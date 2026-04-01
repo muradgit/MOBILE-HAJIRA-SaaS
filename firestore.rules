@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: tenants
+    // Fields: tenant_id, name, eiin, website, phone, credits_left, status, promo_code, referral_count
+    //
+    // Collection: users
+    // Fields: user_id, tenant_id, role, name, phone, password_hash
+    //
+    // Collection: tenants/{tenantId}/students
+    // Fields: student_id, tenant_id, level, dept, session, roll, unique_id, qr_image_url
+    //
+    // Collection: tenants/{tenantId}/attendance
+    // Fields: timestamp, tenant_id, student_id, teacher_id, subject, status
+    //
+    // Collection: transactions
+    // Fields: trx_id, amount, sender_number, status, claimed_by_tenant, timestamp
+    //
+    // Collection: tenants/{tenantId}/rewards
+    // Fields: tenant_id, date, claimed
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == "hello@muradkhank31.com" && request.auth.token.email_verified == true
+      );
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isSchoolAdmin(tenantId) {
+      let userData = getUserData();
+      return isAuthenticated() && userData.tenant_id == tenantId && userData.role == "SchoolAdmin";
+    }
+
+    function isTeacher(tenantId) {
+      let userData = getUserData();
+      return isAuthenticated() && userData.tenant_id == tenantId && userData.role == "Teacher";
+    }
+
+    function belongsToTenant(tenantId) {
+      let userData = getUserData();
+      return isAuthenticated() && userData.tenant_id == tenantId;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    // Tenants
+    match /tenants/{tenantId} {
+      allow read: if belongsToTenant(tenantId) || isSuperAdmin();
+      allow create, delete: if isSuperAdmin();
+      allow update: if isSuperAdmin() || (isSchoolAdmin(tenantId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'website', 'phone']));
+    }
+
+    // Users
+    match /users/{userId} {
+      allow read: if request.auth.uid == userId || isSuperAdmin();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    // Students
+    match /tenants/{tenantId}/students/{studentId} {
+      allow read: if belongsToTenant(tenantId) || isSuperAdmin();
+      allow create, update, delete: if isSchoolAdmin(tenantId) || isSuperAdmin();
+    }
+
+    // Attendance
+    match /tenants/{tenantId}/attendance/{attendanceId} {
+      allow read: if belongsToTenant(tenantId) || isSuperAdmin();
+      allow create: if belongsToTenant(tenantId) || isSuperAdmin();
+      allow update, delete: if isSchoolAdmin(tenantId) || isSuperAdmin();
+    }
+
+    // Transactions
+    match /transactions/{trxId} {
+      allow read: if isAuthenticated();
+      allow create: if isSuperAdmin();
+      allow update: if isSuperAdmin() || (isAuthenticated() && resource.data.status == "unused" && request.resource.data.status == "used");
+    }
+
+    // Rewards
+    match /tenants/{tenantId}/rewards/{rewardId} {
+      allow read: if belongsToTenant(tenantId) || isSuperAdmin();
+      allow create: if belongsToTenant(tenantId) || isSuperAdmin();
+    }
+  }
+}
