@@ -1,19 +1,41 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-noto-bengali), ui-sans-serif, system-ui, sans-serif;
-  --text-xs: 13px;
-  --text-sm: 14px;
-}
-
-@layer utilities {
-  .text-\[10px\] {
-    font-size: 13px !important;
-  }
+  --font-sans: var(--font-noto-bengali), var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+  --font-bengali: var(--font-noto-bengali);
+  --font-english: var(--font-montserrat);
+  
+  /* Minimum font sizes as per brand instructions */
+  --text-xs: 12px; /* English minimum */
+  --text-sm: 13px; /* Bengali minimum */
+  --text-base: 16px;
 }
 
 @layer base {
   html, body {
     font-family: var(--font-sans);
+    font-size: 13px; /* Default to Bengali minimum */
+  }
+
+  /* Ensure Bengali text specifically respects the 13px minimum if used in spans or specific classes */
+  [lang="bn"], .font-bengali {
+    font-family: var(--font-bengali);
+    font-size: 13px;
+  }
+
+  /* Ensure English text specifically respects the 12px minimum */
+  .font-english {
+    font-family: var(--font-english);
+    font-size: 12px;
+  }
+}
+
+@layer utilities {
+  /* Utility to force minimum font size if needed */
+  .min-text-bn {
+    font-size: 13px !important;
+  }
+  .min-text-en {
+    font-size: 12px !important;
   }
 }
