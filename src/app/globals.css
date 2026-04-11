@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Noto Sans Bengali", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-noto-bengali), ui-sans-serif, system-ui, sans-serif;
   --text-xs: 13px;
   --text-sm: 14px;
 }
