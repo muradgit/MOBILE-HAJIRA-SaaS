@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Noto_Sans_Bengali, Montserrat } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const notoBengali = Noto_Sans_Bengali({
   subsets: ["bengali", "latin"],
@@ -30,6 +31,7 @@ export default function RootLayout({
       <body className={`${notoBengali.variable} ${montserrat.variable} font-sans antialiased`}>
         {children}
         <Toaster position="top-center" richColors />
+        <SpeedInsights />
       </body>
     </html>
   );
