@@ -559,43 +559,8 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
   );
 };
 
-const Login = () => {
-  const [loading, setLoading] = useState(false);
-  const [showRegistration, setShowRegistration] = useState(false);
-
-  const handleLogin = async () => {
-    setLoading(true);
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDummyRegistration = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const regData = {
-      name: formData.get('institutionName'),
-      eiin: formData.get('eiin'),
-      adminName: formData.get('adminName'),
-      email: formData.get('email'),
-      phone: formData.get('phone')
-    };
-    
-    // Save to localStorage so it can be picked up by the auth state listener
-    localStorage.setItem('pendingRegistration', JSON.stringify(regData));
-    
-    toast.success("Registration details saved! Please authenticate with Google to complete setup.");
-    setShowRegistration(false);
-    
-    // Trigger Google Auth to complete the process
-    handleLogin();
-  };
-
+const LandingPage = () => {
+  const navigate = useNavigate();
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] text-center space-y-16 py-12">
       <motion.div 
@@ -613,20 +578,18 @@ const Login = () => {
         
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
           <button 
-            onClick={handleLogin}
-            disabled={loading}
-            className="w-full sm:w-auto bg-[#6f42c1] text-white px-8 py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-[#59359a] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-purple-500/30"
+            onClick={() => navigate("/login")}
+            className="w-full sm:w-auto bg-[#6f42c1] text-white px-8 py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-[#59359a] transition-colors flex items-center justify-center gap-2 shadow-lg shadow-purple-500/30"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
-            Login
+            <LogIn className="w-5 h-5" />
+            লগইন করুন
           </button>
           <button 
-            onClick={() => setShowRegistration(true)}
-            disabled={loading}
-            className="w-full sm:w-auto bg-white text-[#6f42c1] border-2 border-[#6f42c1] px-8 py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-purple-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            onClick={() => navigate("/register")}
+            className="w-full sm:w-auto bg-white text-[#6f42c1] border-2 border-[#6f42c1] px-8 py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-purple-50 transition-colors flex items-center justify-center gap-2"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserPlus className="w-5 h-5" />}
-            Registration
+            <UserPlus className="w-5 h-5" />
+            রেজিস্ট্রেশন করুন
           </button>
         </div>
       </motion.div>
@@ -661,49 +624,134 @@ const Login = () => {
           <p className="text-gray-600 leading-relaxed">হাজার হাজার শিক্ষার্থীর আইডি কার্ড তৈরি করুন ৩০ সেকেন্ডে।</p>
         </div>
       </motion.div>
+    </div>
+  );
+};
 
-      {showRegistration && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <motion.div 
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-2xl p-8 max-w-md w-full text-left relative"
+const LoginPage = () => {
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleLogin = async () => {
+    setLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      navigate("/dashboard");
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-[70vh] flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="max-w-md w-full"
+      >
+        <Card className="p-8 text-center space-y-8">
+          <ShieldCheck className="w-16 h-16 text-[#6f42c1] mx-auto" />
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold">লগইন করুন</h2>
+            <p className="text-sm text-gray-500">আপনার গুগল অ্যাকাউন্ট ব্যবহার করে লগইন করুন</p>
+          </div>
+          <button 
+            onClick={handleLogin}
+            disabled={loading}
+            className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-[#59359a] transition-colors disabled:opacity-50 flex items-center justify-center gap-3 shadow-lg shadow-purple-500/30"
           >
-            <button 
-              onClick={() => setShowRegistration(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold"
-            >
-              ✕
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
+            Google দিয়ে লগইন
+          </button>
+          <div className="pt-4 border-t border-gray-100">
+            <p className="text-xs text-gray-500">
+              অ্যাকাউন্ট নেই? <button onClick={() => navigate("/register")} className="text-[#6f42c1] font-bold hover:underline">রেজিস্ট্রেশন করুন</button>
+            </p>
+          </div>
+        </Card>
+      </motion.div>
+    </div>
+  );
+};
+
+const RegisterPage = () => {
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleRegistration = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const regData = {
+      name: formData.get('institutionName'),
+      eiin: formData.get('eiin'),
+      adminName: formData.get('adminName'),
+      email: formData.get('email'),
+      phone: formData.get('phone')
+    };
+    
+    localStorage.setItem('pendingRegistration', JSON.stringify(regData));
+    toast.success("তথ্য সেভ হয়েছে! এখন গুগল দিয়ে লগইন করে সেটআপ সম্পন্ন করুন।");
+    
+    setLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      navigate("/dashboard");
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-[80vh] flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="max-w-md w-full"
+      >
+        <Card className="p-8 space-y-6">
+          <div className="text-center space-y-2">
+            <UserPlus className="w-12 h-12 text-[#6f42c1] mx-auto" />
+            <h2 className="text-2xl font-bold">প্রতিষ্ঠান রেজিস্ট্রেশন</h2>
+            <p className="text-xs text-gray-500 uppercase tracking-widest">নতুন প্রতিষ্ঠানের জন্য তথ্য দিন</p>
+          </div>
+          <form onSubmit={handleRegistration} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Institution Name</label>
+              <input required name="institutionName" type="text" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="e.g. Dhaka College" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">EIIN Number</label>
+              <input required name="eiin" type="text" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="e.g. 108363" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Admin Name</label>
+              <input required name="adminName" type="text" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="Your full name" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Email Address</label>
+              <input required name="email" type="email" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="admin@institution.edu" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Phone Number</label>
+              <input required name="phone" type="tel" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="01XXXXXXXXX" />
+            </div>
+            <button type="submit" disabled={loading} className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold uppercase tracking-wider hover:bg-[#59359a] transition-colors flex items-center justify-center gap-2 shadow-lg shadow-purple-500/30">
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "রেজিস্ট্রেশন সম্পন্ন করুন"}
             </button>
-            <h2 className="text-2xl font-bold text-[#6f42c1] mb-6">Institution Registration</h2>
-            <form onSubmit={handleDummyRegistration} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Institution Name</label>
-                <input required name="institutionName" type="text" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="e.g. Dhaka College" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">EIIN Number</label>
-                <input required name="eiin" type="text" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="e.g. 108363" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Admin Name</label>
-                <input required name="adminName" type="text" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="Your full name" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Email Address</label>
-                <input required name="email" type="email" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="admin@institution.edu" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Phone Number</label>
-                <input required name="phone" type="tel" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="01XXXXXXXXX" />
-              </div>
-              <button type="submit" className="w-full bg-[#6f42c1] text-white py-3 rounded-lg font-bold uppercase tracking-wider hover:bg-[#59359a] transition-colors mt-6">
-                Submit Registration
-              </button>
-            </form>
-          </motion.div>
-        </div>
-      )}
+          </form>
+          <div className="pt-4 border-t border-gray-100 text-center">
+            <p className="text-xs text-gray-500">
+              ইতিমধ্যে অ্যাকাউন্ট আছে? <button onClick={() => navigate("/login")} className="text-[#6f42c1] font-bold hover:underline">লগইন করুন</button>
+            </p>
+          </div>
+        </Card>
+      </motion.div>
     </div>
   );
 };
@@ -1412,21 +1460,24 @@ function AppContent() {
       <Toaster position="top-center" richColors />
       <Layout user={user} tenant={tenant} onLogout={() => signOut(auth)}>
         <Routes>
-          <Route path="/" element={
-            !user ? <Login /> : 
+          <Route path="/" element={user ? <Navigate to="/dashboard" /> : <LandingPage />} />
+          <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <LoginPage />} />
+          <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <RegisterPage />} />
+          <Route path="/dashboard" element={
+            !user ? <Navigate to="/login" /> : 
             user.role === "SuperAdmin" ? <SuperAdminDashboard user={user} /> : 
             user.role === "SchoolAdmin" ? <InstitutionAdminDashboard user={user} tenant={tenant} /> :
             <Dashboard user={user} tenant={tenant} />
           } />
-          <Route path="/scanner" element={user ? <Scanner user={user} /> : <Navigate to="/" />} />
-          <Route path="/wallet" element={user ? <WalletView user={user} tenant={tenant} /> : <Navigate to="/" />} />
-          <Route path="/students" element={user ? <StudentsList user={user} /> : <Navigate to="/" />} />
-          <Route path="/reports" element={user ? <ReportsView user={user} /> : <Navigate to="/" />} />
-          <Route path="/teachers" element={user ? <TeachersList user={user} /> : <Navigate to="/" />} />
-          <Route path="/settings/general" element={user ? <GeneralSettings user={user} /> : <Navigate to="/" />} />
-          <Route path="/teachers/add" element={user ? <AddTeacher user={user} /> : <Navigate to="/" />} />
-          <Route path="/students/add" element={user ? <AddStudent user={user} /> : <Navigate to="/" />} />
-          <Route path="/subjects/add" element={user ? <AddSubject user={user} /> : <Navigate to="/" />} />
+          <Route path="/scanner" element={user ? <Scanner user={user} /> : <Navigate to="/login" />} />
+          <Route path="/wallet" element={user ? <WalletView user={user} tenant={tenant} /> : <Navigate to="/login" />} />
+          <Route path="/students" element={user ? <StudentsList user={user} /> : <Navigate to="/login" />} />
+          <Route path="/reports" element={user ? <ReportsView user={user} /> : <Navigate to="/login" />} />
+          <Route path="/teachers" element={user ? <TeachersList user={user} /> : <Navigate to="/login" />} />
+          <Route path="/settings/general" element={user ? <GeneralSettings user={user} /> : <Navigate to="/login" />} />
+          <Route path="/teachers/add" element={user ? <AddTeacher user={user} /> : <Navigate to="/login" />} />
+          <Route path="/students/add" element={user ? <AddStudent user={user} /> : <Navigate to="/login" />} />
+          <Route path="/subjects/add" element={user ? <AddSubject user={user} /> : <Navigate to="/login" />} />
         </Routes>
       </Layout>
     </Router>
