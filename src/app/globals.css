@@ -6,9 +6,12 @@
   --font-english: var(--font-montserrat);
   
   /* Minimum font sizes as per brand instructions */
-  --text-xs: 12px; /* English minimum */
-  --text-sm: 13px; /* Bengali minimum */
+  --text-xs: 13px; /* English minimum */
+  --text-sm: 15px; /* Bengali minimum */
   --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
 }
 
 @layer base {
@@ -18,36 +21,50 @@
 
   html, body {
     font-family: var(--font-sans);
-    font-size: 13px; /* Default to Bengali minimum */
+    font-size: 15px; /* Default to Bengali minimum for better readability */
+    line-height: 1.6; /* Eye-friendly line height */
+    color: #1a1a1a;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Ensure Bengali text specifically respects the 13px minimum */
+  /* Ensure Bengali text specifically respects the 15px minimum */
   [lang="bn"], .font-bengali {
     font-family: var(--font-bengali);
-    font-size: 13px;
+    font-size: 15px;
+    line-height: 1.7; /* Bengali script often needs slightly more vertical space */
   }
 
-  /* Ensure English text specifically respects the 12px minimum */
+  /* Ensure English text specifically respects the 13px minimum */
   .font-english {
     font-family: var(--font-english);
-    font-size: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    line-height: 1.3;
+    letter-spacing: -0.01em;
   }
 }
 
 @layer utilities {
   /* Utility to force minimum font size if needed */
   .min-text-bn {
-    font-size: 13px !important;
+    font-size: 15px !important;
   }
   .min-text-en {
-    font-size: 12px !important;
+    font-size: 13px !important;
   }
   
   /* Force Montserrat for specific English sections */
   .force-en {
     font-family: var(--font-montserrat) !important;
-    font-size: 12px;
+    font-size: 13px;
+  }
+
+  /* Override very small font sizes globally for accessibility */
+  .text-\[10px\], .text-\[11px\], .text-\[12px\] {
+    font-size: 13px !important;
   }
 }
