@@ -118,6 +118,7 @@ interface UserData {
   subject?: string;
   profile_image?: string;
   created_at?: string;
+  status?: "pending" | "approved";
 }
 
 interface Course {
@@ -715,9 +716,6 @@ const LandingPage = () => {
 
 const LoginPage = () => {
   const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isEmailLogin, setIsEmailLogin] = useState(false);
   const navigate = useNavigate();
 
   const handleGoogleLogin = async () => {
@@ -725,19 +723,6 @@ const LoginPage = () => {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      navigate("/dashboard");
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
       navigate("/dashboard");
     } catch (error: any) {
       toast.error(error.message);
@@ -757,43 +742,19 @@ const LoginPage = () => {
           <ShieldCheck className="w-16 h-16 text-[#6f42c1] mx-auto" />
           <div className="space-y-2">
             <h2 className="text-2xl font-bold">লগইন করুন</h2>
-            <p className="text-sm text-gray-500">আপনার অ্যাকাউন্ট ব্যবহার করে লগইন করুন</p>
+            <p className="text-sm text-gray-500">আপনার জিমেইল অ্যাকাউন্ট ব্যবহার করে লগইন করুন</p>
           </div>
 
-          {!isEmailLogin ? (
-            <div className="space-y-4">
-              <button 
-                onClick={handleGoogleLogin}
-                disabled={loading}
-                className="w-full bg-white border border-gray-200 text-gray-700 py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-3 shadow-sm"
-              >
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
-                Google দিয়ে লগইন
-              </button>
-              <button 
-                onClick={() => setIsEmailLogin(true)}
-                className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-[#59359a] transition-colors flex items-center justify-center gap-3 shadow-lg shadow-purple-500/30"
-              >
-                <LogIn className="w-5 h-5" />
-                Email দিয়ে লগইন
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={handleEmailLogin} className="space-y-4 text-left">
-              <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Email</label>
-                <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Password</label>
-                <input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" />
-              </div>
-              <button type="submit" disabled={loading} className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold uppercase tracking-wider hover:bg-[#59359a] transition-colors flex items-center justify-center gap-2">
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "লগইন করুন"}
-              </button>
-              <button type="button" onClick={() => setIsEmailLogin(false)} className="w-full text-xs text-gray-500 font-bold uppercase tracking-widest hover:underline">Go Back</button>
-            </form>
-          )}
+          <div className="space-y-4">
+            <button 
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="w-full bg-white border border-gray-200 text-gray-700 py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-3 shadow-sm"
+            >
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+              Google দিয়ে লগইন
+            </button>
+          </div>
 
           <div className="pt-4 border-t border-gray-100">
             <p className="text-xs text-gray-500">
@@ -1299,6 +1260,19 @@ const StudentDashboard = ({ user, tenant }: { user: UserData, tenant: Tenant | n
 
 const InstitutionAdminDashboard = ({ user, tenant }: { user: UserData, tenant: Tenant | null }) => {
   const navigate = useNavigate();
+  const [pendingTeachers, setPendingTeachers] = useState(0);
+  const [pendingStudents, setPendingStudents] = useState(0);
+
+  useEffect(() => {
+    const qT = query(collection(db, "users"), where("tenant_id", "==", user.tenant_id), where("role", "==", "Teacher"), where("status", "==", "pending"));
+    const qS = query(collection(db, "users"), where("tenant_id", "==", user.tenant_id), where("role", "==", "Student"), where("status", "==", "pending"));
+    
+    const unsubT = onSnapshot(qT, (s) => setPendingTeachers(s.size));
+    const unsubS = onSnapshot(qS, (s) => setPendingStudents(s.size));
+    
+    return () => { unsubT(); unsubS(); };
+  }, [user.tenant_id]);
+
   return (
     <div className="space-y-6 max-w-md mx-auto">
       <div className="bg-white border border-gray-200 rounded-xl p-5 flex items-center justify-between shadow-sm">
@@ -1340,7 +1314,14 @@ const InstitutionAdminDashboard = ({ user, tenant }: { user: UserData, tenant: T
             <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600">
               <Users className="w-5 h-5" />
             </div>
-            <span className="font-bold text-gray-800">শিক্ষক ম্যানেজমেন্ট</span>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-gray-800">শিক্ষক ম্যানেজমেন্ট</span>
+              {pendingTeachers > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">
+                  {pendingTeachers}
+                </span>
+              )}
+            </div>
           </div>
           <ChevronRight className="w-5 h-5 text-gray-400" />
         </button>
@@ -1353,7 +1334,14 @@ const InstitutionAdminDashboard = ({ user, tenant }: { user: UserData, tenant: T
             <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
               <Users className="w-5 h-5" />
             </div>
-            <span className="font-bold text-gray-800">শিক্ষার্থী ম্যানেজমেন্ট</span>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-gray-800">শিক্ষার্থী ম্যানেজমেন্ট</span>
+              {pendingStudents > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">
+                  {pendingStudents}
+                </span>
+              )}
+            </div>
           </div>
           <ChevronRight className="w-5 h-5 text-gray-400" />
         </button>
@@ -1652,29 +1640,141 @@ const WalletView = ({ user, tenant }: { user: UserData, tenant: Tenant | null })
 // --- Main App ---
 
 const TeachersList = ({ user }: { user: UserData }) => {
+  const [teachers, setTeachers] = useState<UserData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(
+      collection(db, "users"),
+      where("tenant_id", "==", user.tenant_id),
+      where("role", "==", "Teacher")
+    );
+    return onSnapshot(q, (snapshot) => {
+      setTeachers(snapshot.docs.map(doc => doc.data() as UserData));
+      setLoading(false);
+    });
+  }, [user.tenant_id]);
+
+  const handleApprove = async (teacherId: string) => {
+    try {
+      await updateDoc(doc(db, "users", teacherId), { status: "approved" });
+      toast.success("Teacher approved!");
+    } catch (error: any) {
+      toast.error("Approval failed: " + error.message);
+    }
+  };
+
   return (
     <div className="max-w-md mx-auto space-y-4">
       <h2 className="text-xl font-bold text-gray-800">শিক্ষক তালিকা (Teachers List)</h2>
-      <Card>
-        <div className="text-center py-10 text-gray-500">
-          <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
-          <p>No teachers added yet.</p>
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-[#6f42c1]" /></div>
+      ) : teachers.length === 0 ? (
+        <Card>
+          <div className="text-center py-10 text-gray-500">
+            <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
+            <p>No teachers found.</p>
+          </div>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {teachers.map(t => (
+            <Card key={t.user_id} className="p-4">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-[#6f42c1] font-bold">
+                    {t.name.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">{t.name}</p>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest">{t.phone || t.email}</p>
+                  </div>
+                </div>
+                {t.status === "pending" ? (
+                  <button 
+                    onClick={() => handleApprove(t.user_id)}
+                    className="bg-green-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-green-600 transition-colors"
+                  >
+                    Approve
+                  </button>
+                ) : (
+                  <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest bg-green-50 px-2 py-1 rounded">Approved</span>
+                )}
+              </div>
+            </Card>
+          ))}
         </div>
-      </Card>
+      )}
     </div>
   );
 };
 
 const StudentsList = ({ user }: { user: UserData }) => {
+  const [students, setStudents] = useState<UserData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(
+      collection(db, "users"),
+      where("tenant_id", "==", user.tenant_id),
+      where("role", "==", "Student")
+    );
+    return onSnapshot(q, (snapshot) => {
+      setStudents(snapshot.docs.map(doc => doc.data() as UserData));
+      setLoading(false);
+    });
+  }, [user.tenant_id]);
+
+  const handleApprove = async (studentId: string) => {
+    try {
+      await updateDoc(doc(db, "users", studentId), { status: "approved" });
+      toast.success("Student approved!");
+    } catch (error: any) {
+      toast.error("Approval failed: " + error.message);
+    }
+  };
+
   return (
     <div className="max-w-md mx-auto space-y-4">
       <h2 className="text-xl font-bold text-gray-800">শিক্ষার্থী তালিকা (Students List)</h2>
-      <Card>
-        <div className="text-center py-10 text-gray-500">
-          <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
-          <p>No students added yet.</p>
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-[#6f42c1]" /></div>
+      ) : students.length === 0 ? (
+        <Card>
+          <div className="text-center py-10 text-gray-500">
+            <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
+            <p>No students found.</p>
+          </div>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {students.map(s => (
+            <Card key={s.user_id} className="p-4">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold">
+                    {s.name.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">{s.name}</p>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest">Roll: {s.student_id} • Class: {s.class}</p>
+                  </div>
+                </div>
+                {s.status === "pending" ? (
+                  <button 
+                    onClick={() => handleApprove(s.user_id)}
+                    className="bg-green-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-green-600 transition-colors"
+                  >
+                    Approve
+                  </button>
+                ) : (
+                  <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest bg-green-50 px-2 py-1 rounded">Approved</span>
+                )}
+              </div>
+            </Card>
+          ))}
         </div>
-      </Card>
+      )}
     </div>
   );
 };
@@ -1994,7 +2094,8 @@ function AppContent() {
               teacher_id: pendingReg?.teacher_id || "",
               student_id: pendingReg?.student_id || "",
               class: pendingReg?.class || "",
-              section: pendingReg?.session || ""
+              section: pendingReg?.session || "",
+              status: isSuperAdmin || (pendingReg?.role === "SchoolAdmin") ? "approved" : "pending"
             };
             localStorage.removeItem('pendingRegistration');
             try {
@@ -2058,6 +2159,30 @@ function AppContent() {
           <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <RegisterPage />} />
           <Route path="/dashboard" element={
             !user ? <Navigate to="/login" /> : 
+            (user.role === "Teacher" || user.role === "Student") && user.status === "pending" ? (
+              <div className="min-h-[60vh] flex items-center justify-center p-4">
+                <Card className="max-w-md w-full p-8 text-center space-y-6">
+                  <AlertCircle className="w-16 h-16 text-orange-500 mx-auto" />
+                  <div className="space-y-2">
+                    <h2 className="text-xl font-bold text-gray-800">অপেক্ষমান অনুমোদন</h2>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                      আপনার একাউন্টটি এখনো Institute Admin দ্বারা এপ্রুভ হয়নি।
+                    </p>
+                  </div>
+                  <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 text-left space-y-2">
+                    <p className="text-xs font-bold text-orange-800 uppercase tracking-widest">যোগাযোগ করুন:</p>
+                    <p className="text-sm font-bold text-gray-800">{tenant?.admin_name || "Institute Admin"}</p>
+                    <p className="text-xs text-gray-600">মোবাইল: {tenant?.admin_mobile || "N/A"}</p>
+                  </div>
+                  <button 
+                    onClick={() => signOut(auth)}
+                    className="w-full bg-gray-100 text-gray-600 py-3 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-gray-200 transition-colors"
+                  >
+                    লগ আউট করুন
+                  </button>
+                </Card>
+              </div>
+            ) :
             user.role === "SuperAdmin" ? <SuperAdminDashboard user={user} /> : 
             user.role === "SchoolAdmin" ? <InstitutionAdminDashboard user={user} tenant={tenant} /> :
             user.role === "Teacher" ? <TeacherDashboard user={user} tenant={tenant} /> :
