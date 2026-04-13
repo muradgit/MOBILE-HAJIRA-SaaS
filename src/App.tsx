@@ -1243,16 +1243,67 @@ const LandingPage = () => {
 
 const LoginPage = () => {
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<React.ReactNode | null>(null);
   const navigate = useNavigate();
 
   const handleGoogleLogin = async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      const firebaseUser = result.user;
+
+      // Check if user exists in Firestore
+      const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+      
+      if (!userDoc.exists()) {
+        await signOut(auth);
+        setErrorMsg(
+          <div className="space-y-4">
+            <p className="text-red-600 font-bold">আপনার এই জিমেইলটি আমাদের ডাটাবেজে পাওয়া যায়নি।</p>
+            <p className="text-sm text-gray-600">অনুগ্রহ করে প্রথমে রেজিস্ট্রেশন করুন।</p>
+            <button 
+              onClick={() => navigate("/register")}
+              className="w-full bg-[#6f42c1] text-white py-3 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-[#59359a]"
+            >
+              রেজিস্ট্রেশন করুন
+            </button>
+          </div>
+        );
+        return;
+      }
+
+      const userData = userDoc.data() as UserData;
+
+      // Check for approval if Teacher or Student
+      if ((userData.role === "Teacher" || userData.role === "Student") && userData.status !== "approved") {
+        // Fetch tenant to get admin info
+        const tenantDoc = await getDoc(doc(db, "tenants", userData.tenant_id));
+        const tenantData = tenantDoc.exists() ? tenantDoc.data() as Tenant : null;
+        
+        await signOut(auth);
+        setErrorMsg(
+          <div className="space-y-4">
+            <p className="text-red-600 font-bold">আপনার একাউন্টটি এখনো Institute Admin দ্বারা এপ্রুভ হয়নি।</p>
+            {tenantData && (
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-left">
+                <p className="text-xs font-bold text-gray-400 uppercase mb-2">যোগাযোগ করুন:</p>
+                <p className="font-bold text-gray-800">{tenantData.admin_name}</p>
+                <p className="text-sm text-gray-600">Institute Admin</p>
+                {tenantData.admin_mobile && <p className="text-sm text-gray-600">মোবাইল: {tenantData.admin_mobile}</p>}
+              </div>
+            )}
+          </div>
+        );
+        return;
+      }
+
       navigate("/dashboard");
     } catch (error: any) {
-      toast.error(error.message);
+      if (error.code !== 'auth/popup-closed-by-user') {
+        toast.error(error.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -1267,27 +1318,49 @@ const LoginPage = () => {
       >
         <Card className="p-8 text-center space-y-8">
           <ShieldCheck className="w-16 h-16 text-[#6f42c1] mx-auto" />
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold">লগইন করুন</h2>
-            <p className="text-sm text-gray-500">আপনার জিমেইল অ্যাকাউন্ট ব্যবহার করে লগইন করুন</p>
-          </div>
+          
+          {errorMsg ? (
+            <div className="space-y-6">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              {errorMsg}
+              <button 
+                onClick={() => setErrorMsg(null)}
+                className="text-sm font-bold text-[#6f42c1] hover:underline"
+              >
+                আবার চেষ্টা করুন
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold">লগইন করুন</h2>
+                <p className="text-sm text-gray-500">আপনার জিমেইল অ্যাকাউন্ট ব্যবহার করে লগইন করুন</p>
+              </div>
 
-          <div className="space-y-4">
-            <button 
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              className="w-full bg-white border border-gray-200 text-gray-700 py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-3 shadow-sm"
-            >
-              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
-              Google দিয়ে লগইন
-            </button>
-          </div>
+              <div className="space-y-4">
+                <button 
+                  onClick={handleGoogleLogin}
+                  disabled={loading}
+                  className="w-full bg-white border border-gray-200 text-gray-700 py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-3 shadow-sm"
+                >
+                  {loading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+                  )}
+                  Google দিয়ে লগইন
+                </button>
+              </div>
 
-          <div className="pt-4 border-t border-gray-100">
-            <p className="text-xs text-gray-500">
-              অ্যাকাউন্ট নেই? <button onClick={() => navigate("/register")} className="text-[#6f42c1] font-bold hover:underline">রেজিস্ট্রেশন করুন</button>
-            </p>
-          </div>
+              <div className="pt-4 border-t border-gray-100">
+                <p className="text-xs text-gray-500">
+                  অ্যাকাউন্ট নেই? <button onClick={() => navigate("/register")} className="text-[#6f42c1] font-bold hover:underline">রেজিস্ট্রেশন করুন</button>
+                </p>
+              </div>
+            </>
+          )}
         </Card>
       </motion.div>
     </div>
@@ -2593,54 +2666,57 @@ function AppContent() {
             }
             setLoading(false);
           } else {
-            // If user doesn't exist, create a default InstitutionAdmin for demo
-            const isSuperAdmin = firebaseUser.email === "hello@muradkhank31.com";
-            
             // Check if there's pending registration data
             const pendingRegStr = localStorage.getItem('pendingRegistration');
-            const pendingReg = pendingRegStr ? JSON.parse(pendingRegStr) : null;
-            
-            const newTenantId = isSuperAdmin ? "SUPER_ADMIN_TENANT" : `tenant_${Math.random().toString(36).substr(2, 9)}`;
-            const promoCode = `MH-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
-            
-            const newTenant: Tenant = {
-              tenant_id: newTenantId,
-              name: isSuperAdmin ? "Mobile Hajira" : (pendingReg?.name || firebaseUser.displayName || "New Institution"),
-              eiin: isSuperAdmin ? "000000" : (pendingReg?.eiin || "123456"),
-              credits_left: isSuperAdmin ? 999999 : 100,
-              promo_code: promoCode,
-              referral_count: 0,
-              admin_name: pendingReg?.adminName || firebaseUser.displayName || "",
-              admin_mobile: pendingReg?.phone || "",
-              owner_email: pendingReg?.email || firebaseUser.email || ""
-            };
+            if (pendingRegStr) {
+              const pendingReg = JSON.parse(pendingRegStr);
+              const isSuperAdmin = firebaseUser.email === "hello@muradkhank31.com";
+              
+              const newTenantId = isSuperAdmin ? "SUPER_ADMIN_TENANT" : (pendingReg.tenant_id || `tenant_${Math.random().toString(36).substr(2, 9)}`);
+              const promoCode = `MH-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+              
+              const newTenant: Tenant = {
+                tenant_id: newTenantId,
+                name: isSuperAdmin ? "Mobile Hajira" : (pendingReg.institutionName || pendingReg.name || firebaseUser.displayName || "New Institution"),
+                eiin: isSuperAdmin ? "000000" : (pendingReg.eiin || "123456"),
+                credits_left: isSuperAdmin ? 999999 : 100,
+                promo_code: promoCode,
+                referral_count: 0,
+                admin_name: pendingReg.adminName || pendingReg.name || firebaseUser.displayName || "",
+                admin_mobile: pendingReg.phone || "",
+                owner_email: pendingReg.email || firebaseUser.email || ""
+              };
 
-            const newUser: UserData = {
-              user_id: firebaseUser.uid,
-              tenant_id: newTenantId,
-              role: isSuperAdmin ? "SuperAdmin" : (pendingReg?.role || "InstitutionAdmin"),
-              name: pendingReg?.userName || pendingReg?.name || firebaseUser.displayName || "User",
-              email: pendingReg?.email || firebaseUser.email || "",
-              phone: pendingReg?.phone || "",
-              teacher_id: pendingReg?.teacher_id || "",
-              student_id: pendingReg?.student_id || "",
-              class: pendingReg?.class || "",
-              section: pendingReg?.session || "",
-              status: isSuperAdmin || (pendingReg?.role === "InstitutionAdmin") ? "approved" : "pending"
-            };
-            localStorage.removeItem('pendingRegistration');
-            try {
-              await setDoc(doc(db, "tenants", newTenantId), newTenant);
-              await setDoc(doc(db, "users", firebaseUser.uid), newUser);
-              // The onSnapshot above will catch this new document
-            } catch (error) {
+              const newUser: UserData = {
+                user_id: firebaseUser.uid,
+                tenant_id: newTenantId,
+                role: isSuperAdmin ? "SuperAdmin" : (pendingReg.role || "InstitutionAdmin"),
+                name: pendingReg.name || firebaseUser.displayName || "User",
+                email: firebaseUser.email || "",
+                phone: pendingReg.phone || "",
+                teacher_id: pendingReg.teacher_id || "",
+                student_id: pendingReg.student_id || "",
+                class: pendingReg.class || "",
+                section: pendingReg.session || "",
+                status: isSuperAdmin || (pendingReg.role === "InstitutionAdmin") ? "approved" : "pending"
+              };
+
+              localStorage.removeItem('pendingRegistration');
+              
               try {
-                handleFirestoreError(error, OperationType.CREATE, `users/${firebaseUser.uid}`);
-              } catch (e) {
-                setAsyncError(e as Error);
+                if (pendingReg.role === "InstitutionAdmin" || isSuperAdmin) {
+                  await setDoc(doc(db, "tenants", newTenantId), newTenant);
+                }
+                await setDoc(doc(db, "users", firebaseUser.uid), newUser);
+              } catch (error) {
+                try {
+                  handleFirestoreError(error, OperationType.CREATE, `users/${firebaseUser.uid}`);
+                } catch (e) {
+                  setAsyncError(e as Error);
+                }
               }
-              setLoading(false);
             }
+            setLoading(false);
           }
         }, (error) => {
           try {
