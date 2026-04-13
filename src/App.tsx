@@ -116,7 +116,7 @@ interface Tenant {
 interface UserData {
   user_id: string;
   tenant_id: string;
-  role: "SuperAdmin" | "SchoolAdmin" | "Teacher" | "Student";
+  role: "SuperAdmin" | "InstitutionAdmin" | "Teacher" | "Student";
   name: string;
   email?: string;
   phone?: string;
@@ -217,7 +217,7 @@ const Layout = ({ children, user, tenant, onLogout }: { children: React.ReactNod
       { label: "Payment Logs", to: "/payments", icon: History },
       { label: "User Management", to: "/users", icon: Users },
     ],
-    SchoolAdmin: [
+    InstitutionAdmin: [
       { label: "Institute Settings", to: "/settings/general", icon: Database },
       { label: "Teacher Management", to: "/teachers", icon: Users },
       { label: "Student Management", to: "/students", icon: Users },
@@ -307,7 +307,7 @@ const Layout = ({ children, user, tenant, onLogout }: { children: React.ReactNod
                       <button 
                         onClick={async () => {
                           setIsProfileOpen(false);
-                          const nextRole = user.role === "SuperAdmin" ? "SchoolAdmin" : "SuperAdmin";
+                          const nextRole = user.role === "SuperAdmin" ? "InstitutionAdmin" : "SuperAdmin";
                           await updateDoc(doc(db, "users", user.user_id), { role: nextRole });
                           toast.success(`Switched to ${nextRole}`);
                         }}
@@ -379,7 +379,7 @@ const Layout = ({ children, user, tenant, onLogout }: { children: React.ReactNod
         
         {user && (
           <div className="mt-12 mb-8">
-            {(user.role === "SchoolAdmin" || user.role === "Teacher") ? (
+            {(user.role === "InstitutionAdmin" || user.role === "Teacher") ? (
               <div className="no-print bg-white rounded-2xl p-6 text-center shadow-sm border border-gray-100 mx-auto max-w-md" style={{ paddingBottom: '80px' }}>
                 <p className="font-bold text-gray-600 mb-4">Help Others and Get 20 Bonus Credits</p>
                 <button 
@@ -414,7 +414,7 @@ const Layout = ({ children, user, tenant, onLogout }: { children: React.ReactNod
 
       {user && (
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#E4E3E0] px-4 py-2 flex justify-around items-center z-50 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-          {user.role === "SchoolAdmin" ? (
+          {user.role === "InstitutionAdmin" ? (
             <>
               <NavButton icon={Home} label="Dashboard" to="/dashboard" />
               <NavButton icon={WalletIcon} label="Payment" to="/wallet" />
@@ -810,7 +810,7 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
       setTransactions(snapshot.docs.map(doc => doc.data() as Transaction));
     }, (error) => setAsyncError(error as Error));
 
-    const unsubAdmins = onSnapshot(query(collection(db, "users"), where("role", "==", "SchoolAdmin")), (snapshot) => {
+    const unsubAdmins = onSnapshot(query(collection(db, "users"), where("role", "==", "InstitutionAdmin")), (snapshot) => {
       const adminMap: Record<string, UserData> = {};
       snapshot.docs.forEach(doc => {
         const data = doc.data() as UserData;
@@ -1116,7 +1116,7 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
                   <td className="p-4">
                     <span className={cn("px-2 py-1 rounded text-[10px] font-bold uppercase", 
                       u.role === "SuperAdmin" ? "bg-red-100 text-red-700" : 
-                      u.role === "SchoolAdmin" ? "bg-purple-100 text-purple-700" : 
+                      u.role === "InstitutionAdmin" ? "bg-purple-100 text-purple-700" : 
                       u.role === "Teacher" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
                     )}>
                       {u.role}
@@ -1291,7 +1291,7 @@ const LoginPage = () => {
 
 const RegisterPage = () => {
   const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState<"SchoolAdmin" | "Teacher" | "Student">("SchoolAdmin");
+  const [role, setRole] = useState<"InstitutionAdmin" | "Teacher" | "Student">("InstitutionAdmin");
   const [agreed, setAgreed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Tenant[]>([]);
@@ -1345,7 +1345,7 @@ const RegisterPage = () => {
       tenant_id: selectedTenant?.tenant_id || null,
     };
 
-    if (role === "SchoolAdmin") {
+    if (role === "InstitutionAdmin") {
       regData.institutionType = formData.get('instType');
       regData.eiin = formData.get('eiin');
       regData.institutionName = formData.get('instName');
@@ -1384,7 +1384,7 @@ const RegisterPage = () => {
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               {[
-                { id: "SchoolAdmin", label: "Registration as Institute admin" },
+                { id: "InstitutionAdmin", label: "Registration as Institute admin" },
                 { id: "Teacher", label: "Registration as Teachers" },
                 { id: "Student", label: "Registration as Students" }
               ].map((r) => (
@@ -1410,7 +1410,7 @@ const RegisterPage = () => {
           </div>
 
           <AnimatePresence mode="wait">
-            {role === "SchoolAdmin" && (
+            {role === "InstitutionAdmin" && (
               <motion.div 
                 key="admin"
                 initial={{ opacity: 0, height: 0 }}
@@ -2584,7 +2584,7 @@ function AppContent() {
               setLoading(false);
             }
           } else {
-            // If user doesn't exist, create a default SchoolAdmin for demo
+            // If user doesn't exist, create a default InstitutionAdmin for demo
             const isSuperAdmin = firebaseUser.email === "hello@muradkhank31.com";
             
             // Check if there's pending registration data
@@ -2609,7 +2609,7 @@ function AppContent() {
             const newUser: UserData = {
               user_id: firebaseUser.uid,
               tenant_id: newTenantId,
-              role: isSuperAdmin ? "SuperAdmin" : (pendingReg?.role || "SchoolAdmin"),
+              role: isSuperAdmin ? "SuperAdmin" : (pendingReg?.role || "InstitutionAdmin"),
               name: pendingReg?.userName || pendingReg?.name || firebaseUser.displayName || "User",
               email: pendingReg?.email || firebaseUser.email || "",
               phone: pendingReg?.phone || "",
@@ -2617,7 +2617,7 @@ function AppContent() {
               student_id: pendingReg?.student_id || "",
               class: pendingReg?.class || "",
               section: pendingReg?.session || "",
-              status: isSuperAdmin || (pendingReg?.role === "SchoolAdmin") ? "approved" : "pending"
+              status: isSuperAdmin || (pendingReg?.role === "InstitutionAdmin") ? "approved" : "pending"
             };
             localStorage.removeItem('pendingRegistration');
             try {
@@ -2706,7 +2706,7 @@ function AppContent() {
               </div>
             ) :
             user.role === "SuperAdmin" ? <SuperAdminDashboard user={user} /> : 
-            user.role === "SchoolAdmin" ? <InstitutionAdminDashboard user={user} tenant={tenant} /> :
+            user.role === "InstitutionAdmin" ? <InstitutionAdminDashboard user={user} tenant={tenant} /> :
             user.role === "Teacher" ? <TeacherDashboard user={user} tenant={tenant} /> :
             <StudentDashboard user={user} tenant={tenant} />
           } />
