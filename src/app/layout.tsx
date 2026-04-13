@@ -26,8 +26,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${notoBengali.variable} ${montserrat.variable} font-sans antialiased`}>
+    <html lang="en" className={`${notoBengali.variable} ${montserrat.variable}`}>
+      <body className="font-sans antialiased">
         {children}
         <Toaster position="top-center" richColors />
       </body>

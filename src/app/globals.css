@@ -12,6 +12,10 @@
 }
 
 @layer base {
+  :root {
+    --font-sans: var(--font-montserrat), var(--font-noto-bengali), ui-sans-serif, system-ui, sans-serif;
+  }
+
   html, body {
     font-family: var(--font-sans);
     font-size: 13px; /* Default to Bengali minimum */
