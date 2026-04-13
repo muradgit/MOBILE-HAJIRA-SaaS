@@ -268,7 +268,9 @@ const Layout = ({ children, user, tenant, onLogout }: { children: React.ReactNod
 
             <div className="flex flex-col items-center text-center flex-1 mx-4">
               <h1 className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-none">MOBILE-HAJIRA</h1>
-              <h2 className="text-sm sm:text-lg font-black text-[#6f42c1] mt-1 line-clamp-1">{tenant?.name || "Institution"}</h2>
+              <h2 className="text-sm sm:text-lg font-black text-[#6f42c1] mt-1 line-clamp-1">
+                {user.role === "SuperAdmin" ? "Super Admin Dashboard" : (tenant?.name || "Institution")}
+              </h2>
             </div>
 
             <div className="relative">
@@ -311,7 +313,7 @@ const Layout = ({ children, user, tenant, onLogout }: { children: React.ReactNod
                           const roleLabel = nextRole === "SuperAdmin" ? "Super Admin" : "Institute Admin";
                           toast.loading(`Switching to ${roleLabel} Role...`, { id: 'role-switch' });
                           await updateDoc(doc(db, "users", user.user_id), { role: nextRole });
-                          toast.success(`Switching to ${roleLabel} Role`, { id: 'role-switch' });
+                          toast.success(`Switched to ${roleLabel} Role`, { id: 'role-switch' });
                           navigate("/dashboard");
                         }}
                         className="w-full px-4 py-2 text-left text-sm font-medium hover:bg-gray-50 flex items-center gap-2 text-purple-600"
@@ -2574,7 +2576,12 @@ function AppContent() {
               if (tenantUnsub) tenantUnsub();
               tenantUnsub = onSnapshot(doc(db, "tenants", userData.tenant_id), (tDoc) => {
                 if (tDoc.exists()) {
-                  setTenant(tDoc.data() as Tenant);
+                  const tData = tDoc.data() as Tenant;
+                  // Migration: Update "Super Admin" name to "Mobile Hajira" for better branding
+                  if (userData.role === "SuperAdmin" && tData.name === "Super Admin") {
+                    updateDoc(doc(db, "tenants", userData.tenant_id), { name: "Mobile Hajira" }).catch(console.error);
+                  }
+                  setTenant(tData);
                 }
               }, (error) => {
                 try {
@@ -2598,7 +2605,7 @@ function AppContent() {
             
             const newTenant: Tenant = {
               tenant_id: newTenantId,
-              name: isSuperAdmin ? "Super Admin" : (pendingReg?.name || firebaseUser.displayName || "New Institution"),
+              name: isSuperAdmin ? "Mobile Hajira" : (pendingReg?.name || firebaseUser.displayName || "New Institution"),
               eiin: isSuperAdmin ? "000000" : (pendingReg?.eiin || "123456"),
               credits_left: isSuperAdmin ? 999999 : 100,
               promo_code: promoCode,
