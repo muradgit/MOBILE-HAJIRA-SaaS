@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { auth, db } from "./lib/firebase";
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
-import { doc, getDoc, collection, query, where, getDocs, onSnapshot, updateDoc, increment, setDoc, deleteDoc, getDocFromServer } from "firebase/firestore";
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot, updateDoc, increment, setDoc, deleteDoc, getDocFromServer, orderBy, limit } from "firebase/firestore";
 import { Toaster, toast } from "sonner";
 
 enum OperationType {
@@ -65,7 +65,12 @@ import {
   LogIn,
   UserPlus,
   ChevronRight,
-  Home
+  Home,
+  User,
+  Mail,
+  Phone,
+  BookOpen,
+  ClipboardList
 } from "lucide-react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { cn } from "./lib/utils";
@@ -102,10 +107,35 @@ interface Tenant {
 interface UserData {
   user_id: string;
   tenant_id: string;
-  role: "SuperAdmin" | "SchoolAdmin" | "Teacher";
+  role: "SuperAdmin" | "SchoolAdmin" | "Teacher" | "Student";
   name: string;
   email?: string;
   phone?: string;
+  student_id?: string;
+  teacher_id?: string;
+  class?: string;
+  section?: string;
+  subject?: string;
+  profile_image?: string;
+  created_at?: string;
+}
+
+interface Course {
+  course_id: string;
+  tenant_id: string;
+  name: string;
+  code: string;
+  teacher_id: string;
+}
+
+interface AttendanceRecord {
+  id: string;
+  tenant_id: string;
+  student_id: string;
+  teacher_id: string;
+  subject: string;
+  timestamp: string;
+  status: "present" | "absent";
 }
 
 interface Transaction {
@@ -155,7 +185,7 @@ const Layout = ({ children, user, tenant, onLogout }: { children: React.ReactNod
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-sans text-[#141414]">
       <header className="sticky top-0 z-50 bg-white border-b border-[#E4E3E0] px-4 py-3 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate("/")}>
           <ShieldCheck className="w-8 h-8 text-[#6f42c1]" />
           <div>
             <h1 className="text-sm font-bold uppercase tracking-tight leading-none">Mobile-Hajira</h1>
@@ -167,19 +197,21 @@ const Layout = ({ children, user, tenant, onLogout }: { children: React.ReactNod
         {user && (
           <div className="flex items-center gap-2 sm:gap-3">
             <button 
-              onClick={() => navigate("/")}
+              onClick={() => navigate("/dashboard")}
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              title="Home"
+              title="Dashboard"
             >
               <Home className="w-5 h-5 text-gray-500" />
             </button>
             {user.email === "hello@muradkhank31.com" && (
               <button
                 onClick={async () => {
-                  const newRole = user.role === "SuperAdmin" ? "SchoolAdmin" : "SuperAdmin";
+                  const roles: UserData["role"][] = ["SuperAdmin", "SchoolAdmin", "Teacher", "Student"];
+                  const currentIndex = roles.indexOf(user.role);
+                  const nextRole = roles[(currentIndex + 1) % roles.length];
                   try {
-                    await updateDoc(doc(db, "users", user.user_id), { role: newRole });
-                    toast.success(`Switched to ${newRole === "SchoolAdmin" ? "InstitutionAdmin" : "SuperAdmin"}`);
+                    await updateDoc(doc(db, "users", user.user_id), { role: nextRole });
+                    toast.success(`Switched to ${nextRole}`);
                   } catch (e: any) {
                     toast.error("Failed to switch role: " + e.message);
                   }
@@ -187,15 +219,15 @@ const Layout = ({ children, user, tenant, onLogout }: { children: React.ReactNod
                 className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-[#6f42c1] rounded-md hover:bg-purple-200 transition-colors"
                 title="Switch Role (Admin Only)"
               >
-                Switch to {user.role === "SuperAdmin" ? "InstitutionAdmin" : "SuperAdmin"}
+                Switch to {user.role === "SuperAdmin" ? "InstAdmin" : user.role === "SchoolAdmin" ? "Teacher" : user.role === "Teacher" ? "Student" : "SuperAdmin"}
               </button>
             )}
             <div className="text-right hidden sm:block">
               <p className="text-xs font-bold">{user.name}</p>
-              <p className="text-[10px] text-muted-foreground uppercase font-mono">{user.role === "SchoolAdmin" ? "InstitutionAdmin" : user.role}</p>
+              <p className="text-[10px] text-muted-foreground uppercase font-mono">{user.role}</p>
             </div>
-            {auth.currentUser?.photoURL ? (
-              <img src={auth.currentUser.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-gray-200 object-cover" referrerPolicy="no-referrer" />
+            {auth.currentUser?.photoURL || user.profile_image ? (
+              <img src={auth.currentUser?.photoURL || user.profile_image} alt="Profile" className="w-8 h-8 rounded-full border border-gray-200 object-cover" referrerPolicy="no-referrer" />
             ) : (
               <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-xs">
                 {user.name.charAt(0).toUpperCase()}
@@ -213,12 +245,34 @@ const Layout = ({ children, user, tenant, onLogout }: { children: React.ReactNod
       <main className="max-w-7xl mx-auto p-4 pb-24">
         {children}
       </main>
-      {user && user.role !== "SuperAdmin" && (
+      {user && (
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#E4E3E0] px-4 py-2 flex justify-around items-center sm:hidden shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-          <NavButton icon={QrCode} label="Scan" to="/scanner" />
-          <NavButton icon={Users} label="Students" to="/students" />
-          <NavButton icon={WalletIcon} label="Wallet" to="/wallet" />
-          <NavButton icon={FileText} label="Reports" to="/reports" />
+          {user.role === "SuperAdmin" ? (
+            <>
+              <NavButton icon={Database} label="Inst" to="/dashboard" />
+              <NavButton icon={WalletIcon} label="Payments" to="/payments" />
+              <NavButton icon={Users} label="Users" to="/users" />
+            </>
+          ) : user.role === "SchoolAdmin" ? (
+            <>
+              <NavButton icon={Home} label="Home" to="/dashboard" />
+              <NavButton icon={Users} label="Teachers" to="/teachers" />
+              <NavButton icon={Users} label="Students" to="/students" />
+              <NavButton icon={WalletIcon} label="Wallet" to="/wallet" />
+            </>
+          ) : user.role === "Teacher" ? (
+            <>
+              <NavButton icon={Home} label="Home" to="/dashboard" />
+              <NavButton icon={QrCode} label="Scan" to="/scanner" />
+              <NavButton icon={FileText} label="Reports" to="/reports" />
+            </>
+          ) : (
+            <>
+              <NavButton icon={Home} label="Home" to="/dashboard" />
+              <NavButton icon={QrCode} label="My ID" to="/student/id" />
+              <NavButton icon={FileText} label="Reports" to="/reports" />
+            </>
+          )}
         </nav>
       )}
     </div>
@@ -260,8 +314,9 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [admins, setAdmins] = useState<Record<string, UserData>>({});
+  const [allUsers, setAllUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"institutions" | "payments">("institutions");
+  const [activeTab, setActiveTab] = useState<"institutions" | "payments" | "users">("institutions");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [tenantToDelete, setTenantToDelete] = useState<Tenant | null>(null);
   const [asyncError, setAsyncError] = useState<Error | null>(null);
@@ -286,6 +341,10 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
         adminMap[data.tenant_id] = data;
       });
       setAdmins(adminMap);
+    }, (error) => setAsyncError(error as Error));
+
+    const unsubUsers = onSnapshot(query(collection(db, "users"), limit(50)), (snapshot) => {
+      setAllUsers(snapshot.docs.map(doc => doc.data() as UserData));
       setLoading(false);
     }, (error) => setAsyncError(error as Error));
 
@@ -293,6 +352,7 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
       unsubTenants();
       unsubTransactions();
       unsubAdmins();
+      unsubUsers();
     };
   }, [user.role]);
 
@@ -404,18 +464,24 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
         </Card>
       </div>
 
-      <div className="flex gap-2 border-b border-[#E4E3E0] pb-2">
+      <div className="flex gap-2 border-b border-[#E4E3E0] pb-2 overflow-x-auto">
         <button 
           onClick={() => setActiveTab("institutions")}
-          className={cn("px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-t-lg transition-colors", activeTab === "institutions" ? "bg-[#6f42c1] text-white" : "text-gray-500 hover:bg-gray-100")}
+          className={cn("px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-t-lg transition-colors whitespace-nowrap", activeTab === "institutions" ? "bg-[#6f42c1] text-white" : "text-gray-500 hover:bg-gray-100")}
         >
           Institutions
         </button>
         <button 
           onClick={() => setActiveTab("payments")}
-          className={cn("px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-t-lg transition-colors", activeTab === "payments" ? "bg-[#6f42c1] text-white" : "text-gray-500 hover:bg-gray-100")}
+          className={cn("px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-t-lg transition-colors whitespace-nowrap", activeTab === "payments" ? "bg-[#6f42c1] text-white" : "text-gray-500 hover:bg-gray-100")}
         >
           Payment Logs
+        </button>
+        <button 
+          onClick={() => setActiveTab("users")}
+          className={cn("px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-t-lg transition-colors whitespace-nowrap", activeTab === "users" ? "bg-[#6f42c1] text-white" : "text-gray-500 hover:bg-gray-100")}
+        >
+          User Management
         </button>
       </div>
 
@@ -424,7 +490,7 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
           {loading ? (
             <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#6f42c1]" /></div>
           ) : (
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
                 <tr className="border-b border-[#E4E3E0] bg-gray-50 text-[10px] uppercase tracking-widest text-gray-500">
                   <th className="p-4 font-bold">EIIN</th>
@@ -464,13 +530,6 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
                     </tr>
                   );
                 })}
-                {tenants.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="p-8 text-center text-muted-foreground text-xs uppercase tracking-widest">
-                      No institutions found
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           )}
@@ -479,57 +538,83 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
 
       {activeTab === "payments" && (
         <Card className="overflow-x-auto">
-          {loading ? (
-            <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#6f42c1]" /></div>
-          ) : (
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-[#E4E3E0] bg-gray-50 text-[10px] uppercase tracking-widest text-gray-500">
-                  <th className="p-4 font-bold">Timestamp</th>
-                  <th className="p-4 font-bold">Sender Mobile</th>
-                  <th className="p-4 font-bold">Amount</th>
-                  <th className="p-4 font-bold">TrxID</th>
-                  <th className="p-4 font-bold">Status</th>
-                  <th className="p-4 font-bold">Claimed By</th>
+          <table className="w-full text-left border-collapse min-w-[600px]">
+            <thead>
+              <tr className="border-b border-[#E4E3E0] bg-gray-50 text-[10px] uppercase tracking-widest text-gray-500">
+                <th className="p-4 font-bold">Timestamp</th>
+                <th className="p-4 font-bold">Sender Mobile</th>
+                <th className="p-4 font-bold">Amount</th>
+                <th className="p-4 font-bold">TrxID</th>
+                <th className="p-4 font-bold">Status</th>
+                <th className="p-4 font-bold">Claimed By</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm">
+              {transactions.map(t => (
+                <tr key={t.trx_id} className="border-b border-[#E4E3E0] last:border-0 hover:bg-gray-50/50">
+                  <td className="p-4">{t.timestamp ? new Date(t.timestamp).toLocaleString() : "N/A"}</td>
+                  <td className="p-4 font-mono text-xs">{t.sender_number}</td>
+                  <td className="p-4 font-bold text-green-600">৳{t.amount}</td>
+                  <td className="p-4 font-mono text-xs text-[#6f42c1]">{t.trx_id}</td>
+                  <td className="p-4">
+                    <span className={cn("px-2 py-1 rounded text-[10px] font-bold uppercase", t.status === "used" ? "bg-gray-200 text-gray-600" : "bg-green-100 text-green-700")}>
+                      {t.status}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    {t.claimed_by_tenant ? (
+                      <button 
+                        onClick={() => {
+                          const tenant = tenants.find(ten => ten.tenant_id === t.claimed_by_tenant);
+                          if (tenant) setSelectedTenant(tenant);
+                        }}
+                        className="text-blue-500 hover:underline font-mono text-xs"
+                      >
+                        {t.claimed_by_tenant}
+                      </button>
+                    ) : "N/A"}
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="text-sm">
-                {transactions.map(t => (
-                  <tr key={t.trx_id} className="border-b border-[#E4E3E0] last:border-0 hover:bg-gray-50/50">
-                    <td className="p-4">{t.timestamp ? new Date(t.timestamp).toLocaleString() : "N/A"}</td>
-                    <td className="p-4 font-mono text-xs">{t.sender_number}</td>
-                    <td className="p-4 font-bold text-green-600">৳{t.amount}</td>
-                    <td className="p-4 font-mono text-xs text-[#6f42c1]">{t.trx_id}</td>
-                    <td className="p-4">
-                      <span className={cn("px-2 py-1 rounded text-[10px] font-bold uppercase", t.status === "used" ? "bg-gray-200 text-gray-600" : "bg-green-100 text-green-700")}>
-                        {t.status}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      {t.claimed_by_tenant ? (
-                        <button 
-                          onClick={() => {
-                            const tenant = tenants.find(ten => ten.tenant_id === t.claimed_by_tenant);
-                            if (tenant) setSelectedTenant(tenant);
-                          }}
-                          className="text-blue-500 hover:underline font-mono text-xs"
-                        >
-                          {t.claimed_by_tenant}
-                        </button>
-                      ) : "N/A"}
-                    </td>
-                  </tr>
-                ))}
-                {transactions.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-muted-foreground text-xs uppercase tracking-widest">
-                      No payment logs found
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+
+      {activeTab === "users" && (
+        <Card className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[600px]">
+            <thead>
+              <tr className="border-b border-[#E4E3E0] bg-gray-50 text-[10px] uppercase tracking-widest text-gray-500">
+                <th className="p-4 font-bold">Name</th>
+                <th className="p-4 font-bold">Email</th>
+                <th className="p-4 font-bold">Role</th>
+                <th className="p-4 font-bold">Tenant ID</th>
+                <th className="p-4 font-bold text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm">
+              {allUsers.map(u => (
+                <tr key={u.user_id} className="border-b border-[#E4E3E0] last:border-0 hover:bg-gray-50/50">
+                  <td className="p-4 font-medium">{u.name}</td>
+                  <td className="p-4">{u.email || "N/A"}</td>
+                  <td className="p-4">
+                    <span className={cn("px-2 py-1 rounded text-[10px] font-bold uppercase", 
+                      u.role === "SuperAdmin" ? "bg-red-100 text-red-700" : 
+                      u.role === "SchoolAdmin" ? "bg-purple-100 text-purple-700" : 
+                      u.role === "Teacher" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                    )}>
+                      {u.role}
+                    </span>
+                  </td>
+                  <td className="p-4 font-mono text-xs text-gray-500">{u.tenant_id}</td>
+                  <td className="p-4 text-right">
+                    <button className="text-[#6f42c1] hover:underline text-xs font-bold uppercase tracking-wider">Details</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </Card>
       )}
 
@@ -630,13 +715,29 @@ const LandingPage = () => {
 
 const LoginPage = () => {
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isEmailLogin, setIsEmailLogin] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = async () => {
+  const handleGoogleLogin = async () => {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
+      navigate("/dashboard");
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
       navigate("/dashboard");
     } catch (error: any) {
       toast.error(error.message);
@@ -656,16 +757,44 @@ const LoginPage = () => {
           <ShieldCheck className="w-16 h-16 text-[#6f42c1] mx-auto" />
           <div className="space-y-2">
             <h2 className="text-2xl font-bold">লগইন করুন</h2>
-            <p className="text-sm text-gray-500">আপনার গুগল অ্যাকাউন্ট ব্যবহার করে লগইন করুন</p>
+            <p className="text-sm text-gray-500">আপনার অ্যাকাউন্ট ব্যবহার করে লগইন করুন</p>
           </div>
-          <button 
-            onClick={handleLogin}
-            disabled={loading}
-            className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-[#59359a] transition-colors disabled:opacity-50 flex items-center justify-center gap-3 shadow-lg shadow-purple-500/30"
-          >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
-            Google দিয়ে লগইন
-          </button>
+
+          {!isEmailLogin ? (
+            <div className="space-y-4">
+              <button 
+                onClick={handleGoogleLogin}
+                disabled={loading}
+                className="w-full bg-white border border-gray-200 text-gray-700 py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-3 shadow-sm"
+              >
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+                Google দিয়ে লগইন
+              </button>
+              <button 
+                onClick={() => setIsEmailLogin(true)}
+                className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-[#59359a] transition-colors flex items-center justify-center gap-3 shadow-lg shadow-purple-500/30"
+              >
+                <LogIn className="w-5 h-5" />
+                Email দিয়ে লগইন
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleEmailLogin} className="space-y-4 text-left">
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Email</label>
+                <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Password</label>
+                <input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" />
+              </div>
+              <button type="submit" disabled={loading} className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold uppercase tracking-wider hover:bg-[#59359a] transition-colors flex items-center justify-center gap-2">
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "লগইন করুন"}
+              </button>
+              <button type="button" onClick={() => setIsEmailLogin(false)} className="w-full text-xs text-gray-500 font-bold uppercase tracking-widest hover:underline">Go Back</button>
+            </form>
+          )}
+
           <div className="pt-4 border-t border-gray-100">
             <p className="text-xs text-gray-500">
               অ্যাকাউন্ট নেই? <button onClick={() => navigate("/register")} className="text-[#6f42c1] font-bold hover:underline">রেজিস্ট্রেশন করুন</button>
@@ -679,26 +808,37 @@ const LoginPage = () => {
 
 const RegisterPage = () => {
   const [loading, setLoading] = useState(false);
+  const [role, setRole] = useState<"SchoolAdmin" | "Teacher" | "Student">("SchoolAdmin");
+  const [isEmailReg, setIsEmailReg] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
   const handleRegistration = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const regData = {
-      name: formData.get('institutionName'),
+      role,
+      name: formData.get('name'),
       eiin: formData.get('eiin'),
-      adminName: formData.get('adminName'),
-      email: formData.get('email'),
-      phone: formData.get('phone')
+      email: formData.get('email') || email,
+      phone: formData.get('phone'),
+      student_id: formData.get('student_id'),
+      teacher_id: formData.get('teacher_id'),
+      class: formData.get('class'),
+      section: formData.get('section'),
     };
     
     localStorage.setItem('pendingRegistration', JSON.stringify(regData));
-    toast.success("তথ্য সেভ হয়েছে! এখন গুগল দিয়ে লগইন করে সেটআপ সম্পন্ন করুন।");
     
     setLoading(true);
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      if (isEmailReg) {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        const provider = new GoogleAuthProvider();
+        await signInWithPopup(auth, provider);
+      }
       navigate("/dashboard");
     } catch (error: any) {
       toast.error(error.message);
@@ -717,32 +857,82 @@ const RegisterPage = () => {
         <Card className="p-8 space-y-6">
           <div className="text-center space-y-2">
             <UserPlus className="w-12 h-12 text-[#6f42c1] mx-auto" />
-            <h2 className="text-2xl font-bold">প্রতিষ্ঠান রেজিস্ট্রেশন</h2>
-            <p className="text-xs text-gray-500 uppercase tracking-widest">নতুন প্রতিষ্ঠানের জন্য তথ্য দিন</p>
+            <h2 className="text-2xl font-bold">রেজিস্ট্রেশন করুন</h2>
+            <div className="flex gap-2 justify-center pt-2">
+              {(["SchoolAdmin", "Teacher", "Student"] as const).map((r) => (
+                <button 
+                  key={r}
+                  onClick={() => setRole(r)}
+                  className={cn("px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all", 
+                    role === r ? "bg-[#6f42c1] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                  )}
+                >
+                  {r === "SchoolAdmin" ? "Inst Admin" : r}
+                </button>
+              ))}
+            </div>
           </div>
+
           <form onSubmit={handleRegistration} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Institution Name</label>
-              <input required name="institutionName" type="text" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="e.g. Dhaka College" />
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Full Name</label>
+                <input required name="name" type="text" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="Enter full name" />
+              </div>
+              
+              {role === "SchoolAdmin" && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">EIIN Number</label>
+                  <input required name="eiin" type="text" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="e.g. 108363" />
+                </div>
+              )}
+
+              {role === "Teacher" && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Teacher ID</label>
+                  <input required name="teacher_id" type="text" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="e.g. T-101" />
+                </div>
+              )}
+
+              {role === "Student" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Student ID</label>
+                    <input required name="student_id" type="text" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="ID" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Class</label>
+                    <input required name="class" type="text" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="Class" />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Phone Number</label>
+                <input required name="phone" type="tel" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="01XXXXXXXXX" />
+              </div>
+
+              <div className="flex items-center gap-2 py-2">
+                <input type="checkbox" id="emailReg" checked={isEmailReg} onChange={(e) => setIsEmailReg(e.target.checked)} className="w-4 h-4 text-[#6f42c1]" />
+                <label htmlFor="emailReg" className="text-xs font-bold text-gray-600 uppercase tracking-wider">Email/Password দিয়ে রেজিস্ট্রেশন</label>
+              </div>
+
+              {isEmailReg && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Email</label>
+                    <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Password</label>
+                    <input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" />
+                  </div>
+                </div>
+              )}
             </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">EIIN Number</label>
-              <input required name="eiin" type="text" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="e.g. 108363" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Admin Name</label>
-              <input required name="adminName" type="text" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="Your full name" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Email Address</label>
-              <input required name="email" type="email" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="admin@institution.edu" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Phone Number</label>
-              <input required name="phone" type="tel" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="01XXXXXXXXX" />
-            </div>
+
             <button type="submit" disabled={loading} className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold uppercase tracking-wider hover:bg-[#59359a] transition-colors flex items-center justify-center gap-2 shadow-lg shadow-purple-500/30">
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "রেজিস্ট্রেশন সম্পন্ন করুন"}
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : isEmailReg ? "রেজিস্ট্রেশন করুন" : "Google দিয়ে রেজিস্ট্রেশন"}
             </button>
           </form>
           <div className="pt-4 border-t border-gray-100 text-center">
@@ -756,84 +946,122 @@ const RegisterPage = () => {
   );
 };
 
-const Dashboard = ({ user, tenant }: { user: UserData, tenant: Tenant | null }) => {
+const TeacherDashboard = ({ user, tenant }: { user: UserData, tenant: Tenant | null }) => {
   const navigate = useNavigate();
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-gradient-to-br from-[#6f42c1] to-[#59359a] text-white border-none">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] uppercase font-mono tracking-widest opacity-80">Available Credits</p>
-              <h3 className="text-4xl font-bold mt-1">{tenant?.credits_left || 0}</h3>
-            </div>
-            <WalletIcon className="w-8 h-8 opacity-20" />
-          </div>
-          <button 
-            onClick={() => navigate("/wallet")}
-            className="mt-4 w-full bg-white/20 hover:bg-white/30 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors"
-          >
-            Recharge Now
-          </button>
-        </Card>
-        <Card title="Quick Actions" icon={Plus}>
-          <div className="grid grid-cols-2 gap-3">
-            <button 
-              onClick={() => navigate("/scanner")}
-              className="flex flex-col items-center gap-2 p-4 border border-dashed border-gray-200 rounded-xl hover:border-[#6f42c1] hover:bg-purple-50 transition-all group"
-            >
-              <QrCode className="w-6 h-6 text-gray-400 group-hover:text-[#6f42c1]" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">New Attendance</span>
-            </button>
-            <button 
-              onClick={() => navigate("/students")}
-              className="flex flex-col items-center gap-2 p-4 border border-dashed border-gray-200 rounded-xl hover:border-[#6f42c1] hover:bg-purple-50 transition-all group"
-            >
-              <Users className="w-6 h-6 text-gray-400 group-hover:text-[#6f42c1]" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Manage Students</span>
-            </button>
-          </div>
-        </Card>
-        <Card title="Daily Reward" icon={Gift}>
-          <div className="text-center space-y-3">
-            <p className="text-xs text-muted-foreground">Share the system with others and get 1 free credit daily!</p>
-            <button 
-              onClick={async () => {
-                try {
-                  const token = await auth.currentUser?.getIdToken();
-                  const res = await fetch("/api/rewards/share", {
-                    method: "POST",
-                    headers: { 
-                      "Content-Type": "application/json",
-                      "Authorization": `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ tenant_id: user.tenant_id })
-                  });
-                  if (res.ok) toast.success("Daily reward claimed!");
-                  else {
-                    const err = await res.json();
-                    toast.error(err.error || "Failed to claim reward");
-                  }
-                } catch (e) {
-                  toast.error("Network error");
-                }
-              }}
-              className="w-full bg-green-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-600 transition-colors shadow-lg shadow-green-100"
-            >
-              <Share2 className="w-4 h-4" />
-              Claim Daily Share
-            </button>
-          </div>
-        </Card>
+    <div className="space-y-6 max-w-md mx-auto">
+      <div className="bg-white border border-gray-200 rounded-xl p-5 flex items-center gap-4 shadow-sm">
+        <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center text-[#6f42c1] font-bold text-xl overflow-hidden">
+          {user.profile_image ? <img src={user.profile_image} alt="Profile" className="w-full h-full object-cover" /> : user.name.charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <h2 className="text-lg font-bold">{user.name}</h2>
+          <p className="text-xs text-gray-500 uppercase font-mono tracking-wider">Teacher • {user.teacher_id || "N/A"}</p>
+        </div>
       </div>
 
-      <Card title="Recent Activity" icon={History}>
-        <div className="space-y-4">
-          <div className="text-center py-8 text-muted-foreground italic text-xs font-mono uppercase tracking-widest">
-            No recent attendance records found
+      <div className="grid grid-cols-2 gap-3">
+        <button 
+          onClick={() => navigate("/scanner")}
+          className="bg-white border border-gray-200 rounded-xl p-6 flex flex-col items-center gap-3 hover:border-[#6f42c1] hover:bg-purple-50 transition-all shadow-sm"
+        >
+          <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center text-[#6f42c1]">
+            <QrCode className="w-6 h-6" />
           </div>
+          <span className="font-bold text-xs uppercase tracking-wider text-gray-700">Attendance Taker</span>
+        </button>
+        <button 
+          onClick={() => navigate("/reports")}
+          className="bg-white border border-gray-200 rounded-xl p-6 flex flex-col items-center gap-3 hover:border-[#6f42c1] hover:bg-purple-50 transition-all shadow-sm"
+        >
+          <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+            <FileText className="w-6 h-6" />
+          </div>
+          <span className="font-bold text-xs uppercase tracking-wider text-gray-700">Class Report</span>
+        </button>
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100 shadow-sm">
+        <button 
+          onClick={() => navigate("/teacher/profile")}
+          className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+        >
+          <div className="flex items-center gap-3">
+            <User className="w-5 h-5 text-gray-400" />
+            <span className="font-medium text-gray-700">Teachers Profile</span>
+          </div>
+          <ChevronRight className="w-4 h-4 text-gray-400" />
+        </button>
+        <button 
+          onClick={() => navigate("/reports/attendance")}
+          className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+        >
+          <div className="flex items-center gap-3">
+            <ClipboardList className="w-5 h-5 text-gray-400" />
+            <span className="font-medium text-gray-700">Attendance Report</span>
+          </div>
+          <ChevronRight className="w-4 h-4 text-gray-400" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const StudentDashboard = ({ user, tenant }: { user: UserData, tenant: Tenant | null }) => {
+  const navigate = useNavigate();
+  return (
+    <div className="space-y-6 max-w-md mx-auto">
+      <div className="bg-white border border-gray-200 rounded-xl p-5 flex items-center gap-4 shadow-sm">
+        <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-xl overflow-hidden">
+          {user.profile_image ? <img src={user.profile_image} alt="Profile" className="w-full h-full object-cover" /> : user.name.charAt(0).toUpperCase()}
         </div>
-      </Card>
+        <div>
+          <h2 className="text-lg font-bold">{user.name}</h2>
+          <p className="text-xs text-gray-500 uppercase font-mono tracking-wider">Student • {user.student_id || "N/A"}</p>
+          <p className="text-[10px] text-gray-400 uppercase font-mono tracking-widest">Class: {user.class || "N/A"}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3">
+        <button 
+          onClick={() => navigate("/student/id")}
+          className="bg-white border border-gray-200 rounded-xl p-6 flex items-center justify-between hover:border-[#6f42c1] hover:bg-purple-50 transition-all shadow-sm"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
+              <QrCode className="w-6 h-6" />
+            </div>
+            <div className="text-left">
+              <span className="block font-bold text-sm text-gray-800">Attendance Giver (My ID)</span>
+              <span className="text-[10px] text-gray-500 uppercase tracking-wider">Show this to your teacher</span>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-gray-400" />
+        </button>
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100 shadow-sm">
+        <button 
+          onClick={() => navigate("/student/profile")}
+          className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+        >
+          <div className="flex items-center gap-3">
+            <User className="w-5 h-5 text-gray-400" />
+            <span className="font-medium text-gray-700">Student Profile</span>
+          </div>
+          <ChevronRight className="w-4 h-4 text-gray-400" />
+        </button>
+        <button 
+          onClick={() => navigate("/reports/self")}
+          className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+        >
+          <div className="flex items-center gap-3">
+            <FileText className="w-5 h-5 text-gray-400" />
+            <span className="font-medium text-gray-700">Self-Attendance Report</span>
+          </div>
+          <ChevronRight className="w-4 h-4 text-gray-400" />
+        </button>
+      </div>
     </div>
   );
 };
@@ -842,7 +1070,6 @@ const InstitutionAdminDashboard = ({ user, tenant }: { user: UserData, tenant: T
   const navigate = useNavigate();
   return (
     <div className="space-y-6 max-w-md mx-auto">
-      {/* Credit Balance & Recharge */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 flex items-center justify-between shadow-sm">
         <div>
           <span className="text-xs text-gray-500 font-bold uppercase tracking-wider block mb-1">ক্রেডিট ব্যালেন্স</span>
@@ -860,7 +1087,6 @@ const InstitutionAdminDashboard = ({ user, tenant }: { user: UserData, tenant: T
         </button>
       </div>
 
-      {/* Main Stats/Actions */}
       <div className="grid grid-cols-1 gap-3">
         <button 
           onClick={() => navigate("/reports")}
@@ -870,7 +1096,7 @@ const InstitutionAdminDashboard = ({ user, tenant }: { user: UserData, tenant: T
             <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
               <FileText className="w-5 h-5" />
             </div>
-            <span className="font-bold text-gray-800">মোট ক্লাসের সংখ্যা</span>
+            <span className="font-bold text-gray-800">অ্যাটেন্ডেন্স রিপোর্ট</span>
           </div>
           <ChevronRight className="w-5 h-5 text-gray-400" />
         </button>
@@ -883,7 +1109,7 @@ const InstitutionAdminDashboard = ({ user, tenant }: { user: UserData, tenant: T
             <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600">
               <Users className="w-5 h-5" />
             </div>
-            <span className="font-bold text-gray-800">শিক্ষকের সংখ্যা</span>
+            <span className="font-bold text-gray-800">শিক্ষক ম্যানেজমেন্ট</span>
           </div>
           <ChevronRight className="w-5 h-5 text-gray-400" />
         </button>
@@ -896,13 +1122,38 @@ const InstitutionAdminDashboard = ({ user, tenant }: { user: UserData, tenant: T
             <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
               <Users className="w-5 h-5" />
             </div>
-            <span className="font-bold text-gray-800">শিক্ষার্থীর সংখ্যা</span>
+            <span className="font-bold text-gray-800">শিক্ষার্থী ম্যানেজমেন্ট</span>
+          </div>
+          <ChevronRight className="w-5 h-5 text-gray-400" />
+        </button>
+
+        <button 
+          onClick={() => navigate("/subjects/add")}
+          className="w-full bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between hover:border-[#6f42c1] hover:bg-purple-50 transition-all"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-[#6f42c1]">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <span className="font-bold text-gray-800">কোর্স ম্যানেজমেন্ট</span>
+          </div>
+          <ChevronRight className="w-5 h-5 text-gray-400" />
+        </button>
+
+        <button 
+          onClick={() => navigate("/wallet")}
+          className="w-full bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between hover:border-[#6f42c1] hover:bg-purple-50 transition-all"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600">
+              <WalletIcon className="w-5 h-5" />
+            </div>
+            <span className="font-bold text-gray-800">পেমেন্ট ম্যানেজমেন্ট</span>
           </div>
           <ChevronRight className="w-5 h-5 text-gray-400" />
         </button>
       </div>
 
-      {/* Settings Section */}
       <div className="mt-8">
         <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">সেটিংস</h3>
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
@@ -910,28 +1161,7 @@ const InstitutionAdminDashboard = ({ user, tenant }: { user: UserData, tenant: T
             onClick={() => navigate("/settings/general")}
             className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
           >
-            <span className="font-medium text-gray-700">প্রাথমিক সেটিংস</span>
-            <ChevronRight className="w-4 h-4 text-gray-400" />
-          </button>
-          <button 
-            onClick={() => navigate("/teachers/add")}
-            className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
-          >
-            <span className="font-medium text-gray-700">শিক্ষকের তথ্য যোগ করুন</span>
-            <ChevronRight className="w-4 h-4 text-gray-400" />
-          </button>
-          <button 
-            onClick={() => navigate("/students/add")}
-            className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
-          >
-            <span className="font-medium text-gray-700">শিক্ষার্থীর তথ্য যোগ করুন</span>
-            <ChevronRight className="w-4 h-4 text-gray-400" />
-          </button>
-          <button 
-            onClick={() => navigate("/subjects/add")}
-            className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
-          >
-            <span className="font-medium text-gray-700">বিষয় যোগ করুন</span>
+            <span className="font-medium text-gray-700">ইনস্টিটিউট সেটিংস</span>
             <ChevronRight className="w-4 h-4 text-gray-400" />
           </button>
         </div>
@@ -1308,6 +1538,142 @@ const AddSubject = ({ user }: { user: UserData }) => {
   );
 };
 
+const TeacherProfile = ({ user }: { user: UserData }) => {
+  return (
+    <div className="max-w-md mx-auto space-y-6">
+      <h2 className="text-xl font-bold text-gray-800">Teachers Profile</h2>
+      <Card className="p-0 overflow-hidden">
+        <div className="bg-gradient-to-r from-[#6f42c1] to-[#59359a] h-24"></div>
+        <div className="px-6 pb-6 -mt-12 text-center">
+          <div className="w-24 h-24 rounded-full border-4 border-white bg-purple-100 mx-auto flex items-center justify-center text-[#6f42c1] font-bold text-3xl overflow-hidden shadow-md">
+            {user.profile_image ? <img src={user.profile_image} alt="Profile" className="w-full h-full object-cover" /> : user.name.charAt(0).toUpperCase()}
+          </div>
+          <h3 className="mt-4 text-xl font-bold">{user.name}</h3>
+          <p className="text-xs text-gray-500 uppercase font-mono tracking-wider">Teacher</p>
+          
+          <div className="mt-8 space-y-4 text-left">
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <Mail className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Email</p>
+                <p className="text-sm">{user.email || "N/A"}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <Phone className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Phone</p>
+                <p className="text-sm">{user.phone || "N/A"}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <Database className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Teacher ID</p>
+                <p className="text-sm font-mono">{user.teacher_id || "N/A"}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+const StudentProfile = ({ user }: { user: UserData }) => {
+  return (
+    <div className="max-w-md mx-auto space-y-6">
+      <h2 className="text-xl font-bold text-gray-800">Student Profile</h2>
+      <Card className="p-0 overflow-hidden">
+        <div className="bg-gradient-to-r from-orange-400 to-orange-600 h-24"></div>
+        <div className="px-6 pb-6 -mt-12 text-center">
+          <div className="w-24 h-24 rounded-full border-4 border-white bg-orange-100 mx-auto flex items-center justify-center text-orange-600 font-bold text-3xl overflow-hidden shadow-md">
+            {user.profile_image ? <img src={user.profile_image} alt="Profile" className="w-full h-full object-cover" /> : user.name.charAt(0).toUpperCase()}
+          </div>
+          <h3 className="mt-4 text-xl font-bold">{user.name}</h3>
+          <p className="text-xs text-gray-500 uppercase font-mono tracking-wider">Student</p>
+          
+          <div className="mt-8 space-y-4 text-left">
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <Mail className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Email</p>
+                <p className="text-sm">{user.email || "N/A"}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <Phone className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Phone</p>
+                <p className="text-sm">{user.phone || "N/A"}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <Database className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Student ID</p>
+                <p className="text-sm font-mono">{user.student_id || "N/A"}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <BookOpen className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Class</p>
+                <p className="text-sm">{user.class || "N/A"}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+const StudentIDCard = ({ user, tenant }: { user: UserData, tenant: Tenant | null }) => {
+  return (
+    <div className="max-w-md mx-auto space-y-6">
+      <h2 className="text-xl font-bold text-gray-800 text-center">Digital ID Card</h2>
+      <div className="bg-white border-2 border-gray-200 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-2 bg-[#6f42c1]"></div>
+        <div className="text-center space-y-6">
+          <div className="space-y-1">
+            <h3 className="text-lg font-bold uppercase tracking-tight">{tenant?.name || "Institution Name"}</h3>
+            <p className="text-[10px] text-gray-400 uppercase font-mono tracking-widest">Digital Student ID</p>
+          </div>
+          
+          <div className="w-32 h-32 rounded-2xl bg-gray-100 mx-auto flex items-center justify-center border-4 border-gray-50 shadow-inner overflow-hidden">
+            {user.profile_image ? <img src={user.profile_image} alt="Profile" className="w-full h-full object-cover" /> : <User className="w-16 h-16 text-gray-300" />}
+          </div>
+
+          <div className="space-y-1">
+            <h4 className="text-xl font-bold text-gray-900">{user.name}</h4>
+            <p className="text-sm font-medium text-[#6f42c1]">{user.student_id}</p>
+          </div>
+
+          <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 flex flex-col items-center gap-4">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+              <QrCode className="w-32 h-32 text-[#6f42c1]" />
+            </div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Scan for Attendance</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
+            <div className="text-left">
+              <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Class</p>
+              <p className="text-sm font-bold">{user.class || "N/A"}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Valid Until</p>
+              <p className="text-sm font-bold">Dec 2026</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p className="text-center text-xs text-gray-500 italic">Show this QR code to your teacher to mark attendance.</p>
+    </div>
+  );
+};
+
 function AppContent() {
   const [user, setUser] = useState<UserData | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
@@ -1390,22 +1756,18 @@ function AppContent() {
             const newUser: UserData = {
               user_id: firebaseUser.uid,
               tenant_id: newTenantId,
-              role: isSuperAdmin ? "SuperAdmin" : "SchoolAdmin",
-              name: pendingReg?.adminName || firebaseUser.displayName || "Admin",
+              role: isSuperAdmin ? "SuperAdmin" : (pendingReg?.role || "SchoolAdmin"),
+              name: pendingReg?.adminName || pendingReg?.name || firebaseUser.displayName || "User",
               email: pendingReg?.email || firebaseUser.email || "",
-              phone: pendingReg?.phone || ""
+              phone: pendingReg?.phone || "",
+              teacher_id: pendingReg?.teacher_id || "",
+              student_id: pendingReg?.student_id || "",
+              class: pendingReg?.class || ""
             };
-
-            // Clear pending registration
             localStorage.removeItem('pendingRegistration');
-
-            // In a real app, this would be handled by a registration flow
-            // For this demo, we'll auto-provision
             try {
               await setDoc(doc(db, "tenants", newTenantId), newTenant);
               await setDoc(doc(db, "users", firebaseUser.uid), newUser);
-              
-              // Listen for tenant updates
               const unsubscribe = onSnapshot(doc(db, "tenants", newTenantId), (doc) => {
                 if (doc.exists()) {
                   setTenant(doc.data() as Tenant);
@@ -1417,7 +1779,6 @@ function AppContent() {
                   setAsyncError(e as Error);
                 }
               });
-              
               setUser(newUser);
               setTenant(newTenant);
               setLoading(false);
@@ -1467,17 +1828,26 @@ function AppContent() {
             !user ? <Navigate to="/login" /> : 
             user.role === "SuperAdmin" ? <SuperAdminDashboard user={user} /> : 
             user.role === "SchoolAdmin" ? <InstitutionAdminDashboard user={user} tenant={tenant} /> :
-            <Dashboard user={user} tenant={tenant} />
+            user.role === "Teacher" ? <TeacherDashboard user={user} tenant={tenant} /> :
+            <StudentDashboard user={user} tenant={tenant} />
           } />
+          <Route path="/courses" element={user ? <div className="p-8">Course Management Coming Soon</div> : <Navigate to="/login" />} />
+          <Route path="/users" element={user?.role === "SuperAdmin" ? <div className="p-8">User Management View</div> : <Navigate to="/login" />} />
+          <Route path="/payments" element={user ? <div className="p-8">Payment History View</div> : <Navigate to="/login" />} />
           <Route path="/scanner" element={user ? <Scanner user={user} /> : <Navigate to="/login" />} />
           <Route path="/wallet" element={user ? <WalletView user={user} tenant={tenant} /> : <Navigate to="/login" />} />
           <Route path="/students" element={user ? <StudentsList user={user} /> : <Navigate to="/login" />} />
           <Route path="/reports" element={user ? <ReportsView user={user} /> : <Navigate to="/login" />} />
+          <Route path="/reports/attendance" element={user ? <ReportsView user={user} /> : <Navigate to="/login" />} />
+          <Route path="/reports/self" element={user ? <ReportsView user={user} /> : <Navigate to="/login" />} />
           <Route path="/teachers" element={user ? <TeachersList user={user} /> : <Navigate to="/login" />} />
           <Route path="/settings/general" element={user ? <GeneralSettings user={user} /> : <Navigate to="/login" />} />
           <Route path="/teachers/add" element={user ? <AddTeacher user={user} /> : <Navigate to="/login" />} />
           <Route path="/students/add" element={user ? <AddStudent user={user} /> : <Navigate to="/login" />} />
           <Route path="/subjects/add" element={user ? <AddSubject user={user} /> : <Navigate to="/login" />} />
+          <Route path="/teacher/profile" element={user ? <TeacherProfile user={user} /> : <Navigate to="/login" />} />
+          <Route path="/student/profile" element={user ? <StudentProfile user={user} /> : <Navigate to="/login" />} />
+          <Route path="/student/id" element={user ? <StudentIDCard user={user} tenant={tenant} /> : <Navigate to="/login" />} />
         </Routes>
       </Layout>
     </Router>
