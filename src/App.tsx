@@ -476,6 +476,7 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
   const [allUsers, setAllUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"institutions" | "payments" | "users">("institutions");
+  const [instFilter, setInstFilter] = useState<"all" | "active" | "inactive">("all");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [tenantToDelete, setTenantToDelete] = useState<Tenant | null>(null);
   const [asyncError, setAsyncError] = useState<Error | null>(null);
@@ -521,11 +522,23 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
 
   const earnedMoney = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
   
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const sixtyDaysAgo = new Date();
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
   
-  const activeInstitutions = tenants.filter(t => t.last_active_date && new Date(t.last_active_date) >= sevenDaysAgo).length;
-  const inactiveInstitutions = tenants.length - activeInstitutions;
+  const activeInstitutionsCount = tenants.filter(t => t.last_active_date && new Date(t.last_active_date) >= sixtyDaysAgo).length;
+  const inactiveInstitutionsCount = tenants.length - activeInstitutionsCount;
+
+  const filteredTenants = tenants.filter(t => {
+    if (instFilter === "active") return t.last_active_date && new Date(t.last_active_date) >= sixtyDaysAgo;
+    if (instFilter === "inactive") return !t.last_active_date || new Date(t.last_active_date) < sixtyDaysAgo;
+    return true;
+  }).slice(0, 10);
+
+  const lastTenTransactions = [...transactions].sort((a, b) => 
+    new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+  ).slice(0, 10);
+
+  const lastTenUsers = [...allUsers].slice(0, 10);
 
   const handleDeleteTenant = async () => {
     if (!tenantToDelete) return;
@@ -605,27 +618,47 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="bg-white border-[#E4E3E0]">
-          <p className="text-[10px] uppercase font-mono tracking-widest text-muted-foreground">Institution Registered</p>
-          <h3 className="text-3xl font-bold mt-1 text-[#6f42c1]">{tenants.length}</h3>
-        </Card>
-        <Card className="bg-white border-[#E4E3E0]">
-          <p className="text-[10px] uppercase font-mono tracking-widest text-muted-foreground">Active Institution</p>
-          <h3 className="text-3xl font-bold mt-1 text-green-600">{activeInstitutions}</h3>
-        </Card>
-        <Card className="bg-white border-[#E4E3E0]">
-          <p className="text-[10px] uppercase font-mono tracking-widest text-muted-foreground">Inactive Institution</p>
-          <h3 className="text-3xl font-bold mt-1 text-red-500">{inactiveInstitutions}</h3>
-        </Card>
-        <Card className="bg-white border-[#E4E3E0]">
-          <p className="text-[10px] uppercase font-mono tracking-widest text-muted-foreground">Earned Money</p>
-          <h3 className="text-3xl font-bold mt-1 text-blue-600">৳{earnedMoney}</h3>
-        </Card>
+        <button 
+          onClick={() => { setActiveTab("institutions"); setInstFilter("all"); }}
+          className="text-left"
+        >
+          <Card className="bg-white border-[#E4E3E0] hover:border-[#6f42c1] transition-all cursor-pointer h-full">
+            <p className="text-[10px] uppercase font-mono tracking-widest text-muted-foreground">Registered Institute/Dept.</p>
+            <h3 className="text-3xl font-bold mt-1 text-[#6f42c1]">{tenants.length}</h3>
+          </Card>
+        </button>
+        <button 
+          onClick={() => { setActiveTab("institutions"); setInstFilter("active"); }}
+          className="text-left"
+        >
+          <Card className="bg-white border-[#E4E3E0] hover:border-green-500 transition-all cursor-pointer h-full">
+            <p className="text-[10px] uppercase font-mono tracking-widest text-muted-foreground">Active Institute</p>
+            <h3 className="text-3xl font-bold mt-1 text-green-600">{activeInstitutionsCount}</h3>
+          </Card>
+        </button>
+        <button 
+          onClick={() => { setActiveTab("institutions"); setInstFilter("inactive"); }}
+          className="text-left"
+        >
+          <Card className="bg-white border-[#E4E3E0] hover:border-red-500 transition-all cursor-pointer h-full">
+            <p className="text-[10px] uppercase font-mono tracking-widest text-muted-foreground">Inactive Institute</p>
+            <h3 className="text-3xl font-bold mt-1 text-red-500">{inactiveInstitutionsCount}</h3>
+          </Card>
+        </button>
+        <button 
+          onClick={() => setActiveTab("payments")}
+          className="text-left"
+        >
+          <Card className="bg-white border-[#E4E3E0] hover:border-blue-500 transition-all cursor-pointer h-full">
+            <p className="text-[10px] uppercase font-mono tracking-widest text-muted-foreground">Earned Money</p>
+            <h3 className="text-3xl font-bold mt-1 text-blue-600">৳{earnedMoney}</h3>
+          </Card>
+        </button>
       </div>
 
       <div className="flex gap-2 border-b border-[#E4E3E0] pb-2 overflow-x-auto">
         <button 
-          onClick={() => setActiveTab("institutions")}
+          onClick={() => { setActiveTab("institutions"); setInstFilter("all"); }}
           className={cn("px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-t-lg transition-colors whitespace-nowrap", activeTab === "institutions" ? "bg-[#6f42c1] text-white" : "text-gray-500 hover:bg-gray-100")}
         >
           Institutions
@@ -662,7 +695,7 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
                 </tr>
               </thead>
               <tbody className="text-sm">
-                {tenants.map(t => {
+                {filteredTenants.map(t => {
                   const admin = admins[t.tenant_id];
                   return (
                     <tr key={t.tenant_id} className="border-b border-[#E4E3E0] last:border-0 hover:bg-gray-50/50">
@@ -680,10 +713,17 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
                           Details
                         </button>
                         <button 
-                          onClick={() => setTenantToDelete(t)}
+                          onClick={async () => {
+                            try {
+                              await updateDoc(doc(db, "tenants", t.tenant_id), { status: "deactivated" });
+                              toast.success("Institution deactivated");
+                            } catch (e: any) {
+                              toast.error("Failed to deactivate: " + e.message);
+                            }
+                          }}
                           className="text-red-600 hover:text-red-700 text-[10px] font-bold uppercase tracking-wider bg-red-50 px-3 py-1.5 rounded-md"
                         >
-                          Delete
+                          Deactivate
                         </button>
                       </td>
                     </tr>
@@ -709,7 +749,7 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
               </tr>
             </thead>
             <tbody className="text-sm">
-              {transactions.map(t => (
+              {lastTenTransactions.map(t => (
                 <tr key={t.trx_id} className="border-b border-[#E4E3E0] last:border-0 hover:bg-gray-50/50">
                   <td className="p-4">{t.timestamp ? new Date(t.timestamp).toLocaleString() : "N/A"}</td>
                   <td className="p-4 font-mono text-xs">{t.sender_number}</td>
@@ -753,7 +793,7 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
               </tr>
             </thead>
             <tbody className="text-sm">
-              {allUsers.map(u => (
+              {lastTenUsers.map(u => (
                 <tr key={u.user_id} className="border-b border-[#E4E3E0] last:border-0 hover:bg-gray-50/50">
                   <td className="p-4 font-medium">{u.name}</td>
                   <td className="p-4">{u.email || "N/A"}</td>
@@ -768,7 +808,15 @@ const SuperAdminDashboard = ({ user }: { user: UserData }) => {
                   </td>
                   <td className="p-4 font-mono text-xs text-gray-500">{u.tenant_id}</td>
                   <td className="p-4 text-right">
-                    <button className="text-[#6f42c1] hover:underline text-xs font-bold uppercase tracking-wider">Details</button>
+                    <button 
+                      onClick={() => {
+                        const tenant = tenants.find(t => t.tenant_id === u.tenant_id);
+                        if (tenant) setSelectedTenant(tenant);
+                      }}
+                      className="text-[#6f42c1] hover:underline text-xs font-bold uppercase tracking-wider"
+                    >
+                      Details
+                    </button>
                   </td>
                 </tr>
               ))}
