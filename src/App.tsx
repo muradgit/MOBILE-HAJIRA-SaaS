@@ -2548,7 +2548,9 @@ function AppContent() {
     }
     testConnection();
 
-    return onAuthStateChanged(auth, async (firebaseUser) => {
+    let tenantUnsub: (() => void) | null = null;
+
+    const authUnsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         // Fetch user data from Firestore
         try {
@@ -2567,7 +2569,8 @@ function AppContent() {
 
             if (userData.tenant_id) {
               // Listen for tenant updates
-              const unsubscribe = onSnapshot(doc(db, "tenants", userData.tenant_id), (doc) => {
+              if (tenantUnsub) tenantUnsub();
+              tenantUnsub = onSnapshot(doc(db, "tenants", userData.tenant_id), (doc) => {
                 if (doc.exists()) {
                   setTenant(doc.data() as Tenant);
                 }
@@ -2579,7 +2582,6 @@ function AppContent() {
                 }
               });
               setLoading(false);
-              return () => unsubscribe();
             } else {
               setLoading(false);
             }
@@ -2623,7 +2625,8 @@ function AppContent() {
             try {
               await setDoc(doc(db, "tenants", newTenantId), newTenant);
               await setDoc(doc(db, "users", firebaseUser.uid), newUser);
-              const unsubscribe = onSnapshot(doc(db, "tenants", newTenantId), (doc) => {
+              if (tenantUnsub) tenantUnsub();
+              tenantUnsub = onSnapshot(doc(db, "tenants", newTenantId), (doc) => {
                 if (doc.exists()) {
                   setTenant(doc.data() as Tenant);
                 }
@@ -2637,7 +2640,6 @@ function AppContent() {
               setUser(newUser);
               setTenant(newTenant);
               setLoading(false);
-              return () => unsubscribe();
             } catch (error) {
               try {
                 handleFirestoreError(error, OperationType.CREATE, `users/${firebaseUser.uid}`);
@@ -2659,8 +2661,19 @@ function AppContent() {
         setUser(null);
         setTenant(null);
         setLoading(false);
+        if (tenantUnsub) {
+          tenantUnsub();
+          tenantUnsub = null;
+        }
       }
     });
+
+    return () => {
+      authUnsub();
+      if (tenantUnsub) {
+        tenantUnsub();
+      }
+    };
   }, []);
 
   if (loading) {
