@@ -308,8 +308,11 @@ const Layout = ({ children, user, tenant, onLogout }: { children: React.ReactNod
                         onClick={async () => {
                           setIsProfileOpen(false);
                           const nextRole = user.role === "SuperAdmin" ? "InstitutionAdmin" : "SuperAdmin";
+                          const roleLabel = nextRole === "SuperAdmin" ? "Super Admin" : "Institute Admin";
+                          toast.loading(`Switching to ${roleLabel} Role...`, { id: 'role-switch' });
                           await updateDoc(doc(db, "users", user.user_id), { role: nextRole });
-                          toast.success(`Switched to ${nextRole}`);
+                          toast.success(`Switching to ${roleLabel} Role`, { id: 'role-switch' });
+                          navigate("/dashboard");
                         }}
                         className="w-full px-4 py-2 text-left text-sm font-medium hover:bg-gray-50 flex items-center gap-2 text-purple-600"
                       >
@@ -2549,30 +2552,29 @@ function AppContent() {
     testConnection();
 
     let tenantUnsub: (() => void) | null = null;
+    let userUnsub: (() => void) | null = null;
 
     const authUnsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Fetch user data from Firestore
-        try {
-          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
-          if (userDoc.exists()) {
-            const userData = userDoc.data() as UserData;
+        // Listen for user data updates in real-time
+        if (userUnsub) userUnsub();
+        userUnsub = onSnapshot(doc(db, "users", firebaseUser.uid), async (uDoc) => {
+          if (uDoc.exists()) {
+            const userData = uDoc.data() as UserData;
             
             if (!userData.email && firebaseUser.email) {
               userData.email = firebaseUser.email;
               updateDoc(doc(db, "users", firebaseUser.uid), { email: firebaseUser.email }).catch(console.error);
             }
             
-            // We removed the forced SuperAdmin override here so the user can switch roles
-            
             setUser(userData);
 
             if (userData.tenant_id) {
               // Listen for tenant updates
               if (tenantUnsub) tenantUnsub();
-              tenantUnsub = onSnapshot(doc(db, "tenants", userData.tenant_id), (doc) => {
-                if (doc.exists()) {
-                  setTenant(doc.data() as Tenant);
+              tenantUnsub = onSnapshot(doc(db, "tenants", userData.tenant_id), (tDoc) => {
+                if (tDoc.exists()) {
+                  setTenant(tDoc.data() as Tenant);
                 }
               }, (error) => {
                 try {
@@ -2581,10 +2583,8 @@ function AppContent() {
                   setAsyncError(e as Error);
                 }
               });
-              setLoading(false);
-            } else {
-              setLoading(false);
             }
+            setLoading(false);
           } else {
             // If user doesn't exist, create a default InstitutionAdmin for demo
             const isSuperAdmin = firebaseUser.email === "hello@muradkhank31.com";
@@ -2625,21 +2625,7 @@ function AppContent() {
             try {
               await setDoc(doc(db, "tenants", newTenantId), newTenant);
               await setDoc(doc(db, "users", firebaseUser.uid), newUser);
-              if (tenantUnsub) tenantUnsub();
-              tenantUnsub = onSnapshot(doc(db, "tenants", newTenantId), (doc) => {
-                if (doc.exists()) {
-                  setTenant(doc.data() as Tenant);
-                }
-              }, (error) => {
-                try {
-                  handleFirestoreError(error, OperationType.GET, `tenants/${newTenantId}`);
-                } catch (e) {
-                  setAsyncError(e as Error);
-                }
-              });
-              setUser(newUser);
-              setTenant(newTenant);
-              setLoading(false);
+              // The onSnapshot above will catch this new document
             } catch (error) {
               try {
                 handleFirestoreError(error, OperationType.CREATE, `users/${firebaseUser.uid}`);
@@ -2649,14 +2635,14 @@ function AppContent() {
               setLoading(false);
             }
           }
-        } catch (error) {
+        }, (error) => {
           try {
             handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
           } catch (e) {
             setAsyncError(e as Error);
           }
           setLoading(false);
-        }
+        });
       } else {
         setUser(null);
         setTenant(null);
@@ -2665,14 +2651,17 @@ function AppContent() {
           tenantUnsub();
           tenantUnsub = null;
         }
+        if (userUnsub) {
+          userUnsub();
+          userUnsub = null;
+        }
       }
     });
 
     return () => {
       authUnsub();
-      if (tenantUnsub) {
-        tenantUnsub();
-      }
+      if (tenantUnsub) tenantUnsub();
+      if (userUnsub) userUnsub();
     };
   }, []);
 
