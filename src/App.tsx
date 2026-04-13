@@ -74,7 +74,9 @@ import {
   Menu,
   X,
   ChevronDown,
-  LifeBuoy
+  LifeBuoy,
+  Settings,
+  Filter
 } from "lucide-react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { cn } from "./lib/utils";
@@ -87,10 +89,11 @@ interface Tenant {
   credits_left: number;
   promo_code: string;
   referral_count: number;
-  status?: "active" | "suspended";
+  status?: "active" | "suspended" | "deactivated";
   plan?: "Free Tier" | "Paid";
   class_duration?: number;
   total_credit_used?: number;
+  total_credit_purchased?: number;
   last_reward_date?: string;
   promo_code_claimed?: boolean;
   recharge_status?: string;
@@ -106,6 +109,8 @@ interface Tenant {
   last_active_date?: string;
   teachers_amount?: number;
   students_amount?: number;
+  institutionType?: "College" | "School" | "Madrasa" | "Coaching Center";
+  departmentName?: string;
 }
 
 interface UserData {
@@ -468,6 +473,317 @@ const Card = ({ children, className, title, icon: Icon }: { children: React.Reac
 );
 
 // --- Pages ---
+
+const InstituteManagement = ({ user }: { user: UserData }) => {
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
+    const saved = localStorage.getItem("sa_inst_cols");
+    return saved ? JSON.parse(saved) : ["Actions", "EIIN", "Institution Name", "Admin Name", "Admin Mobile", "Last Active Date", "Credit Balance", "Status"];
+  });
+
+  const [tenantToDelete, setTenantToDelete] = useState<Tenant | null>(null);
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    localStorage.setItem("sa_inst_cols", JSON.stringify(visibleColumns));
+  }, [visibleColumns]);
+
+  useEffect(() => {
+    const q = query(collection(db, "tenants"));
+    return onSnapshot(q, (snapshot) => {
+      setTenants(snapshot.docs.map(doc => doc.data() as Tenant).filter(t => t.tenant_id !== "SUPER_ADMIN_TENANT"));
+      setLoading(false);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, "tenants"));
+  }, []);
+
+  const sixtyDaysAgo = new Date();
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+  const getStats = (type: string) => {
+    const filtered = tenants.filter(t => t.institutionType === type);
+    const active = filtered.filter(t => t.last_active_date && new Date(t.last_active_date) >= sixtyDaysAgo).length;
+    const inactive = filtered.length - active;
+    return { active, inactive };
+  };
+
+  const allColumns = [
+    "Actions", "EIIN", "Institution Name", "Department Name", "Admin Name", "Admin Mobile", "Admin Email",
+    "Last Active Date", "Credit Balance", "Instance_ID", "Institute Website", "Status", "Plan",
+    "Per Class Duration", "Teachers Registered Amount", "Students Registered Amount",
+    "Total Credit Purchased", "Total Credit Used", "Last Reward Date", "Last Recharge Date",
+    "Promo Code", "Promo Code Claimed?", "Referral Count"
+  ];
+
+  const toggleColumn = (col: string) => {
+    setVisibleColumns(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col]);
+  };
+
+  const handleDelete = async () => {
+    if (!tenantToDelete) return;
+    try {
+      await deleteDoc(doc(db, "tenants", tenantToDelete.tenant_id));
+      toast.success("Institution deleted");
+      setTenantToDelete(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `tenants/${tenantToDelete.tenant_id}`);
+    }
+  };
+
+  const handleDeactivate = async (id: string) => {
+    try {
+      await updateDoc(doc(db, "tenants", id), { status: "deactivated" });
+      toast.success("Institution deactivated");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `tenants/${id}`);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold">Institute Management</h2>
+        <button 
+          onClick={() => navigate("/institutes/create")}
+          className="bg-[#6f42c1] text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" /> Create Institute
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {["College", "School", "Madrasa", "Coaching Center"].map(type => {
+          const { active, inactive } = getStats(type);
+          return (
+            <Card key={type} className="p-4">
+              <p className="text-[10px] uppercase font-mono tracking-widest text-muted-foreground">{type}</p>
+              <div className="mt-2 flex justify-between items-end">
+                <div>
+                  <p className="text-2xl font-bold">{active + inactive}</p>
+                  <p className="text-[10px] text-gray-400">Total</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-bold text-green-600">Active: {active}</p>
+                  <p className="text-xs font-bold text-red-500">Inactive: {inactive}</p>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      <Card className="overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500">Institutions List</h3>
+          <button 
+            onClick={() => setShowSettings(!showSettings)}
+            className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            <Settings className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        {showSettings && (
+          <div className="p-4 bg-gray-50 border-b border-gray-100 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+            {allColumns.map(col => (
+              <label key={col} className="flex items-center gap-2 text-xs cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={visibleColumns.includes(col)}
+                  onChange={() => toggleColumn(col)}
+                  className="rounded text-[#6f42c1]"
+                />
+                {col}
+              </label>
+            ))}
+          </div>
+        )}
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-max">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50/30 text-[10px] uppercase tracking-widest text-gray-400">
+                {visibleColumns.map(col => <th key={col} className="p-4 font-bold">{col}</th>)}
+              </tr>
+            </thead>
+            <tbody className="text-sm">
+              {tenants.map(t => (
+                <tr key={t.tenant_id} className="border-b border-gray-50 last:border-0 hover:bg-purple-50/30 transition-colors">
+                  {visibleColumns.map(col => (
+                    <td key={col} className="p-4">
+                      {col === "Actions" && (
+                        <div className="flex gap-2">
+                          <button onClick={() => handleDeactivate(t.tenant_id)} className="text-xs font-bold text-orange-500 hover:underline">Deactivate</button>
+                          <button onClick={() => setTenantToDelete(t)} className="text-xs font-bold text-red-500 hover:underline">Delete</button>
+                        </div>
+                      )}
+                      {col === "EIIN" && <span className="font-mono text-xs">{t.eiin}</span>}
+                      {col === "Institution Name" && <span className="font-bold">{t.name}</span>}
+                      {col === "Department Name" && <span>{t.departmentName || "N/A"}</span>}
+                      {col === "Admin Name" && <span>{t.admin_name || "N/A"}</span>}
+                      {col === "Admin Mobile" && <span>{t.admin_mobile || "N/A"}</span>}
+                      {col === "Admin Email" && <span>{t.owner_email || "N/A"}</span>}
+                      {col === "Last Active Date" && <span>{t.last_active_date ? new Date(t.last_active_date).toLocaleDateString() : "Never"}</span>}
+                      {col === "Credit Balance" && <span className="font-bold text-[#6f42c1]">{t.credits_left}</span>}
+                      {col === "Instance_ID" && <span className="font-mono text-xs text-gray-400">{t.tenant_id}</span>}
+                      {col === "Institute Website" && <span className="text-blue-500 truncate max-w-[150px] inline-block">{t.website || "N/A"}</span>}
+                      {col === "Status" && (
+                        <span className={cn(
+                          "px-2 py-1 rounded text-[10px] font-bold uppercase",
+                          t.status === "deactivated" ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600"
+                        )}>
+                          {t.status || "active"}
+                        </span>
+                      )}
+                      {col === "Plan" && (
+                        <span className={cn(
+                          "px-2 py-1 rounded text-[10px] font-bold uppercase",
+                          t.plan === "Paid" ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-600"
+                        )}>
+                          {t.plan || "Free Tier"}
+                        </span>
+                      )}
+                      {col === "Per Class Duration" && <span>{t.class_duration || 45}m</span>}
+                      {col === "Teachers Registered Amount" && <span>{t.teachers_amount || 0}</span>}
+                      {col === "Students Registered Amount" && <span>{t.students_amount || 0}</span>}
+                      {col === "Total Credit Purchased" && <span>{t.total_credit_purchased || 0}</span>}
+                      {col === "Total Credit Used" && <span>{t.total_credit_used || 0}</span>}
+                      {col === "Last Reward Date" && <span>{t.last_reward_date || "N/A"}</span>}
+                      {col === "Last Recharge Date" && <span>{t.last_recharge_date || "N/A"}</span>}
+                      {col === "Promo Code" && <span className="font-mono text-[#6f42c1]">{t.promo_code}</span>}
+                      {col === "Promo Code Claimed?" && <span>{t.promo_code_claimed ? "Yes" : "No"}</span>}
+                      {col === "Referral Count" && <span>{t.referral_count || 0}</span>}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {tenantToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full space-y-4">
+            <h3 className="text-lg font-bold text-red-600">Delete Institution</h3>
+            <p className="text-sm text-gray-600">Are you sure you want to delete <strong>{tenantToDelete.name}</strong>? This action cannot be undone.</p>
+            <div className="flex gap-3 justify-end pt-2">
+              <button 
+                onClick={() => setTenantToDelete(null)}
+                className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleDelete}
+                className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CreateInstitute = ({ user }: { user: UserData }) => {
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    const formData = new FormData(e.currentTarget);
+    
+    const tenantId = "INST_" + Math.random().toString(36).substr(2, 9).toUpperCase();
+    const promoCode = Math.random().toString(36).substr(2, 6).toUpperCase();
+
+    const newTenant: Tenant = {
+      tenant_id: tenantId,
+      name: formData.get("name") as string,
+      eiin: formData.get("eiin") as string,
+      institutionType: formData.get("type") as any,
+      departmentName: formData.get("dept") as string || "",
+      admin_name: formData.get("adminName") as string,
+      admin_mobile: formData.get("adminMobile") as string,
+      owner_email: formData.get("adminEmail") as string,
+      credits_left: 10,
+      promo_code: promoCode,
+      referral_count: 0,
+      status: "active",
+      plan: "Free Tier",
+      class_duration: 45,
+      total_credit_used: 0,
+      total_credit_purchased: 0,
+      last_active_date: new Date().toISOString()
+    };
+
+    try {
+      await setDoc(doc(db, "tenants", tenantId), newTenant);
+      toast.success("Institution created successfully!");
+      navigate("/institutes");
+    } catch (error: any) {
+      toast.error("Failed to create institution: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6">
+      <button onClick={() => navigate(-1)} className="text-[#6f42c1] font-bold text-xs uppercase tracking-wider hover:underline flex items-center gap-1">
+        &larr; Back
+      </button>
+      <Card className="p-8">
+        <h2 className="text-2xl font-bold mb-6">Create New Institute</h2>
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Institution Name</label>
+            <input required name="name" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 uppercase mb-1">EIIN / Reg No</label>
+            <input required name="eiin" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Type</label>
+            <select required name="type" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]">
+              <option value="School">School</option>
+              <option value="College">College</option>
+              <option value="Madrasa">Madrasa</option>
+              <option value="Coaching Center">Coaching Center</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Department Name (Optional)</label>
+            <input name="dept" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Admin Name</label>
+            <input required name="adminName" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Admin Mobile</label>
+            <input required name="adminMobile" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Admin Email</label>
+            <input required name="adminEmail" type="email" className="w-full border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-[#6f42c1]" />
+          </div>
+          <div className="md:col-span-2 pt-4">
+            <button disabled={loading} type="submit" className="w-full bg-[#6f42c1] text-white py-3 rounded-xl font-bold uppercase tracking-wider hover:bg-[#59359a] transition-all flex items-center justify-center gap-2">
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Create Institution"}
+            </button>
+          </div>
+        </form>
+      </Card>
+    </div>
+  );
+};
 
 const SuperAdminDashboard = ({ user }: { user: UserData }) => {
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -1125,7 +1441,7 @@ const RegisterPage = () => {
                           <option value="">নির্বাচন করুন</option>
                           <option value="School">স্কুল</option>
                           <option value="College">কলেজ</option>
-                          <option value="Coaching">কোচিং সেন্টার</option>
+                          <option value="Coaching Center">কোচিং সেন্টার</option>
                           <option value="Madrasa">মাদ্রাসা</option>
                         </select>
                       </div>
@@ -2394,6 +2710,8 @@ function AppContent() {
             user.role === "Teacher" ? <TeacherDashboard user={user} tenant={tenant} /> :
             <StudentDashboard user={user} tenant={tenant} />
           } />
+          <Route path="/institutes" element={user?.role === "SuperAdmin" ? <InstituteManagement user={user} /> : <Navigate to="/login" />} />
+          <Route path="/institutes/create" element={user?.role === "SuperAdmin" ? <CreateInstitute user={user} /> : <Navigate to="/login" />} />
           <Route path="/courses" element={user ? <div className="p-8">Course Management Coming Soon</div> : <Navigate to="/login" />} />
           <Route path="/users" element={user?.role === "SuperAdmin" ? <div className="p-8">User Management View</div> : <Navigate to="/login" />} />
           <Route path="/payments" element={user ? <div className="p-8">Payment History View</div> : <Navigate to="/login" />} />
