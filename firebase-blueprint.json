@@ -1,116 +1,68 @@
 {
   "entities": {
-    "Tenant": {
-      "title": "Tenant",
-      "description": "An educational institution (school/college).",
+    "Institution": {
+      "title": "Institution",
+      "description": "Represents a school, college, or coaching center (tenant).",
       "type": "object",
       "properties": {
-        "tenant_id": { "type": "string" },
-        "name": { "type": "string" },
-        "eiin": { "type": "string" },
-        "website": { "type": "string" },
-        "phone": { "type": "string" },
-        "credits_left": { "type": "number" },
-        "status": { "type": "string", "enum": ["active", "suspended"] },
-        "promo_code": { "type": "string" },
-        "referral_count": { "type": "number" }
+        "tenant_id": { "type": "string", "description": "Unique identifier for the institution." },
+        "name": { "type": "string", "description": "Name of the institution." },
+        "eiin": { "type": "string", "description": "EIIN or Registration Number." },
+        "institutionType": { "type": "string", "enum": ["School", "College", "Madrasa", "Coaching Center"] },
+        "credits_left": { "type": "number", "description": "Remaining credits for attendance." },
+        "status": { "type": "string", "enum": ["active", "suspended", "deactivated"] },
+        "admin_name": { "type": "string" },
+        "admin_mobile": { "type": "string" },
+        "owner_email": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
       },
-      "required": ["tenant_id", "name", "eiin", "credits_left", "status"]
+      "required": ["tenant_id", "name", "eiin", "credits_left"]
     },
     "User": {
       "title": "User",
-      "description": "A user belonging to a tenant (SuperAdmin, SchoolAdmin, Teacher).",
+      "description": "Represents any user in the system (SuperAdmin, Admin, Teacher, Student).",
       "type": "object",
       "properties": {
-        "user_id": { "type": "string" },
-        "tenant_id": { "type": "string" },
-        "role": { "type": "string", "enum": ["SuperAdmin", "SchoolAdmin", "Teacher"] },
+        "user_id": { "type": "string", "description": "Firebase Auth UID." },
+        "tenant_id": { "type": "string", "description": "The institution this user belongs to." },
+        "role": { "type": "string", "enum": ["SuperAdmin", "InstitutionAdmin", "Teacher", "Student"] },
         "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
         "phone": { "type": "string" },
-        "password_hash": { "type": "string" }
+        "status": { "type": "string", "enum": ["pending", "approved"] },
+        "student_id": { "type": "string", "description": "Specific to students." },
+        "teacher_id": { "type": "string", "description": "Specific to teachers." },
+        "class": { "type": "string" },
+        "section": { "type": "string" }
       },
-      "required": ["user_id", "tenant_id", "role", "name"]
+      "required": ["user_id", "tenant_id", "role", "name", "status"]
     },
-    "Student": {
-      "title": "Student",
-      "description": "A student enrolled in an institution.",
+    "SessionCode": {
+      "title": "SessionCode",
+      "description": "Temporary codes for attendance sessions or verification.",
       "type": "object",
       "properties": {
-        "student_id": { "type": "string" },
+        "code": { "type": "string" },
         "tenant_id": { "type": "string" },
-        "level": { "type": "string" },
-        "dept": { "type": "string" },
-        "session": { "type": "string" },
-        "roll": { "type": "string" },
-        "unique_id": { "type": "string" },
-        "qr_image_url": { "type": "string" }
-      },
-      "required": ["student_id", "tenant_id", "level", "dept", "session", "roll", "unique_id"]
-    },
-    "Attendance": {
-      "title": "Attendance",
-      "description": "An attendance record.",
-      "type": "object",
-      "properties": {
-        "timestamp": { "type": "string", "format": "date-time" },
-        "tenant_id": { "type": "string" },
-        "student_id": { "type": "string" },
         "teacher_id": { "type": "string" },
         "subject": { "type": "string" },
-        "status": { "type": "string", "enum": ["present", "absent"] }
+        "expires_at": { "type": "string", "format": "date-time" }
       },
-      "required": ["timestamp", "tenant_id", "student_id", "teacher_id", "subject", "status"]
-    },
-    "Transaction": {
-      "title": "Transaction",
-      "description": "A bank log for payments (bKash/Nagad).",
-      "type": "object",
-      "properties": {
-        "trx_id": { "type": "string" },
-        "amount": { "type": "number" },
-        "sender_number": { "type": "string" },
-        "status": { "type": "string", "enum": ["unused", "used"] },
-        "claimed_by_tenant": { "type": "string" },
-        "timestamp": { "type": "string", "format": "date-time" }
-      },
-      "required": ["trx_id", "amount", "status"]
-    },
-    "Reward": {
-      "title": "Reward",
-      "description": "Tracking daily share rewards.",
-      "type": "object",
-      "properties": {
-        "tenant_id": { "type": "string" },
-        "date": { "type": "string" },
-        "claimed": { "type": "boolean" }
-      },
-      "required": ["tenant_id", "date", "claimed"]
+      "required": ["code", "tenant_id", "expires_at"]
     }
   },
   "firestore": {
     "/tenants/{tenantId}": {
-      "schema": "Tenant",
-      "description": "Tenant settings and credits."
+      "schema": "Institution",
+      "description": "Collection of institutions."
     },
     "/users/{userId}": {
       "schema": "User",
-      "description": "User profiles and roles."
+      "description": "Collection of all users."
     },
-    "/tenants/{tenantId}/students/{studentId}": {
-      "schema": "Student",
-      "description": "Students within a tenant."
-    },
-    "/tenants/{tenantId}/attendance/{attendanceId}": {
-      "schema": "Attendance",
-      "description": "Attendance records for a tenant."
-    },
-    "/transactions/{trxId}": {
-      "schema": "Transaction",
-      "description": "Global bank logs for payment verification."
-    },
-    "/tenants/{tenantId}/rewards/{rewardId}": {
-      "schema": "Reward",
-      "description": "Daily reward tracking per tenant."
+    "/session_codes/{codeId}": {
+      "schema": "SessionCode",
+      "description": "Collection of active session codes."
     }
   }
 }

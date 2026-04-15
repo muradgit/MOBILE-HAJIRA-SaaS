@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Noto_Sans_Bengali, Montserrat } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "sonner";
+import { ClientLayout } from "@/src/components/layout/ClientLayout";
 
 const notoBengali = Noto_Sans_Bengali({
   subsets: ["bengali", "latin"],
@@ -20,6 +20,8 @@ export const metadata: Metadata = {
   description: "Digital Attendance & Institution Management System",
 };
 
+import { Toaster } from "sonner";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,7 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${notoBengali.variable} ${montserrat.variable}`}>
       <body className="font-sans antialiased">
-        {children}
+        <ClientLayout>{children}</ClientLayout>
         <Toaster position="top-center" richColors />
       </body>
     </html>
