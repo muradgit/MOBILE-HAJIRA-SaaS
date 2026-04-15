@@ -101,6 +101,7 @@ export const Layout = ({ children, user, tenant }: { children: React.ReactNode, 
   const currentMenuItems = user ? menuItems[user.role] : [];
 
   const handleLogout = async () => {
+    await fetch("/api/auth/session", { method: "DELETE" });
     await signOut(auth);
     router.push("/auth/login");
   };

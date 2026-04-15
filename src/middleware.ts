@@ -1,49 +1,54 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-/**
- * Next.js Middleware to protect routes based on authentication and roles.
- * 
- * In a production environment with Firebase Auth, you would typically:
- * 1. Use Firebase Session Cookies (set via an API route after client-side login).
- * 2. Verify the session cookie using `firebase-admin` (which requires a Node.js runtime, 
- *    so you might need to use a standard API route or a Edge-compatible JWT library).
- * 3. Check custom claims (e.g., { role: 'SuperAdmin' }) embedded in the token.
- */
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
-  // Example: Get the session cookie
-  const session = request.cookies.get('session')?.value;
+  const userRole = request.cookies.get("user-role")?.value;
 
-  // Define protected route patterns
-  const isSuperAdminRoute = pathname.startsWith('/super-admin');
-  const isAdminRoute = pathname.startsWith('/admin');
-  const isTeacherRoute = pathname.startsWith('/teacher');
-  const isStudentRoute = pathname.startsWith('/student');
-  const isProtectedRoute = isSuperAdminRoute || isAdminRoute || isTeacherRoute || isStudentRoute;
+  // Define protected routes and their allowed roles
+  const protectedRoutes = [
+    { path: "/super-admin", roles: ["SuperAdmin"] },
+    { path: "/admin", roles: ["InstitutionAdmin"] },
+    { path: "/teacher", roles: ["Teacher"] },
+    { path: "/student", roles: ["Student"] },
+  ];
 
-  if (isProtectedRoute && !session) {
-    // Redirect to login if no session is found
-    const loginUrl = new URL('/auth/login', request.url);
-    loginUrl.searchParams.set('from', pathname);
-    return NextResponse.redirect(loginUrl);
+  // Check if the current path is a protected route
+  const protectedRoute = protectedRoutes.find((route) =>
+    pathname.startsWith(route.path)
+  );
+
+  if (protectedRoute) {
+    // If no user role is found, redirect to login
+    if (!userRole) {
+      const loginUrl = new URL("/auth/login", request.url);
+      loginUrl.searchParams.set("from", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // If the user's role is not allowed for this route, redirect to their own dashboard or login
+    if (!protectedRoute.roles.includes(userRole)) {
+      const dashboardMap: Record<string, string> = {
+        SuperAdmin: "/super-admin/dashboard",
+        InstitutionAdmin: "/admin/dashboard",
+        Teacher: "/teacher/dashboard",
+        Student: "/student/dashboard",
+      };
+
+      const redirectUrl = dashboardMap[userRole] || "/auth/login";
+      return NextResponse.redirect(new URL(redirectUrl, request.url));
+    }
   }
-
-  // Role-based access control logic would go here:
-  // if (isSuperAdminRoute && userRole !== 'SuperAdmin') {
-  //   return NextResponse.redirect(new URL('/unauthorized', request.url));
-  // }
 
   return NextResponse.next();
 }
 
-// See "Matching Paths" below to learn more
+// Configure the middleware to run on specific paths
 export const config = {
   matcher: [
-    '/super-admin/:path*',
-    '/admin/:path*',
-    '/teacher/:path*',
-    '/student/:path*',
+    "/super-admin/:path*",
+    "/admin/:path*",
+    "/teacher/:path*",
+    "/student/:path*",
   ],
 };

@@ -2,15 +2,22 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { auth, db } from "@/src/lib/firebase";
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  createUserWithEmailAndPassword 
+} from "firebase/auth";
 import { collection, query, where, getDocs, limit } from "firebase/firestore";
 import { toast } from "sonner";
 import { 
   ShieldCheck, 
   Search, 
   Loader2, 
-  ChevronRight 
+  ChevronRight,
+  Mail,
+  Lock
 } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
 import { Tenant } from "@/src/lib/types";
@@ -24,6 +31,8 @@ export default function RegisterPage() {
   const [searchResults, setSearchResults] = useState<Tenant[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [searching, setSearching] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const router = useRouter();
 
   const handleSearch = async () => {
@@ -76,6 +85,7 @@ export default function RegisterPage() {
       regData.institutionType = formData.get('instType');
       regData.eiin = formData.get('eiin');
       regData.institutionName = formData.get('instName');
+      regData.googleSheetId = formData.get('googleSheetId');
     } else if (role === "Student") {
       regData.department = formData.get('dept');
       regData.class = formData.get('class');
@@ -87,11 +97,14 @@ export default function RegisterPage() {
     
     setLoading(true);
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      if (email && password) {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        const provider = new GoogleAuthProvider();
+        await signInWithPopup(auth, provider);
+      }
       
-      // The auth state listener in a root layout or provider will handle the actual Firestore creation
-      // For now, we redirect to dashboard which will trigger the auth check
+      // The auth state listener in ClientLayout will handle the actual Firestore creation
       router.push("/auth/login"); 
     } catch (error: any) {
       toast.error(error.message);
@@ -101,18 +114,23 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] py-12 px-4">
+    <div className="min-h-screen bg-[#F8F9FA] py-12 px-4 font-english">
       <div className="max-w-2xl mx-auto">
         <Card className="p-8 space-y-8">
           <div className="text-center space-y-4">
-            <h2 className="text-3xl font-bold text-[#6f42c1]">রেজিস্ট্রেশন করুন</h2>
-            <p className="text-gray-500">আপনার সঠিক রোল নির্বাচন করে এগিয়ে যান</p>
+            <div className="flex justify-center">
+              <div className="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center">
+                <ShieldCheck className="w-10 h-10 text-[#6f42c1]" />
+              </div>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900">রেজিস্ট্রেশন করুন</h2>
+            <p className="text-sm text-gray-500 font-bengali">আপনার সঠিক রোল নির্বাচন করে এগিয়ে যান</p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4 relative z-10">
               {[
-                { id: "InstitutionAdmin", label: "Registration as Institute admin" },
-                { id: "Teacher", label: "Registration as Teachers" },
-                { id: "Student", label: "Registration as Students" }
+                { id: "InstitutionAdmin", label: "Institute Admin" },
+                { id: "Teacher", label: "Teacher" },
+                { id: "Student", label: "Student" }
               ].map((r) => (
                 <label key={r.id} className={cn(
                   "flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all flex-1",
@@ -138,7 +156,7 @@ export default function RegisterPage() {
           {role === "InstitutionAdmin" && (
             <div className="space-y-6">
               <div className="bg-purple-50 p-6 rounded-xl border border-purple-100">
-                <p className="text-sm text-purple-900 leading-relaxed">
+                <p className="text-sm text-purple-900 leading-relaxed font-bengali">
                   “এই সিস্টেমটি পুরো প্রতিষ্ঠান বা নির্দিষ্ট বিভাগের জন্য সেটআপ করতে পারবেন। সেটআপ করার পর যদি সিস্টেমটি ৬০ দিন পর্যন্ত ব্যবহার না হয় তবে স্বয়ংক্রিয়ভাবে আপনার একাউন্টের সকল তথ্য মুছে যাবে।”
                 </p>
                 {!agreed && (
@@ -152,11 +170,11 @@ export default function RegisterPage() {
               </div>
 
               {agreed && (
-                <form onSubmit={handleRegistration} className="space-y-4 pt-4 border-t border-gray-100">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">কোন ধরণের প্রতিষ্ঠান?</label>
-                      <select required name="instType" className="w-full border rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-[#6f42c1] bg-white">
+                <form onSubmit={handleRegistration} className="space-y-6 pt-4 border-t border-gray-100">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Institution Type</label>
+                      <select required name="instType" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] bg-white text-sm">
                         <option value="">নির্বাচন করুন</option>
                         <option value="School">স্কুল</option>
                         <option value="College">কলেজ</option>
@@ -164,25 +182,86 @@ export default function RegisterPage() {
                         <option value="Madrasa">মাদ্রাসা</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">প্রতিষ্ঠানের EIIN/Registration Number</label>
-                      <input required name="eiin" type="text" className="w-full border rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="EIIN লিখুন" />
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">EIIN / Reg No</label>
+                      <input required name="eiin" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="EIIN লিখুন" />
                     </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">প্রতিষ্ঠানের নাম (বাংলা/ইংরেজিতে)</label>
-                      <input required name="instName" type="text" className="w-full border rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="প্রতিষ্ঠানের নাম লিখুন" />
+                    <div className="md:col-span-2 space-y-1">
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Institution Name</label>
+                      <input required name="instName" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="প্রতিষ্ঠানের নাম লিখুন" />
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">আপনার নাম (বাংলা/ইংরেজিতে)</label>
-                      <input required name="userName" type="text" className="w-full border rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="আপনার নাম লিখুন" />
+                    <div className="md:col-span-2 space-y-1">
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Master Google Sheet ID</label>
+                      <input required name="googleSheetId" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="Google Sheet ID লিখুন" />
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">আপনার মোবাইল নাম্বার (বাংলা/ইংরেজিতে)</label>
-                      <input required name="phone" type="tel" className="w-full border rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="01XXXXXXXXX" />
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Your Name</label>
+                      <input required name="userName" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="আপনার নাম লিখুন" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Mobile Number</label>
+                      <input required name="phone" type="tel" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="01XXXXXXXXX" />
+                    </div>
+
+                    <div className="md:col-span-2 border-t border-gray-100 pt-6 space-y-4">
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
+                        <div className="relative">
+                          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <input 
+                            required 
+                            type="email" 
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-12 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" 
+                            placeholder="name@institution.com" 
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Password</label>
+                        <div className="relative">
+                          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <input 
+                            required 
+                            type="password" 
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-12 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" 
+                            placeholder="••••••••" 
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
+
                   <button type="submit" disabled={loading} className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold uppercase tracking-wider hover:bg-[#59359a] transition-all shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2">
                     {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "রেজিস্ট্রেশন করুন"}
+                  </button>
+
+                  <div className="relative py-2">
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
+                    <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-4 text-gray-400 font-bold tracking-widest">Or</span></div>
+                  </div>
+
+                  <button 
+                    type="button"
+                    onClick={async () => {
+                      setLoading(true);
+                      try {
+                        const provider = new GoogleAuthProvider();
+                        await signInWithPopup(auth, provider);
+                        router.push("/auth/login");
+                      } catch (error: any) {
+                        toast.error(error.message);
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    className="w-full bg-white border border-gray-200 text-gray-700 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-gray-50 transition-colors flex items-center justify-center gap-3"
+                  >
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+                    Google দিয়ে রেজিস্ট্রেশন
                   </button>
                 </form>
               )}
@@ -192,7 +271,7 @@ export default function RegisterPage() {
           {(role === "Teacher" || role === "Student") && (
             <div className="space-y-6">
               <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
-                <p className="text-sm text-blue-900 leading-relaxed">
+                <p className="text-sm text-blue-900 leading-relaxed font-bengali">
                   ”আপনার প্রতিষ্ঠানের বা বিভাগের জন্য এই সিস্টেমটি সেটআপ করা আছে কিনা তা দেখার জন্য EIIN/Registration Number বা নাম দিয়ে সার্চ করুন”
                 </p>
               </div>
@@ -204,39 +283,39 @@ export default function RegisterPage() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="EIIN বা প্রতিষ্ঠানের নাম দিয়ে সার্চ করুন"
-                    className="flex-1 border rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-[#6f42c1]"
+                    className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm"
                   />
                   <button 
                     onClick={handleSearch}
                     disabled={searching}
-                    className="bg-[#6f42c1] text-white px-6 rounded-lg font-bold hover:bg-[#59359a] transition-colors"
+                    className="bg-[#6f42c1] text-white px-6 rounded-xl font-bold hover:bg-[#59359a] transition-colors"
                   >
                     {searching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
                   </button>
                 </div>
 
                 {searchResults.length > 0 && !selectedTenant && (
-                  <div className="border rounded-xl divide-y bg-white overflow-hidden">
+                  <div className="border border-gray-100 rounded-xl divide-y bg-white overflow-hidden shadow-sm">
                     {searchResults.map(t => (
                       <button 
                         key={t.tenant_id}
                         onClick={() => setSelectedTenant(t)}
-                        className="w-full p-4 text-left hover:bg-gray-50 flex justify-between items-center"
+                        className="w-full p-4 text-left hover:bg-gray-50 flex justify-between items-center transition-colors"
                       >
                         <div>
-                          <p className="font-bold text-sm">{t.name}</p>
-                          <p className="text-xs text-gray-400">EIIN: {t.eiin}</p>
+                          <p className="font-bold text-sm text-gray-800">{t.name}</p>
+                          <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">EIIN: {t.eiin}</p>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-gray-400" />
+                        <ChevronRight className="w-5 h-5 text-gray-300" />
                       </button>
                     ))}
                   </div>
                 )}
 
                 {selectedTenant && (
-                  <div className="bg-green-50 p-4 rounded-xl border border-green-100 flex justify-between items-center">
+                  <div className="bg-green-50 p-4 rounded-xl border border-green-100 flex justify-between items-center shadow-sm">
                     <div>
-                      <p className="text-xs font-bold text-green-600 uppercase tracking-widest">Selected Institution</p>
+                      <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest">Selected Institution</p>
                       <p className="font-bold text-gray-800">{selectedTenant.name}</p>
                     </div>
                     <button onClick={() => setSelectedTenant(null)} className="text-xs font-bold text-red-500 uppercase hover:underline">Change</button>
@@ -245,44 +324,107 @@ export default function RegisterPage() {
               </div>
 
               {selectedTenant && (
-                <form onSubmit={handleRegistration} className="space-y-4 pt-4 border-t border-gray-100">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">আপনার নাম (বাংলা/ইংরেজিতে)</label>
-                      <input required name="userName" type="text" className="w-full border rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="আপনার নাম লিখুন" />
+                <form onSubmit={handleRegistration} className="space-y-6 pt-4 border-t border-gray-100">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Your Name</label>
+                      <input required name="userName" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="আপনার নাম লিখুন" />
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">আপনার মোবাইল নাম্বার (বাংলা/ইংরেজিতে)</label>
-                      <input required name="phone" type="tel" className="w-full border rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="01XXXXXXXXX" />
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Mobile Number</label>
+                      <input required name="phone" type="tel" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="01XXXXXXXXX" />
                     </div>
                     {role === "Student" && (
                       <>
-                        <div>
-                          <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">বিভাগ</label>
-                          <input required name="dept" type="text" className="w-full border rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="Science/Arts/Commerce" />
+                        <div className="space-y-1">
+                          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Department</label>
+                          <input required name="dept" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="Science/Arts/Commerce" />
                         </div>
-                        <div>
-                          <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">শ্রেণী</label>
-                          <input required name="class" type="text" className="w-full border rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="Class 10" />
+                        <div className="space-y-1">
+                          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Class</label>
+                          <input required name="class" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="Class 10" />
                         </div>
-                        <div>
-                          <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">সেশন</label>
-                          <input required name="session" type="text" className="w-full border rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="2023-24" />
+                        <div className="space-y-1">
+                          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Session</label>
+                          <input required name="session" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="2023-24" />
                         </div>
-                        <div>
-                          <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">রোল নাম্বার</label>
-                          <input required name="roll" type="text" className="w-full border rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-[#6f42c1]" placeholder="Roll No" />
+                        <div className="space-y-1">
+                          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Roll Number</label>
+                          <input required name="roll" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="Roll No" />
                         </div>
                       </>
                     )}
+
+                    <div className="md:col-span-2 border-t border-gray-100 pt-6 space-y-4">
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
+                        <div className="relative">
+                          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <input 
+                            required 
+                            type="email" 
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-12 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" 
+                            placeholder="name@institution.com" 
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Password</label>
+                        <div className="relative">
+                          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <input 
+                            required 
+                            type="password" 
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-12 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" 
+                            placeholder="••••••••" 
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <button type="submit" disabled={loading} className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold uppercase tracking-wider hover:bg-[#59359a] transition-all shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2">
+
+                  <button type="submit" disabled={loading} className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold uppercase tracking-wider hover:bg-[#59359a] transition-all shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2 text-sm">
                     {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "রেজিস্ট্রেশন করুন"}
+                  </button>
+
+                  <div className="relative py-2">
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
+                    <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-4 text-gray-400 font-bold tracking-widest">Or</span></div>
+                  </div>
+
+                  <button 
+                    type="button"
+                    onClick={async () => {
+                      setLoading(true);
+                      try {
+                        const provider = new GoogleAuthProvider();
+                        await signInWithPopup(auth, provider);
+                        router.push("/auth/login");
+                      } catch (error: any) {
+                        toast.error(error.message);
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    className="w-full bg-white border border-gray-200 text-gray-700 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-gray-50 transition-colors flex items-center justify-center gap-3"
+                  >
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+                    Google দিয়ে রেজিস্ট্রেশন
                   </button>
                 </form>
               )}
             </div>
           )}
+          
+          <div className="pt-4 border-t border-gray-100 text-center">
+            <p className="text-xs text-gray-500 font-bengali">
+              ইতিমধ্যে অ্যাকাউন্ট আছে? <Link href="/auth/login" className="text-[#6f42c1] font-bold hover:underline">লগইন করুন</Link>
+            </p>
+          </div>
         </Card>
       </div>
     </div>

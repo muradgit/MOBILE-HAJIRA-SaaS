@@ -36,6 +36,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
               eiin: pendingData.eiin,
               institutionType: pendingData.institutionType,
               credits_left: 50, // Initial free credits
+              googleSheetId: pendingData.googleSheetId,
               status: "active",
               admin_name: pendingData.name,
               admin_mobile: pendingData.phone,
@@ -63,6 +64,14 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
           }
 
           await setDoc(doc(db, "users", user.uid), newUser);
+
+          // Set session cookie
+          await fetch("/api/auth/session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ role: newUser.role, userId: newUser.user_id }),
+          });
+
           localStorage.removeItem('pendingRegistration');
           toast.success("Registration successful!");
         } catch (error: any) {

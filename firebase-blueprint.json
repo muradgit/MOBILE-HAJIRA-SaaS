@@ -14,9 +14,10 @@
         "admin_name": { "type": "string" },
         "admin_mobile": { "type": "string" },
         "owner_email": { "type": "string" },
+        "googleSheetId": { "type": "string", "description": "The Master Google Sheet ID for this institution where attendance goes." },
         "created_at": { "type": "string", "format": "date-time" }
       },
-      "required": ["tenant_id", "name", "eiin", "credits_left"]
+      "required": ["tenant_id", "name", "eiin", "credits_left", "googleSheetId"]
     },
     "User": {
       "title": "User",
