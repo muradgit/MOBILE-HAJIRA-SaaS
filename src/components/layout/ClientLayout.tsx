@@ -85,11 +85,11 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
           // Redirect based on role
           if (newUser.role === "InstitutionAdmin") {
-            router.push("/admin/dashboard");
+            window.location.href = "/admin/dashboard";
           } else {
             // Teacher/Student are pending by default
             toast.info("আপনার অ্যাকাউন্টটি বর্তমানে পেন্ডিং অবস্থায় আছে। এডমিন অ্যাপ্রুভ করলে আপনি ড্যাশবোর্ড ব্যবহার করতে পারবেন।");
-            router.push("/auth/login");
+            window.location.href = "/auth/login";
           }
         } catch (error: any) {
           console.error("Registration error:", error);

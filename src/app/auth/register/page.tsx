@@ -126,7 +126,6 @@ export default function RegisterPage() {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       // ClientLayout will handle the Firestore record creation upon auth change
-      router.refresh(); 
     } catch (error: any) {
       toast.error(error.message);
     } finally {
