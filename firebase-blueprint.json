@@ -6,18 +6,22 @@
       "type": "object",
       "properties": {
         "tenant_id": { "type": "string", "description": "Unique identifier for the institution." },
-        "name": { "type": "string", "description": "Name of the institution." },
+        "name": { "type": "string", "description": "Name of the institution (English)." },
+        "nameBN": { "type": "string", "description": "Name of the institution (Bengali)." },
         "eiin": { "type": "string", "description": "EIIN or Registration Number." },
-        "institutionType": { "type": "string", "enum": ["School", "College", "Madrasa", "Coaching Center"] },
+        "institutionType": { "type": "string", "enum": ["School", "College", "Madrasa", "Coaching Center", "University", "Polytechnic"] },
+        "academicLevels": { "type": "array", "items": { "type": "string" } },
+        "department": { "type": "string", "description": "Specific department if admin is for a dept." },
         "credits_left": { "type": "number", "description": "Remaining credits for attendance." },
         "status": { "type": "string", "enum": ["active", "suspended", "deactivated"] },
         "admin_name": { "type": "string" },
+        "admin_nameBN": { "type": "string" },
         "admin_mobile": { "type": "string" },
         "owner_email": { "type": "string" },
         "googleSheetId": { "type": "string", "description": "The Master Google Sheet ID for this institution where attendance goes." },
         "created_at": { "type": "string", "format": "date-time" }
       },
-      "required": ["tenant_id", "name", "eiin", "credits_left", "googleSheetId"]
+      "required": ["tenant_id", "name", "eiin", "credits_left"]
     },
     "User": {
       "title": "User",
@@ -28,13 +32,15 @@
         "tenant_id": { "type": "string", "description": "The institution this user belongs to." },
         "role": { "type": "string", "enum": ["SuperAdmin", "InstitutionAdmin", "Teacher", "Student"] },
         "name": { "type": "string" },
+        "nameBN": { "type": "string" },
         "email": { "type": "string", "format": "email" },
         "phone": { "type": "string" },
         "status": { "type": "string", "enum": ["pending", "approved"] },
-        "student_id": { "type": "string", "description": "Specific to students." },
-        "teacher_id": { "type": "string", "description": "Specific to teachers." },
+        "department": { "type": "string" },
         "class": { "type": "string" },
-        "section": { "type": "string" }
+        "session": { "type": "string" },
+        "student_id": { "type": "string" },
+        "teacher_id": { "type": "string" }
       },
       "required": ["user_id", "tenant_id", "role", "name", "status"]
     },

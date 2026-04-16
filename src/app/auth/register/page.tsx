@@ -1,111 +1,127 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { auth, db } from "@/src/lib/firebase";
-import { 
-  GoogleAuthProvider, 
-  signInWithPopup, 
-  createUserWithEmailAndPassword 
-} from "firebase/auth";
-import { collection, query, where, getDocs, limit } from "firebase/firestore";
+import { auth } from "@/src/lib/firebase";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { toast } from "sonner";
 import { 
   ShieldCheck, 
   Search, 
   Loader2, 
+  ChevronDown,
   ChevronRight,
-  Mail,
-  Lock
+  Check,
+  Building2,
+  GraduationCap,
+  Users
 } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
-import { Tenant } from "@/src/lib/types";
 import { cn } from "@/src/lib/utils";
+
+type Role = "InstitutionAdmin" | "Teacher" | "Student";
+
+const ACADEMIC_LEVELS = [
+  "Primary", "Secondary", "Higher Secondary", "Honours", "Masters", "Diploma", "Vocational"
+];
+
+const INST_TYPES = [
+  "School", "College", "Madrasa", "Coaching Center", "University", "Polytechnic"
+];
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState<"InstitutionAdmin" | "Teacher" | "Student">("InstitutionAdmin");
+  const [activeRole, setActiveRole] = useState<Role | null>(null);
+  
+  // Admin Form State
   const [agreed, setAgreed] = useState(false);
+  const [selectedLevels, setSelectedLevels] = useState<string[]>([]);
+  const [showDept, setShowDept] = useState(false);
+  
+  // Teacher/Student Form State
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Tenant[]>([]);
-  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [selectedTenant, setSelectedTenant] = useState<any | null>(null);
   const [searching, setSearching] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  
   const router = useRouter();
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
+  useEffect(() => {
+    setShowDept(selectedLevels.includes("Honours") || selectedLevels.includes("Masters"));
+  }, [selectedLevels]);
+
+  const handleSearch = async (val: string) => {
+    setSearchQuery(val);
+    if (val.length < 2) {
+      setSearchResults([]);
+      return;
+    }
     setSearching(true);
     try {
-      const q = query(
-        collection(db, "tenants"),
-        where("name", ">=", searchQuery),
-        where("name", "<=", searchQuery + "\uf8ff"),
-        limit(5)
-      );
-      const snapshot = await getDocs(q);
-      const results = snapshot.docs.map(doc => doc.data() as Tenant);
-      
-      // Also search by EIIN
-      const qEiin = query(collection(db, "tenants"), where("eiin", "==", searchQuery));
-      const snapshotEiin = await getDocs(qEiin);
-      const resultsEiin = snapshotEiin.docs.map(doc => doc.data() as Tenant);
-      
-      // Combine and unique
-      const combined = [...results, ...resultsEiin];
-      const unique = combined.filter((v, i, a) => a.findIndex(t => t.tenant_id === v.tenant_id) === i);
-      
-      setSearchResults(unique);
-    } catch (error: any) {
-      toast.error("Search failed: " + error.message);
+      const res = await fetch(`/api/institutions/search?q=${encodeURIComponent(val)}`);
+      const data = await res.json();
+      setSearchResults(data.results || []);
+    } catch (error) {
+      console.error("Search failed", error);
     } finally {
       setSearching(false);
     }
   };
 
+  const toggleLevel = (level: string) => {
+    setSelectedLevels(prev => 
+      prev.includes(level) ? prev.filter(l => l !== level) : [...prev, level]
+    );
+  };
+
   const handleRegistration = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    
-    if ((role === "Teacher" || role === "Student") && !selectedTenant) {
-      toast.error("অনুগ্রহ করে আপনার প্রতিষ্ঠানটি নির্বাচন করুন");
-      return;
-    }
+    if (!activeRole) return;
 
-    const regData: any = {
-      role,
-      name: formData.get('userName'),
-      phone: formData.get('phone'),
-      tenant_id: selectedTenant?.tenant_id || null,
+    const formData = new FormData(e.currentTarget);
+    const data: any = {
+      role: activeRole,
+      name: formData.get("nameEN"),
+      nameBN: formData.get("nameBN"),
+      phone: formData.get("phone"),
     };
 
-    if (role === "InstitutionAdmin") {
-      regData.institutionType = formData.get('instType');
-      regData.eiin = formData.get('eiin');
-      regData.institutionName = formData.get('instName');
-      regData.googleSheetId = formData.get('googleSheetId');
-    } else if (role === "Student") {
-      regData.department = formData.get('dept');
-      regData.class = formData.get('class');
-      regData.session = formData.get('session');
-      regData.student_id = formData.get('roll'); // Roll as student_id
+    if (activeRole === "InstitutionAdmin") {
+      data.institutionType = formData.get("instType");
+      data.eiin = formData.get("eiin");
+      data.institutionNameEN = formData.get("instNameEN");
+      data.institutionNameBN = formData.get("instNameBN");
+      data.academicLevels = selectedLevels;
+      data.department = formData.get("dept");
+      data.adminName = formData.get("nameEN");
+      if (selectedLevels.length === 0) {
+        toast.error("কমপক্ষে একটি একাডেমিক লেভেল নির্বাচন করুন");
+        return;
+      }
+    } else {
+      if (!selectedTenant) {
+        toast.error("অনুগ্রহ করে আপনার প্রতিষ্ঠানটি নির্বাচন করুন");
+        return;
+      }
+      data.tenant_id = selectedTenant.tenant_id;
+      data.institutionName = selectedTenant.name;
+      
+      if (activeRole === "Student") {
+        data.department = formData.get("dept");
+        data.class = formData.get("class");
+        data.session = formData.get("session");
+      }
     }
 
-    localStorage.setItem('pendingRegistration', JSON.stringify(regData));
+    // Save to localStorage temporarily
+    localStorage.setItem("pendingRegistration", JSON.stringify(data));
     
     setLoading(true);
     try {
-      if (email && password) {
-        await createUserWithEmailAndPassword(auth, email, password);
-      } else {
-        const provider = new GoogleAuthProvider();
-        await signInWithPopup(auth, provider);
-      }
-      
-      // The auth state listener in ClientLayout will handle the actual Firestore creation
-      router.push("/auth/login"); 
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      // ClientLayout will handle the Firestore record creation upon auth change
+      router.refresh(); 
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -114,319 +130,361 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] py-12 px-4 font-english">
-      <div className="max-w-2xl mx-auto">
-        <Card className="p-8 space-y-8">
-          <div className="text-center space-y-4">
-            <div className="flex justify-center">
-              <div className="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center">
-                <ShieldCheck className="w-10 h-10 text-[#6f42c1]" />
-              </div>
-            </div>
-            <h2 className="text-3xl font-bold text-gray-900">রেজিস্ট্রেশন করুন</h2>
-            <p className="text-sm text-gray-500 font-bengali">আপনার সঠিক রোল নির্বাচন করে এগিয়ে যান</p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4 relative z-10">
-              {[
-                { id: "InstitutionAdmin", label: "Institute Admin" },
-                { id: "Teacher", label: "Teacher" },
-                { id: "Student", label: "Student" }
-              ].map((r) => (
-                <label key={r.id} className={cn(
-                  "flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all flex-1",
-                  role === r.id ? "border-[#6f42c1] bg-purple-50" : "border-gray-100 hover:border-gray-200"
-                )}>
-                  <input 
-                    type="radio" 
-                    name="role" 
-                    checked={role === r.id} 
-                    onChange={() => {
-                      setRole(r.id as any);
-                      setAgreed(false);
-                      setSelectedTenant(null);
-                    }}
-                    className="w-4 h-4 text-[#6f42c1]"
-                  />
-                  <span className="text-sm font-bold text-gray-700">{r.label}</span>
-                </label>
-              ))}
-            </div>
+    <div className="min-h-screen bg-slate-50 py-10 px-4 font-montserrat antialiased">
+      <div className="max-w-xl mx-auto space-y-8">
+        {/* Header */}
+        <div className="text-center space-y-3">
+          <div className="inline-flex p-4 bg-purple-600 rounded-3xl shadow-xl shadow-purple-200">
+            <ShieldCheck className="w-10 h-10 text-white" />
           </div>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight text-center">নিবন্ধন করুন</h1>
+          <p className="text-slate-500 font-bengali text-lg text-center">আপনার সঠিক ভূমিকা নির্বাচন করুন</p>
+        </div>
 
-          {role === "InstitutionAdmin" && (
-            <div className="space-y-6">
-              <div className="bg-purple-50 p-6 rounded-xl border border-purple-100">
-                <p className="text-sm text-purple-900 leading-relaxed font-bengali">
+        {/* Roles Accordion */}
+        <div className="space-y-4">
+          {/* Institution Admin */}
+          <RoleAccordion 
+            id="InstitutionAdmin"
+            title="ইনস্টিটিউট এডমিন (প্রতিষ্ঠানের জন্য)"
+            icon={<Building2 className="w-5 h-5" />}
+            active={activeRole === "InstitutionAdmin"}
+            onClick={() => setActiveRole("InstitutionAdmin")}
+          >
+            <div className="space-y-6 pt-2 font-bengali">
+              <div className="bg-purple-50 p-5 rounded-2xl border border-purple-100">
+                <p className="text-sm text-purple-900 leading-relaxed">
                   “এই সিস্টেমটি পুরো প্রতিষ্ঠান বা নির্দিষ্ট বিভাগের জন্য সেটআপ করতে পারবেন। সেটআপ করার পর যদি সিস্টেমটি ৬০ দিন পর্যন্ত ব্যবহার না হয় তবে স্বয়ংক্রিয়ভাবে আপনার একাউন্টের সকল তথ্য মুছে যাবে।”
                 </p>
-                {!agreed && (
-                  <button 
-                    onClick={() => setAgreed(true)}
-                    className="mt-4 bg-[#6f42c1] text-white px-6 py-2 rounded-lg text-sm font-bold uppercase tracking-wider hover:bg-[#59359a] transition-colors"
-                  >
-                    I Agree
-                  </button>
-                )}
+                <label className="mt-4 flex items-center gap-3 cursor-pointer group">
+                  <div className={cn(
+                    "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
+                    agreed ? "bg-purple-600 border-purple-600" : "bg-white border-purple-200"
+                  )}>
+                    {agreed && <Check className="w-4 h-4 text-white" />}
+                  </div>
+                  <input type="checkbox" className="hidden" checked={agreed} onChange={e => setAgreed(e.target.checked)} />
+                  <span className="text-sm font-bold text-slate-700 select-none">আমি একমত</span>
+                </label>
               </div>
 
               {agreed && (
-                <form onSubmit={handleRegistration} className="space-y-6 pt-4 border-t border-gray-100">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-1">
-                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Institution Type</label>
-                      <select required name="instType" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] bg-white text-sm">
+                <form onSubmit={handleRegistration} className="space-y-5 animate-in fade-in duration-500">
+                  <div className="space-y-4">
+                    <FieldGroup label="Institution Type">
+                      <select required name="instType" className="input-field">
                         <option value="">নির্বাচন করুন</option>
-                        <option value="School">স্কুল</option>
-                        <option value="College">কলেজ</option>
-                        <option value="Coaching Center">কোচিং সেন্টার</option>
-                        <option value="Madrasa">মাদ্রাসা</option>
+                        {INST_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">EIIN / Reg No</label>
-                      <input required name="eiin" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="EIIN লিখুন" />
-                    </div>
-                    <div className="md:col-span-2 space-y-1">
-                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Institution Name</label>
-                      <input required name="instName" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="প্রতিষ্ঠানের নাম লিখুন" />
-                    </div>
-                    <div className="md:col-span-2 space-y-1">
-                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Master Google Sheet ID</label>
-                      <input required name="googleSheetId" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="Google Sheet ID লিখুন" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Your Name</label>
-                      <input required name="userName" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="আপনার নাম লিখুন" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Mobile Number</label>
-                      <input required name="phone" type="tel" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="01XXXXXXXXX" />
+                    </FieldGroup>
+
+                    <div className="space-y-2">
+                       <label className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">Academic Levels</label>
+                       <div className="flex flex-wrap gap-2">
+                         {ACADEMIC_LEVELS.map(level => (
+                           <button
+                             key={level}
+                             type="button"
+                             onClick={() => toggleLevel(level)}
+                             className={cn(
+                               "px-4 py-2 rounded-full text-sm font-medium transition-all",
+                               selectedLevels.includes(level) 
+                                 ? "bg-purple-600 text-white shadow-md shadow-purple-200" 
+                                 : "bg-white text-slate-600 border border-slate-200 hover:border-purple-300"
+                             )}
+                           >
+                             {level}
+                           </button>
+                         ))}
+                       </div>
                     </div>
 
-                    <div className="md:col-span-2 border-t border-gray-100 pt-6 space-y-4">
-                      <div className="space-y-1">
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
-                        <div className="relative">
-                          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                          <input 
-                            required 
-                            type="email" 
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-12 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" 
-                            placeholder="name@institution.com" 
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Password</label>
-                        <div className="relative">
-                          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                          <input 
-                            required 
-                            type="password" 
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-12 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" 
-                            placeholder="••••••••" 
-                          />
-                        </div>
-                      </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <FieldGroup label="EIIN / Reg No">
+                        <input required name="eiin" type="text" className="input-field font-montserrat" placeholder="EIIN" />
+                      </FieldGroup>
+                      {showDept && (
+                        <FieldGroup label="Department/Faculty">
+                          <input required name="dept" type="text" className="input-field" placeholder="উদা: বাংলা বিভাগ" />
+                        </FieldGroup>
+                      )}
                     </div>
+
+                    <FieldGroup label="Institution Name (English)">
+                      <input required name="instNameEN" type="text" className="input-field font-montserrat" placeholder="Institution Name" />
+                    </FieldGroup>
+
+                    <FieldGroup label="প্রতিষ্ঠানের নাম (বাংলা)">
+                      <input required name="instNameBN" type="text" className="input-field" placeholder="প্রতিষ্ঠানের নাম" />
+                    </FieldGroup>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <FieldGroup label="Admin Name (EN)">
+                        <input required name="nameEN" type="text" className="input-field font-montserrat" placeholder="Your Name" />
+                      </FieldGroup>
+                      <FieldGroup label="এডমিন এর নাম (বাংলা)">
+                        <input required name="nameBN" type="text" className="input-field" placeholder="আপনার নাম" />
+                      </FieldGroup>
+                    </div>
+
+                    <FieldGroup label="Mobile Number">
+                      <input required name="phone" type="tel" className="input-field font-montserrat" placeholder="01XXXXXXXXX" />
+                    </FieldGroup>
                   </div>
 
-                  <button type="submit" disabled={loading} className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold uppercase tracking-wider hover:bg-[#59359a] transition-all shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2">
-                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "রেজিস্ট্রেশন করুন"}
-                  </button>
-
-                  <div className="relative py-2">
-                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
-                    <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-4 text-gray-400 font-bold tracking-widest">Or</span></div>
-                  </div>
-
-                  <button 
-                    type="button"
-                    onClick={async () => {
-                      setLoading(true);
-                      try {
-                        const provider = new GoogleAuthProvider();
-                        await signInWithPopup(auth, provider);
-                        router.push("/auth/login");
-                      } catch (error: any) {
-                        toast.error(error.message);
-                      } finally {
-                        setLoading(false);
-                      }
-                    }}
-                    className="w-full bg-white border border-gray-200 text-gray-700 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-gray-50 transition-colors flex items-center justify-center gap-3"
-                  >
-                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
-                    Google দিয়ে রেজিস্ট্রেশন
-                  </button>
+                  <SubmitButton loading={loading} label="রেজিস্ট্রেশন করুন" />
                 </form>
               )}
             </div>
-          )}
+          </RoleAccordion>
 
-          {(role === "Teacher" || role === "Student") && (
-            <div className="space-y-6">
-              <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
-                <p className="text-sm text-blue-900 leading-relaxed font-bengali">
-                  ”আপনার প্রতিষ্ঠানের বা বিভাগের জন্য এই সিস্টেমটি সেটআপ করা আছে কিনা তা দেখার জন্য EIIN/Registration Number বা নাম দিয়ে সার্চ করুন”
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="EIIN বা প্রতিষ্ঠানের নাম দিয়ে সার্চ করুন"
-                    className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm"
-                  />
-                  <button 
-                    onClick={handleSearch}
-                    disabled={searching}
-                    className="bg-[#6f42c1] text-white px-6 rounded-xl font-bold hover:bg-[#59359a] transition-colors"
-                  >
-                    {searching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
-                  </button>
-                </div>
-
-                {searchResults.length > 0 && !selectedTenant && (
-                  <div className="border border-gray-100 rounded-xl divide-y bg-white overflow-hidden shadow-sm">
-                    {searchResults.map(t => (
-                      <button 
-                        key={t.tenant_id}
-                        onClick={() => setSelectedTenant(t)}
-                        className="w-full p-4 text-left hover:bg-gray-50 flex justify-between items-center transition-colors"
-                      >
-                        <div>
-                          <p className="font-bold text-sm text-gray-800">{t.name}</p>
-                          <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">EIIN: {t.eiin}</p>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-gray-300" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {selectedTenant && (
-                  <div className="bg-green-50 p-4 rounded-xl border border-green-100 flex justify-between items-center shadow-sm">
-                    <div>
-                      <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest">Selected Institution</p>
-                      <p className="font-bold text-gray-800">{selectedTenant.name}</p>
-                    </div>
-                    <button onClick={() => setSelectedTenant(null)} className="text-xs font-bold text-red-500 uppercase hover:underline">Change</button>
-                  </div>
-                )}
-              </div>
+          {/* Teacher */}
+          <RoleAccordion 
+            id="Teacher"
+            title="শিক্ষক (Teacher)"
+            icon={<GraduationCap className="w-5 h-5" />}
+            active={activeRole === "Teacher"}
+            onClick={() => { setActiveRole("Teacher"); setSelectedTenant(null); }}
+          >
+            <div className="space-y-6 pt-2 font-bengali">
+              <SearchSection 
+                searchQuery={searchQuery}
+                handleSearch={handleSearch}
+                searching={searching}
+                searchResults={searchResults}
+                selectedTenant={selectedTenant}
+                setSelectedTenant={setSelectedTenant}
+              />
 
               {selectedTenant && (
-                <form onSubmit={handleRegistration} className="space-y-6 pt-4 border-t border-gray-100">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-1">
-                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Your Name</label>
-                      <input required name="userName" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="আপনার নাম লিখুন" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Mobile Number</label>
-                      <input required name="phone" type="tel" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="01XXXXXXXXX" />
-                    </div>
-                    {role === "Student" && (
-                      <>
-                        <div className="space-y-1">
-                          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Department</label>
-                          <input required name="dept" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="Science/Arts/Commerce" />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Class</label>
-                          <input required name="class" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="Class 10" />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Session</label>
-                          <input required name="session" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="2023-24" />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Roll Number</label>
-                          <input required name="roll" type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" placeholder="Roll No" />
-                        </div>
-                      </>
-                    )}
-
-                    <div className="md:col-span-2 border-t border-gray-100 pt-6 space-y-4">
-                      <div className="space-y-1">
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
-                        <div className="relative">
-                          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                          <input 
-                            required 
-                            type="email" 
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-12 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" 
-                            placeholder="name@institution.com" 
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Password</label>
-                        <div className="relative">
-                          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                          <input 
-                            required 
-                            type="password" 
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-12 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm" 
-                            placeholder="••••••••" 
-                          />
-                        </div>
-                      </div>
-                    </div>
+                <form onSubmit={handleRegistration} className="space-y-5 animate-in slide-in-from-top-2 duration-300">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FieldGroup label="Teacher Name (English)">
+                      <input required name="nameEN" type="text" className="input-field font-montserrat" placeholder="Teacher Name" />
+                    </FieldGroup>
+                    <FieldGroup label="শিক্ষকের নাম (বাংলা)">
+                      <input required name="nameBN" type="text" className="input-field" placeholder="আপনার নাম" />
+                    </FieldGroup>
                   </div>
-
-                  <button type="submit" disabled={loading} className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold uppercase tracking-wider hover:bg-[#59359a] transition-all shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2 text-sm">
-                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "রেজিস্ট্রেশন করুন"}
-                  </button>
-
-                  <div className="relative py-2">
-                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
-                    <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-4 text-gray-400 font-bold tracking-widest">Or</span></div>
-                  </div>
-
-                  <button 
-                    type="button"
-                    onClick={async () => {
-                      setLoading(true);
-                      try {
-                        const provider = new GoogleAuthProvider();
-                        await signInWithPopup(auth, provider);
-                        router.push("/auth/login");
-                      } catch (error: any) {
-                        toast.error(error.message);
-                      } finally {
-                        setLoading(false);
-                      }
-                    }}
-                    className="w-full bg-white border border-gray-200 text-gray-700 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-gray-50 transition-colors flex items-center justify-center gap-3"
-                  >
-                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
-                    Google দিয়ে রেজিস্ট্রেশন
-                  </button>
+                  <FieldGroup label="Mobile Number">
+                    <input required name="phone" type="tel" className="input-field font-montserrat" placeholder="01XXXXXXXXX" />
+                  </FieldGroup>
+                  <SubmitButton loading={loading} label="নিবন্ধন করুন" />
                 </form>
               )}
             </div>
-          )}
-          
-          <div className="pt-4 border-t border-gray-100 text-center">
-            <p className="text-xs text-gray-500 font-bengali">
-              ইতিমধ্যে অ্যাকাউন্ট আছে? <Link href="/auth/login" className="text-[#6f42c1] font-bold hover:underline">লগইন করুন</Link>
-            </p>
-          </div>
-        </Card>
+          </RoleAccordion>
+
+          {/* Student */}
+          <RoleAccordion 
+            id="Student"
+            title="শিক্ষার্থী (Student)"
+            icon={<Users className="w-5 h-5" />}
+            active={activeRole === "Student"}
+            onClick={() => { setActiveRole("Student"); setSelectedTenant(null); }}
+          >
+            <div className="space-y-6 pt-2 font-bengali">
+              <SearchSection 
+                searchQuery={searchQuery}
+                handleSearch={handleSearch}
+                searching={searching}
+                searchResults={searchResults}
+                selectedTenant={selectedTenant}
+                setSelectedTenant={setSelectedTenant}
+              />
+
+              {selectedTenant && (
+                <form onSubmit={handleRegistration} className="space-y-5 animate-in slide-in-from-top-2 duration-300">
+                  <FieldGroup label="Student Name (English)">
+                    <input required name="nameEN" type="text" className="input-field font-montserrat" placeholder="Student Name" />
+                  </FieldGroup>
+                  <FieldGroup label="Mobile Number">
+                    <input required name="phone" type="tel" className="input-field font-montserrat" placeholder="01XXXXXXXXX" />
+                  </FieldGroup>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <FieldGroup label="Department">
+                      <input required name="dept" type="text" className="input-field" placeholder="বিভাগ" />
+                    </FieldGroup>
+                    <FieldGroup label="Class">
+                      <input required name="class" type="text" className="input-field" placeholder="শ্রেণী" />
+                    </FieldGroup>
+                  </div>
+                  
+                  <FieldGroup label="Session / Year">
+                    <input required name="session" type="text" className="input-field font-montserrat" placeholder="2023-24" />
+                  </FieldGroup>
+
+                  <SubmitButton loading={loading} label="নিবন্ধন সম্পন্ন করুন" />
+                </form>
+              )}
+            </div>
+          </RoleAccordion>
+        </div>
+
+        {/* Footer Link */}
+        <div className="text-center font-bengali">
+          <p className="text-slate-500">
+            ইতিমধ্যে অ্যাকাউন্ট আছে? {" "}
+            <button 
+              onClick={() => router.push("/auth/login")}
+              className="text-purple-600 font-bold hover:underline"
+            >
+              লগইন করুন
+            </button>
+          </p>
+        </div>
       </div>
+
+      <style jsx global>{`
+        .input-field {
+          width: 100%;
+          background: white;
+          border: 1px solid #e2e8f0;
+          border-radius: 1rem;
+          padding: 0.875rem 1rem;
+          font-size: 0.875rem;
+          outline: none;
+          transition: all 0.2s;
+        }
+        .input-field:focus {
+          border-color: #9333ea;
+          box-shadow: 0 0 0 4px rgba(147, 51, 234, 0.1);
+        }
+      `}</style>
     </div>
+  );
+}
+
+// Helper Components
+function RoleAccordion({ id, title, icon, active, children, onClick }: any) {
+  return (
+    <Card className={cn(
+      "overflow-hidden transition-all duration-300",
+      active ? "border-purple-600 ring-4 ring-purple-100" : "border-slate-200 hover:border-purple-300"
+    )}>
+      <button 
+        onClick={onClick}
+        className="w-full flex items-center justify-between p-5 text-left"
+      >
+        <div className="flex items-center gap-4">
+          <div className={cn(
+            "p-3 rounded-xl transition-colors",
+            active ? "bg-purple-600 text-white" : "bg-slate-100 text-slate-500"
+          )}>
+            {icon}
+          </div>
+          <span className={cn(
+            "font-bold text-lg font-bengali text-left",
+            active ? "text-purple-900" : "text-slate-700"
+          )}>
+            {title}
+          </span>
+        </div>
+        <ChevronDown className={cn(
+          "w-5 h-5 text-slate-400 transition-transform duration-300",
+          active && "rotate-180"
+        )} />
+      </button>
+      <div className={cn(
+        "px-5 overflow-hidden transition-all duration-300",
+        active ? "max-h-[1500px] mb-6 opacity-100" : "max-h-0 opacity-0"
+      )}>
+        {children}
+      </div>
+    </Card>
+  );
+}
+
+function FieldGroup({ label, children }: any) {
+  return (
+    <div className="space-y-1.5 font-bengali">
+      <label className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function SearchSection({ searchQuery, handleSearch, searching, searchResults, selectedTenant, setSelectedTenant }: any) {
+  return (
+    <div className="space-y-4">
+      <p className="text-slate-600 text-sm">
+        আপনার প্রতিষ্ঠানের জন্য এই সিস্টেমটি সেটআপ করা আছে কিনা তা দেখার জন্য EIIN বা নাম দিয়ে সার্চ করুন
+      </p>
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+        <input 
+          type="text" 
+          value={searchQuery}
+          onChange={(e) => handleSearch(e.target.value)}
+          placeholder="EIIN বা প্রতিষ্ঠানের নাম..."
+          className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-purple-100 transition-all font-english"
+        />
+        {searching && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 animate-spin text-purple-600" />}
+      </div>
+
+      {searchResults.length > 0 && !selectedTenant && (
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-xl shadow-slate-200/50 overflow-hidden divide-y divide-slate-50">
+          {searchResults.map((t: any) => (
+            <button 
+              key={t.tenant_id}
+              onClick={() => setSelectedTenant(t)}
+              className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
+            >
+              <div>
+                <h4 className="font-bold text-slate-900">{t.name}</h4>
+                <p className="text-xs text-slate-400 font-bold tracking-widest uppercase">EIIN: {t.eiin}</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-purple-600" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {searchQuery.length >= 2 && searchResults.length === 0 && !searching && !selectedTenant && (
+        <div className="text-center py-4 text-slate-500">
+          কোন প্রতিষ্ঠান পাওয়া যায়নি
+        </div>
+      )}
+
+      {selectedTenant && (
+        <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center justify-between group">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-500 rounded-lg text-white">
+              <Check className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">নির্বাচিত প্রতিষ্ঠান</p>
+              <h4 className="font-bold text-slate-900">{selectedTenant.name}</h4>
+            </div>
+          </div>
+          <button 
+            onClick={() => setSelectedTenant(null)}
+            className="text-xs font-bold text-red-500 hover:text-red-600 uppercase transition-colors"
+          >
+            পরিবর্তন করুন
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SubmitButton({ loading, label }: any) {
+  return (
+    <button 
+      type="submit" 
+      disabled={loading} 
+      className="w-full bg-purple-600 text-white py-4 rounded-2xl font-bold uppercase tracking-wider hover:bg-purple-700 transition-all shadow-xl shadow-purple-200 flex items-center justify-center gap-3 active:scale-[0.98]"
+    >
+      {loading ? (
+        <Loader2 className="w-6 h-6 animate-spin" />
+      ) : (
+        <>
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+          {label}
+        </>
+      )}
+    </button>
   );
 }

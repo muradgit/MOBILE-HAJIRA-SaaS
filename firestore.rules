@@ -6,13 +6,10 @@ service cloud.firestore {
     // Assumed Data Model
     // ===============================================================
     // Collection: tenants
-    // Fields: tenant_id, name, eiin, institutionType, credits_left, status, admin_name, admin_mobile, owner_email, googleSheetId, created_at
+    // Fields: tenant_id, name, nameBN, eiin, institutionType, academicLevels, department, credits_left, status, admin_name, admin_nameBN, admin_mobile, owner_email, googleSheetId, created_at
     //
     // Collection: users
-    // Fields: user_id, tenant_id, role, name, email, phone, status, student_id, teacher_id, class, section
-    //
-    // Collection: session_codes
-    // Fields: code, tenant_id, teacher_id, subject, expires_at
+    // Fields: user_id, tenant_id, role, name, nameBN, email, phone, status, department, class, session, student_id, teacher_id, created_at
     // ===============================================================
 
     // ===============================================================
@@ -22,32 +19,44 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
     function isSuperAdmin() {
-      let userData = getUserData();
-      return isAuthenticated() && (
-        (request.auth.token.email == "hello@muradkhank31.com" && request.auth.token.email_verified == true) ||
-        (userData != null && userData.role == "SuperAdmin")
-      );
+      return isAuthenticated() && request.auth.token.email == "hello@muradkhank31.com";
     }
 
     function getUserData() {
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-      return userDoc != null ? userDoc.data : null;
-    }
-
-    function isInstitutionAdmin(tenantId) {
-      let userData = getUserData();
-      return isAuthenticated() && userData != null && userData.tenant_id == tenantId && userData.role == "InstitutionAdmin";
-    }
-
-    function isTeacher(tenantId) {
-      let userData = getUserData();
-      return isAuthenticated() && userData != null && userData.tenant_id == tenantId && userData.role == "Teacher";
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function belongsToTenant(tenantId) {
-      let userData = getUserData();
-      return isAuthenticated() && userData != null && userData.tenant_id == tenantId;
+      return isAuthenticated() && getUserData().tenant_id == tenantId;
+    }
+
+    function isInstitutionAdmin(tenantId) {
+      let data = getUserData();
+      return isAuthenticated() && data.tenant_id == tenantId && data.role == "InstitutionAdmin";
+    }
+
+    function isValidTenant(data) {
+      return data.tenant_id is string &&
+             data.name is string && data.name.size() > 0 &&
+             data.eiin is string &&
+             data.institutionType in ["School", "College", "Madrasa", "Coaching Center", "University", "Polytechnic"] &&
+             data.credits_left is number &&
+             data.status in ["active", "suspended", "deactivated"] &&
+             data.owner_email is string && isValidEmail(data.owner_email);
+    }
+
+    function isValidUser(data) {
+      return data.user_id is string &&
+             data.tenant_id is string &&
+             data.role in ["InstitutionAdmin", "Teacher", "Student"] &&
+             data.name is string && data.name.size() > 0 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.status in ["pending", "approved"];
     }
 
     // ===============================================================
@@ -57,24 +66,22 @@ service cloud.firestore {
     // Tenants
     match /tenants/{tenantId} {
       allow read: if isSuperAdmin() || belongsToTenant(tenantId);
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidTenant(request.resource.data) && request.resource.data.owner_email == request.auth.token.email;
+      allow update: if isSuperAdmin() || (isInstitutionAdmin(tenantId) && isValidTenant(request.resource.data));
       allow delete: if isSuperAdmin();
-      allow update: if isSuperAdmin() || (isInstitutionAdmin(tenantId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'admin_name', 'admin_mobile']));
     }
 
     // Users
     match /users/{userId} {
-      allow read: if isSuperAdmin() || request.auth.uid == userId;
-      allow create: if isSuperAdmin() || (request.auth.uid == userId && request.resource.data.role != "SuperAdmin");
-      allow update: if isSuperAdmin() || (request.auth.uid == userId && request.resource.data.role == resource.data.role);
+      allow read: if isSuperAdmin() || request.auth.uid == userId || (isAuthenticated() && getUserData().tenant_id == resource.data.tenant_id);
+      allow create: if isAuthenticated() && request.auth.uid == userId && isValidUser(request.resource.data) && request.resource.data.role != "SuperAdmin";
+      allow update: if isSuperAdmin() || (request.auth.uid == userId && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role) || (isInstitutionAdmin(resource.data.tenant_id) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']));
       allow delete: if isSuperAdmin();
     }
 
     // Session Codes
     match /session_codes/{codeId} {
-      allow read: if isAuthenticated();
-      allow create: if isSuperAdmin() || isTeacher(request.resource.data.tenant_id);
-      allow delete: if isSuperAdmin() || isTeacher(resource.data.tenant_id);
+      allow read, write: if isAuthenticated();
     }
   }
 }

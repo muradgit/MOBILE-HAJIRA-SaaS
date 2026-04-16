@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/hooks/useAuth";
 import { Layout } from "@/src/components/layout/Layout";
 import { toast } from "sonner";
@@ -9,6 +10,7 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const { userData, tenant, loading } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     const handlePendingRegistration = async () => {
@@ -32,13 +34,16 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             tenantId = `tenant_${Date.now()}`;
             await setDoc(doc(db, "tenants", tenantId), {
               tenant_id: tenantId,
-              name: pendingData.institutionName,
+              name: pendingData.institutionNameEN,
+              nameBN: pendingData.institutionNameBN,
               eiin: pendingData.eiin,
               institutionType: pendingData.institutionType,
+              academicLevels: pendingData.academicLevels,
+              department: pendingData.department || null,
               credits_left: 50, // Initial free credits
-              googleSheetId: pendingData.googleSheetId,
               status: "active",
               admin_name: pendingData.name,
+              admin_nameBN: pendingData.nameBN,
               admin_mobile: pendingData.phone,
               owner_email: user.email,
               created_at: new Date().toISOString(),
@@ -51,6 +56,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             tenant_id: tenantId,
             role: pendingData.role,
             name: pendingData.name,
+            nameBN: pendingData.nameBN,
             email: user.email,
             phone: pendingData.phone,
             status: pendingData.role === "InstitutionAdmin" ? "approved" : "pending",
@@ -58,9 +64,11 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
           };
 
           if (pendingData.role === "Student") {
+            newUser.department = pendingData.department;
             newUser.class = pendingData.class;
-            newUser.section = pendingData.section;
-            newUser.student_id = pendingData.student_id;
+            newUser.session = pendingData.session;
+          } else if (pendingData.role === "Teacher") {
+            newUser.department = pendingData.department || null;
           }
 
           await setDoc(doc(db, "users", user.uid), newUser);
@@ -74,6 +82,15 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
           localStorage.removeItem('pendingRegistration');
           toast.success("Registration successful!");
+
+          // Redirect based on role
+          if (newUser.role === "InstitutionAdmin") {
+            router.push("/admin/dashboard");
+          } else {
+            // Teacher/Student are pending by default
+            toast.info("আপনার অ্যাকাউন্টটি বর্তমানে পেন্ডিং অবস্থায় আছে। এডমিন অ্যাপ্রুভ করলে আপনি ড্যাশবোর্ড ব্যবহার করতে পারবেন।");
+            router.push("/auth/login");
+          }
         } catch (error: any) {
           console.error("Registration error:", error);
           toast.error("Registration failed: " + error.message);
