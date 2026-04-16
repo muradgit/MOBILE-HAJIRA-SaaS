@@ -22,11 +22,11 @@ import { cn } from "@/src/lib/utils";
 type Role = "InstitutionAdmin" | "Teacher" | "Student";
 
 const ACADEMIC_LEVELS = [
-  "Primary", "Secondary", "Higher Secondary", "Honours", "Masters", "Diploma", "Vocational"
+  "Play", "Nursery", "Primary (Class 1-5)", "High (Class 6-10)", "Class Eleven", "Class Twelve", "Degree", "Honours", "Preliminary to Masters", "Masters", "Training", "Vocational", "Diploma"
 ];
 
 const INST_TYPES = [
-  "School", "College", "Madrasa", "Coaching Center", "University", "Polytechnic"
+  "University", "College", "School", "School and College", "Madrasha", "Coaching Center", "Training Institute", "Polytechnic"
 ];
 
 export default function RegisterPage() {
@@ -47,7 +47,12 @@ export default function RegisterPage() {
   const router = useRouter();
 
   useEffect(() => {
-    setShowDept(selectedLevels.includes("Honours") || selectedLevels.includes("Masters"));
+    setShowDept(
+      selectedLevels.includes("Honours") || 
+      selectedLevels.includes("Masters") || 
+      selectedLevels.includes("Preliminary to Masters") ||
+      selectedLevels.includes("Degree")
+    );
   }, [selectedLevels]);
 
   const handleSearch = async (val: string) => {

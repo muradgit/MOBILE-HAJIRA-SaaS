@@ -9,7 +9,7 @@
         "name": { "type": "string", "description": "Name of the institution (English)." },
         "nameBN": { "type": "string", "description": "Name of the institution (Bengali)." },
         "eiin": { "type": "string", "description": "EIIN or Registration Number." },
-        "institutionType": { "type": "string", "enum": ["School", "College", "Madrasa", "Coaching Center", "University", "Polytechnic"] },
+        "institutionType": { "type": "string", "enum": ["University", "College", "School", "School and College", "Madrasha", "Coaching Center", "Training Institute", "Polytechnic"] },
         "academicLevels": { "type": "array", "items": { "type": "string" } },
         "department": { "type": "string", "description": "Specific department if admin is for a dept." },
         "credits_left": { "type": "number", "description": "Remaining credits for attendance." },

@@ -44,7 +44,7 @@ service cloud.firestore {
       return data.tenant_id is string &&
              data.name is string && data.name.size() > 0 &&
              data.eiin is string &&
-             data.institutionType in ["School", "College", "Madrasa", "Coaching Center", "University", "Polytechnic"] &&
+             data.institutionType in ["University", "College", "School", "School and College", "Madrasha", "Coaching Center", "Training Institute", "Polytechnic"] &&
              data.credits_left is number &&
              data.status in ["active", "suspended", "deactivated"] &&
              data.owner_email is string && isValidEmail(data.owner_email);
