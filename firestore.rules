@@ -6,22 +6,13 @@ service cloud.firestore {
     // Assumed Data Model
     // ===============================================================
     // Collection: tenants
-    // Fields: tenant_id, name, eiin, website, phone, credits_left, status, promo_code, referral_count
+    // Fields: tenant_id, name, eiin, institutionType, credits_left, status, admin_name, admin_mobile, owner_email, googleSheetId, created_at
     //
     // Collection: users
-    // Fields: user_id, tenant_id, role, name, phone, password_hash
+    // Fields: user_id, tenant_id, role, name, email, phone, status, student_id, teacher_id, class, section
     //
-    // Collection: tenants/{tenantId}/students
-    // Fields: student_id, tenant_id, level, dept, session, roll, unique_id, qr_image_url
-    //
-    // Collection: tenants/{tenantId}/attendance
-    // Fields: timestamp, tenant_id, student_id, teacher_id, subject, status
-    //
-    // Collection: transactions
-    // Fields: trx_id, amount, sender_number, status, claimed_by_tenant, timestamp
-    //
-    // Collection: tenants/{tenantId}/rewards
-    // Fields: tenant_id, date, claimed
+    // Collection: session_codes
+    // Fields: code, tenant_id, teacher_id, subject, expires_at
     // ===============================================================
 
     // ===============================================================
@@ -34,7 +25,7 @@ service cloud.firestore {
     function isSuperAdmin() {
       let userData = getUserData();
       return isAuthenticated() && (
-        ('email' in request.auth.token && request.auth.token.email == "hello@muradkhank31.com") ||
+        (request.auth.token.email == "hello@muradkhank31.com" && request.auth.token.email_verified == true) ||
         (userData != null && userData.role == "SuperAdmin")
       );
     }
@@ -44,9 +35,9 @@ service cloud.firestore {
       return userDoc != null ? userDoc.data : null;
     }
 
-    function isSchoolAdmin(tenantId) {
+    function isInstitutionAdmin(tenantId) {
       let userData = getUserData();
-      return isAuthenticated() && userData != null && userData.tenant_id == tenantId && userData.role == "SchoolAdmin";
+      return isAuthenticated() && userData != null && userData.tenant_id == tenantId && userData.role == "InstitutionAdmin";
     }
 
     function isTeacher(tenantId) {
@@ -68,7 +59,7 @@ service cloud.firestore {
       allow read: if isSuperAdmin() || belongsToTenant(tenantId);
       allow create: if isAuthenticated();
       allow delete: if isSuperAdmin();
-      allow update: if isSuperAdmin() || (isSchoolAdmin(tenantId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'website', 'phone']));
+      allow update: if isSuperAdmin() || (isInstitutionAdmin(tenantId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'admin_name', 'admin_mobile']));
     }
 
     // Users
@@ -79,30 +70,11 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
-    // Students
-    match /tenants/{tenantId}/students/{studentId} {
-      allow read: if isSuperAdmin() || belongsToTenant(tenantId);
-      allow create, update, delete: if isSuperAdmin() || isSchoolAdmin(tenantId);
-    }
-
-    // Attendance
-    match /tenants/{tenantId}/attendance/{attendanceId} {
-      allow read: if isSuperAdmin() || belongsToTenant(tenantId);
-      allow create: if isSuperAdmin() || belongsToTenant(tenantId);
-      allow update, delete: if isSuperAdmin() || isSchoolAdmin(tenantId);
-    }
-
-    // Transactions
-    match /transactions/{trxId} {
+    // Session Codes
+    match /session_codes/{codeId} {
       allow read: if isAuthenticated();
-      allow create: if isSuperAdmin();
-      allow update: if isSuperAdmin() || (isAuthenticated() && resource.data.status == "unused" && request.resource.data.status == "used");
-    }
-
-    // Rewards
-    match /tenants/{tenantId}/rewards/{rewardId} {
-      allow read: if isSuperAdmin() || belongsToTenant(tenantId);
-      allow create: if isSuperAdmin() || belongsToTenant(tenantId);
+      allow create: if isSuperAdmin() || isTeacher(request.resource.data.tenant_id);
+      allow delete: if isSuperAdmin() || isTeacher(resource.data.tenant_id);
     }
   }
 }

@@ -24,6 +24,7 @@ export interface Tenant {
   name: string;
   eiin: string;
   credits_left: number;
+  googleSheetId: string;
   promo_code: string;
   referral_count: number;
   status?: "active" | "suspended" | "deactivated";
