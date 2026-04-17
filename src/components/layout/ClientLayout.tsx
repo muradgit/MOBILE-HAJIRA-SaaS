@@ -6,7 +6,7 @@ import { useAuth } from "@/src/hooks/useAuth";
 import { Layout } from "@/src/components/layout/Layout";
 import { toast } from "sonner";
 import { auth, db } from "@/src/lib/firebase";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const { userData, tenant, loading } = useAuth();
@@ -55,8 +55,12 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
           const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
           
           let resolvedRole = pendingData.role;
-          if (!resolvedRole) {
-            resolvedRole = userEmail === superAdminEmail ? 'SuperAdmin' : 'Student';
+
+          // CRITICAL: Super Admin Email ALWAYS gets SuperAdmin role
+          if (userEmail === superAdminEmail) {
+            resolvedRole = "SuperAdmin";
+          } else if (!resolvedRole) {
+            resolvedRole = "Student";
           }
 
           // Ensure name is never undefined
@@ -114,6 +118,31 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     };
 
     if (!loading && auth.currentUser) {
+      const user = auth.currentUser;
+      const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
+
+      // CRITICAL: If this is the Super Admin email, ensure they have the correct role in Firestore
+      if (user.email === superAdminEmail) {
+        const userDocRef = doc(db, "users", user.uid);
+        getDoc(userDocRef).then(async (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data.role !== "SuperAdmin") {
+              await updateDoc(userDocRef, { role: "SuperAdmin", status: "approved" });
+              // Refresh session cookie
+              await fetch("/api/auth/session", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ role: "SuperAdmin", userId: user.uid }),
+              });
+              // Redirect to Super Admin dashboard
+              window.location.href = "/super-admin/dashboard";
+              return;
+            }
+          }
+        });
+      }
+
       // Task 1: Auto-login URL Bug Fix - Redirect from root (/) to dashboard
       if (window.location.pathname === "/") {
         const userDoc = doc(db, "users", auth.currentUser.uid);

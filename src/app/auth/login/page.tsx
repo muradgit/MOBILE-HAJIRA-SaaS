@@ -75,16 +75,20 @@ export default function LoginPage() {
     }
 
     const userData = userDoc.data() as UserData;
+    const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
+    
+    // Override role if it's the super admin email
+    const finalRole = auth.currentUser?.email === superAdminEmail ? "SuperAdmin" : userData.role;
 
     // Set session cookie
     await fetch("/api/auth/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: userData.role, userId: userData.user_id }),
+      body: JSON.stringify({ role: finalRole, userId: userData.user_id }),
     });
 
     // Check for approval if Teacher or Student
-    if ((userData.role === "Teacher" || userData.role === "Student") && userData.status !== "approved") {
+    if ((finalRole === "Teacher" || finalRole === "Student") && userData.status !== "approved") {
       // Fetch tenant to get admin info
       const tenantDoc = await getDoc(doc(db, "tenants", userData.tenant_id));
       const tenantData = tenantDoc.exists() ? tenantDoc.data() as Tenant : null;
@@ -114,7 +118,7 @@ export default function LoginPage() {
       Student: "/student/dashboard",
     };
     
-    router.push(roleRoutes[userData.role] || "/");
+    router.push(roleRoutes[finalRole as keyof typeof roleRoutes] || "/");
   };
 
   return (
