@@ -22,6 +22,7 @@ export interface FirestoreErrorInfo {
 export interface Tenant {
   tenant_id: string;
   name: string;
+  nameBN?: string;
   eiin: string;
   credits_left: number;
   googleSheetId: string;
@@ -56,6 +57,7 @@ export interface UserData {
   tenant_id: string;
   role: "SuperAdmin" | "InstitutionAdmin" | "Teacher" | "Student";
   name: string;
+  nameBN?: string;
   email?: string;
   phone?: string;
   student_id?: string;

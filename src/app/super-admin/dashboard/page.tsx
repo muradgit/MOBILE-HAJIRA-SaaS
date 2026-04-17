@@ -44,10 +44,22 @@ export default function SuperAdminDashboard() {
     };
   }, [userData]);
 
-  if (authLoading || (userData && loading)) {
+  if (authLoading || (userData && loading) || (!userData && !authLoading)) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-[#6f42c1]" />
+      <div className="p-6 space-y-8 max-w-7xl mx-auto animate-pulse">
+        <div className="h-10 bg-gray-200 rounded-lg w-1/3 mb-2"></div>
+        <div className="h-4 bg-gray-100 rounded-md w-1/4 mb-8"></div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-32 bg-gray-50 rounded-2xl"></div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="h-64 bg-gray-50 rounded-2xl"></div>
+          <div className="h-64 bg-gray-50 rounded-2xl"></div>
+        </div>
       </div>
     );
   }
@@ -59,10 +71,10 @@ export default function SuperAdminDashboard() {
   const earnedMoney = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
 
   return (
-    <div className="p-6 space-y-8 max-w-7xl mx-auto">
+    <div className="p-6 space-y-8 max-w-7xl mx-auto transition-all duration-500 animate-in fade-in">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Super Admin Dashboard</h1>
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold text-gray-900 font-bengali">স্বাগতম, {userData.nameBN || userData.name} (Super Admin)</h1>
           <p className="text-sm text-gray-500">Manage institutions, payments, and users across the platform.</p>
         </div>
       </div>

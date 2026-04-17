@@ -59,23 +59,27 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             resolvedRole = userEmail === superAdminEmail ? 'SuperAdmin' : 'Student';
           }
 
+          // Ensure name is never undefined
+          const resolvedName = pendingData.name || user.displayName || "User";
+          const resolvedNameBN = pendingData.nameBN || resolvedName;
+
           // Create user document
           const newUser: any = {
             user_id: user.uid,
-            tenant_id: tenantId,
+            tenant_id: resolvedRole === "SuperAdmin" ? "SUPER_ADMIN" : tenantId,
             role: resolvedRole,
-            name: pendingData.name,
-            nameBN: pendingData.nameBN,
+            name: resolvedName,
+            nameBN: resolvedNameBN,
             email: user.email,
-            phone: pendingData.phone,
-            status: resolvedRole === "InstitutionAdmin" ? "approved" : "pending",
+            phone: pendingData.phone || "",
+            status: (resolvedRole === "InstitutionAdmin" || resolvedRole === "SuperAdmin") ? "approved" : "pending",
             created_at: new Date().toISOString(),
           };
 
           if (resolvedRole === "Student") {
-            newUser.department = pendingData.department;
-            newUser.class = pendingData.class;
-            newUser.session = pendingData.session;
+            newUser.department = pendingData.department || "";
+            newUser.class = pendingData.class || "";
+            newUser.session = pendingData.session || "";
           } else if (resolvedRole === "Teacher") {
             newUser.department = pendingData.department || null;
           }

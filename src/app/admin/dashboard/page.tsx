@@ -12,7 +12,8 @@ import {
   ChevronRight, 
   BookOpen, 
   Settings,
-  Loader2
+  Loader2,
+  Building2
 } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
 
@@ -23,7 +24,7 @@ export default function AdminDashboard() {
   const [pendingStudents, setPendingStudents] = useState(0);
 
   useEffect(() => {
-    if (!userData || userData.role !== "InstitutionAdmin") return;
+    if (!userData || userData.role !== "InstitutionAdmin" || !userData.tenant_id) return;
 
     const qT = query(collection(db, "users"), where("tenant_id", "==", userData.tenant_id), where("role", "==", "Teacher"), where("status", "==", "pending"));
     const qS = query(collection(db, "users"), where("tenant_id", "==", userData.tenant_id), where("role", "==", "Student"), where("status", "==", "pending"));
@@ -34,10 +35,16 @@ export default function AdminDashboard() {
     return () => { unsubT(); unsubS(); };
   }, [userData]);
 
-  if (authLoading) {
+  if (authLoading || (!userData && !authLoading)) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-[#6f42c1]" />
+      <div className="p-6 space-y-6 max-w-md mx-auto animate-pulse">
+        <div className="h-8 bg-gray-200 rounded-lg w-3/4 mb-4"></div>
+        <div className="h-32 bg-gray-100 rounded-2xl w-full"></div>
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="h-16 bg-gray-100 rounded-xl w-full"></div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -47,8 +54,18 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-md mx-auto">
-      <Card className="p-5 flex items-center justify-between shadow-sm">
+    <div className="p-6 space-y-6 max-w-md mx-auto transition-all duration-500 animate-in fade-in">
+      <div className="space-y-1">
+        <h1 className="text-2xl font-bold text-gray-900 font-bengali">
+          স্বাগতম, {userData.nameBN || userData.name}
+        </h1>
+        <p className="text-xs text-purple-600 font-bold uppercase tracking-widest flex items-center gap-1.5">
+          <Building2 className="w-3 h-3" />
+          {tenant?.nameBN || tenant?.name || "Institution"}
+        </p>
+      </div>
+
+      <Card className="p-5 flex items-center justify-between shadow-sm border border-purple-100 bg-gradient-to-br from-white to-purple-50">
         <div>
           <span className="text-xs text-gray-500 font-bold uppercase tracking-wider block mb-1">ক্রেডিট ব্যালেন্স</span>
           <div className="flex items-baseline gap-1">

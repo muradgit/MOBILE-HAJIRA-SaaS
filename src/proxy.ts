@@ -19,10 +19,11 @@ export function proxy(request: NextRequest) {
   );
 
   if (protectedRoute) {
-    // If no user role is found, redirect to login
+    // CRITICAL: If no user role is found, redirect to login
     if (!userRole) {
       const loginUrl = new URL("/auth/login", request.url);
       loginUrl.searchParams.set("from", pathname);
+      // Hard redirect to clear any state issues
       return NextResponse.redirect(loginUrl);
     }
 
