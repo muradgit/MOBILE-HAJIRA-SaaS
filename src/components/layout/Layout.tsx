@@ -25,7 +25,8 @@ import {
   Database,
   History,
   Share2,
-  BookOpen
+  BookOpen,
+  GraduationCap
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { UserData, Tenant } from "@/src/lib/types";
@@ -44,12 +45,11 @@ const shareSystem = () => {
 };
 
 const NavButton = ({ icon: Icon, label, to }: { icon: any, label: string, to: string }) => {
-  const router = useRouter();
   const pathname = usePathname();
   const isActive = pathname === to;
   return (
-    <Link 
-      href={to}
+    <button 
+      onClick={() => window.location.href = to}
       className={cn(
         "flex flex-col items-center gap-1 p-2 transition-colors",
         isActive ? "text-[#6f42c1]" : "text-gray-400"
@@ -57,7 +57,7 @@ const NavButton = ({ icon: Icon, label, to }: { icon: any, label: string, to: st
     >
       <Icon className="w-6 h-6" />
       <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
-    </Link>
+    </button>
   );
 };
 
@@ -71,11 +71,11 @@ export const Layout = ({ children, user, tenant }: { children: React.ReactNode, 
       { label: "Dashboard", to: "/super-admin/dashboard", icon: Home },
       { label: "Institute Management", to: "/institutes", icon: Database },
       { label: "Create Institute", to: "/institutes/create", icon: Plus },
+      { label: "Details", to: "/super-admin/details", icon: ClipboardList },
       { label: "Payment Logs", to: "/payments", icon: History },
       { label: "User Management", to: "/users", icon: Users },
     ],
     InstitutionAdmin: [
-      { label: "Dashboard", to: "/admin/dashboard", icon: Home },
       { label: "Institute Settings", to: "/settings/general", icon: Database },
       { label: "Teacher Management", to: "/teachers", icon: Users },
       { label: "Student Management", to: "/students", icon: Users },
@@ -84,16 +84,14 @@ export const Layout = ({ children, user, tenant }: { children: React.ReactNode, 
       { label: "Payment Management", to: "/wallet", icon: WalletIcon },
     ],
     Teacher: [
-      { label: "Dashboard", to: "/teacher/dashboard", icon: Home },
-      { label: "Teachers Profile", to: "/teacher/profile", icon: User },
+      { label: "Profile", to: "/teacher/profile", icon: User },
       { label: "Attendance Taker", to: "/scanner", icon: QrCode },
-      { label: "Teachers Class Report", to: "/reports", icon: FileText },
+      { label: "Class Report", to: "/reports", icon: FileText },
       { label: "Attendance Report", to: "/reports/attendance", icon: ClipboardList },
     ],
     Student: [
-      { label: "Dashboard", to: "/student/dashboard", icon: Home },
       { label: "Attendance Giver", to: "/student/id", icon: QrCode },
-      { label: "Student Profile", to: "/student/profile", icon: User },
+      { label: "Profile", to: "/student/profile", icon: User },
       { label: "Student Self-Attendance Report", to: "/reports/self", icon: FileText },
     ],
   };
@@ -132,10 +130,10 @@ export const Layout = ({ children, user, tenant }: { children: React.ReactNode, 
               </button>
             </div>
 
-            <div className="flex flex-col items-center text-center flex-1 mx-4">
+                    <div className="flex flex-col items-center text-center flex-1 mx-4">
               <h1 className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-none">MOBILE-HAJIRA</h1>
-              <h2 className="text-sm sm:text-lg font-black text-[#6f42c1] mt-1 line-clamp-1">
-                {user.role === "SuperAdmin" ? "Super Admin Dashboard" : (tenant?.name || "Institution")}
+              <h2 className="text-sm sm:text-lg font-black text-[#6f42c1] mt-1 line-clamp-1 font-bengali">
+                {user.role === "SuperAdmin" ? "Super Admin Dashboard" : (tenant?.nameBN || tenant?.name || "Institution")}
               </h2>
             </div>
 
@@ -165,27 +163,88 @@ export const Layout = ({ children, user, tenant }: { children: React.ReactNode, 
                         Teacher: "/teacher/profile",
                         Student: "/student/profile",
                       };
-                      router.push(profileRoutes[user.role]);
+                      window.location.href = profileRoutes[user.role];
                     }}
                     className="w-full px-4 py-2 text-left text-sm font-medium hover:bg-gray-50 flex items-center gap-2"
                   >
                     <User className="w-4 h-4" /> Your Profile
                   </button>
-                  {user.email === "hello@muradkhank31.com" && (
-                    <button 
-                      onClick={async () => {
-                        setIsProfileOpen(false);
-                        const nextRole = user.role === "SuperAdmin" ? "InstitutionAdmin" : "SuperAdmin";
-                        const roleLabel = nextRole === "SuperAdmin" ? "Super Admin" : "Institute Admin";
-                        toast.loading(`Switching to ${roleLabel} Role...`, { id: 'role-switch' });
-                        await updateDoc(doc(db, "users", user.user_id), { role: nextRole });
-                        toast.success(`Switched to ${roleLabel} Role`, { id: 'role-switch' });
-                        router.push(nextRole === "SuperAdmin" ? "/super-admin/dashboard" : "/admin/dashboard");
-                      }}
-                      className="w-full px-4 py-2 text-left text-sm font-medium hover:bg-gray-50 flex items-center gap-2 text-purple-600"
-                    >
-                      <ShieldCheck className="w-4 h-4" /> Switch to {user.role === "SuperAdmin" ? "Inst Admin" : "Super Admin"}
-                    </button>
+
+                  {/* Role Switching for Super Admin */}
+                  {user.role === "SuperAdmin" && (
+                    <>
+                      <button 
+                        onClick={async () => {
+                          setIsProfileOpen(false);
+                          toast.loading("Switching to Institute Admin...", { id: 'role-switch' });
+                          await updateDoc(doc(db, "users", user.user_id), { role: "InstitutionAdmin" });
+                          await fetch("/api/auth/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "InstitutionAdmin", userId: user.user_id }) });
+                          toast.success("Switched to Institute Admin", { id: 'role-switch' });
+                          window.location.href = "/admin/dashboard";
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm font-medium hover:bg-gray-50 flex items-center gap-2 text-purple-600"
+                      >
+                        <ShieldCheck className="w-4 h-4" /> Switch to Inst Admin
+                      </button>
+                      <button 
+                        onClick={async () => {
+                          setIsProfileOpen(false);
+                          toast.loading("Switching to Teacher...", { id: 'role-switch' });
+                          await updateDoc(doc(db, "users", user.user_id), { role: "Teacher" });
+                          await fetch("/api/auth/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "Teacher", userId: user.user_id }) });
+                          toast.success("Switched to Teacher", { id: 'role-switch' });
+                          window.location.href = "/teacher/dashboard";
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm font-medium hover:bg-gray-50 flex items-center gap-2 text-purple-600"
+                      >
+                        <GraduationCap className="w-4 h-4" /> Switch to Teacher
+                      </button>
+                      <button 
+                        onClick={async () => {
+                          setIsProfileOpen(false);
+                          toast.loading("Switching to Student...", { id: 'role-switch' });
+                          await updateDoc(doc(db, "users", user.user_id), { role: "Student" });
+                          await fetch("/api/auth/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "Student", userId: user.user_id }) });
+                          toast.success("Switched to Student", { id: 'role-switch' });
+                          window.location.href = "/student/dashboard";
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm font-medium hover:bg-gray-50 flex items-center gap-2 text-purple-600"
+                      >
+                        <Users className="w-4 h-4" /> Switch to Student
+                      </button>
+                    </>
+                  )}
+
+                  {/* Role Switching for Institution Admin */}
+                  {user.role === "InstitutionAdmin" && (
+                    <>
+                      <button 
+                        onClick={async () => {
+                          setIsProfileOpen(false);
+                          toast.loading("Switching to Teacher...", { id: 'role-switch' });
+                          await updateDoc(doc(db, "users", user.user_id), { role: "Teacher" });
+                          await fetch("/api/auth/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "Teacher", userId: user.user_id }) });
+                          toast.success("Switched to Teacher", { id: 'role-switch' });
+                          window.location.href = "/teacher/dashboard";
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm font-medium hover:bg-gray-50 flex items-center gap-2 text-purple-600"
+                      >
+                        <GraduationCap className="w-4 h-4" /> Switch to Teacher
+                      </button>
+                      <button 
+                        onClick={async () => {
+                          setIsProfileOpen(false);
+                          toast.loading("Switching to Student...", { id: 'role-switch' });
+                          await updateDoc(doc(db, "users", user.user_id), { role: "Student" });
+                          await fetch("/api/auth/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "Student", userId: user.user_id }) });
+                          toast.success("Switched to Student", { id: 'role-switch' });
+                          window.location.href = "/student/dashboard";
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm font-medium hover:bg-gray-50 flex items-center gap-2 text-purple-600"
+                      >
+                        <Users className="w-4 h-4" /> Switch to Student
+                      </button>
+                    </>
                   )}
                   <hr className="my-1 border-gray-100" />
                   <button 
@@ -221,12 +280,12 @@ export const Layout = ({ children, user, tenant }: { children: React.ReactNode, 
                   key={idx}
                   onClick={() => {
                     setIsMenuOpen(false);
-                    router.push(item.to);
+                    window.location.href = item.to;
                   }}
                   className="w-full px-6 py-3 text-left flex items-center gap-4 hover:bg-purple-50 transition-colors group"
                 >
                   <item.icon className="w-5 h-5 text-gray-400 group-hover:text-[#6f42c1]" />
-                  <span className="text-sm font-bold text-gray-700 group-hover:text-[#6f42c1]">{item.label}</span>
+                  <span className="text-sm font-bold text-gray-700 group-hover:text-[#6f42c1] font-bengali">{item.label}</span>
                 </button>
               ))}
             </div>
@@ -241,16 +300,16 @@ export const Layout = ({ children, user, tenant }: { children: React.ReactNode, 
           <div className="mt-12 mb-8">
             {(user.role === "InstitutionAdmin" || user.role === "Teacher") ? (
               <div className="no-print bg-white rounded-2xl p-6 text-center shadow-sm border border-gray-100 mx-auto max-w-md" style={{ paddingBottom: '80px' }}>
-                <p className="font-bold text-gray-600 mb-4">Help Others and Get 20 Bonus Credits</p>
+                <p className="font-bold text-gray-600 mb-4 font-bengali">Help Others and Get 20 Bonus Credits</p>
                 <button 
                   onClick={shareSystem}
-                  className="bg-purple-50 text-[#6f42c1] border border-purple-100 px-6 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 mx-auto hover:bg-purple-100 transition-all"
+                  className="bg-purple-50 text-[#6f42c1] border border-purple-100 px-6 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 mx-auto hover:bg-purple-100 transition-all font-bengali"
                 >
                   <Share2 className="w-4 h-4" /> সিস্টেমটি শেয়ার করুন
                 </button>
                 
                 <div className="border-t border-gray-100 pt-6 mt-6">
-                  <small className="text-gray-400 block">
+                  <small className="text-gray-400 block font-bengali">
                     MOBILE-HAJIRA Developed by
                   </small>
                   <a href="https://muradkhank31.com" target="_blank" rel="noopener noreferrer" className="text-[#6f42c1] font-black text-sm mt-1 inline-block hover:underline">
@@ -282,13 +341,11 @@ export const Layout = ({ children, user, tenant }: { children: React.ReactNode, 
             </>
           ) : user.role === "Teacher" ? (
             <>
-              <NavButton icon={Home} label="Dashboard" to="/teacher/dashboard" />
               <NavButton icon={QrCode} label="Attendance" to="/scanner" />
               <NavButton icon={FileText} label="Report" to="/reports" />
             </>
           ) : user.role === "Student" ? (
             <>
-              <NavButton icon={Home} label="Dashboard" to="/student/dashboard" />
               <NavButton icon={QrCode} label="Attendance" to="/student/id" />
               <NavButton icon={FileText} label="Report" to="/reports/self" />
             </>

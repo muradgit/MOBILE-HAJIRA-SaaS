@@ -5,6 +5,20 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const userRole = request.cookies.get("user-role")?.value;
 
+  // Task 1: Redirect from root (/) to dashboard if role exists
+  if (pathname === "/" && userRole) {
+    const dashboardMap: Record<string, string> = {
+      SuperAdmin: "/super-admin/dashboard",
+      InstitutionAdmin: "/admin/dashboard",
+      Teacher: "/teacher/dashboard",
+      Student: "/student/dashboard",
+    };
+    const redirectUrl = dashboardMap[userRole];
+    if (redirectUrl) {
+      return NextResponse.redirect(new URL(redirectUrl, request.url));
+    }
+  }
+
   // Define protected routes and their allowed roles
   const protectedRoutes = [
     { path: "/super-admin", roles: ["SuperAdmin"] },

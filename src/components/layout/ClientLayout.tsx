@@ -114,6 +114,25 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     };
 
     if (!loading && auth.currentUser) {
+      // Task 1: Auto-login URL Bug Fix - Redirect from root (/) to dashboard
+      if (window.location.pathname === "/") {
+        const userDoc = doc(db, "users", auth.currentUser.uid);
+        getDoc(userDoc).then(docSnap => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            const dashboardMap: Record<string, string> = {
+              SuperAdmin: "/super-admin/dashboard",
+              InstitutionAdmin: "/admin/dashboard",
+              Teacher: "/teacher/dashboard",
+              Student: "/student/dashboard",
+            };
+            const redirectUrl = dashboardMap[data.role];
+            if (redirectUrl) {
+              window.location.href = redirectUrl;
+            }
+          }
+        });
+      }
       handlePendingRegistration();
     }
   }, [loading]);
