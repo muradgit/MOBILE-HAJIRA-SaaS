@@ -184,14 +184,14 @@ export default function RegisterPage() {
 
                     <div className="space-y-2">
                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">Academic Levels</label>
-                       <div className="flex flex-wrap gap-2">
+                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                          {ACADEMIC_LEVELS.map(level => (
                            <button
                              key={level}
                              type="button"
                              onClick={() => toggleLevel(level)}
                              className={cn(
-                               "px-4 py-2 rounded-full text-sm font-medium transition-all",
+                               "px-3 py-2 rounded-xl text-xs font-medium transition-all text-center flex items-center justify-center",
                                selectedLevels.includes(level) 
                                  ? "bg-purple-600 text-white shadow-md shadow-purple-200" 
                                  : "bg-white text-slate-600 border border-slate-200 hover:border-purple-300"

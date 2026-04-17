@@ -50,30 +50,39 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             });
           }
 
+          // Robust Role Detection
+          const userEmail = user.email;
+          const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
+          
+          let resolvedRole = pendingData.role;
+          if (!resolvedRole) {
+            resolvedRole = userEmail === superAdminEmail ? 'SuperAdmin' : 'Student';
+          }
+
           // Create user document
           const newUser: any = {
             user_id: user.uid,
             tenant_id: tenantId,
-            role: pendingData.role,
+            role: resolvedRole,
             name: pendingData.name,
             nameBN: pendingData.nameBN,
             email: user.email,
             phone: pendingData.phone,
-            status: pendingData.role === "InstitutionAdmin" ? "approved" : "pending",
+            status: resolvedRole === "InstitutionAdmin" ? "approved" : "pending",
             created_at: new Date().toISOString(),
           };
 
-          if (pendingData.role === "Student") {
+          if (resolvedRole === "Student") {
             newUser.department = pendingData.department;
             newUser.class = pendingData.class;
             newUser.session = pendingData.session;
-          } else if (pendingData.role === "Teacher") {
+          } else if (resolvedRole === "Teacher") {
             newUser.department = pendingData.department || null;
           }
 
           await setDoc(doc(db, "users", user.uid), newUser);
 
-          // Set session cookie
+          // Set session cookie - MUST happen before redirect
           await fetch("/api/auth/session", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -83,8 +92,10 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
           localStorage.removeItem('pendingRegistration');
           toast.success("Registration successful!");
 
-          // Redirect based on role
-          if (newUser.role === "InstitutionAdmin") {
+          // Fixed Redirection Race Condition: Redirect only after session is set
+          if (newUser.role === "SuperAdmin") {
+            window.location.href = "/super-admin/dashboard";
+          } else if (newUser.role === "InstitutionAdmin") {
             window.location.href = "/admin/dashboard";
           } else {
             // Teacher/Student are pending by default
