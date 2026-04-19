@@ -63,6 +63,11 @@ service cloud.firestore {
     // Rules
     // ===============================================================
 
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
     // Tenants
     match /tenants/{tenantId} {
       allow read: if isSuperAdmin() || belongsToTenant(tenantId);
@@ -82,6 +87,37 @@ service cloud.firestore {
     // Session Codes
     match /session_codes/{codeId} {
       allow read, write: if isAuthenticated();
+    }
+
+    // --- Added Super Admin Support Collections ---
+
+    // System Settings
+    match /system_settings/{docId} {
+      allow read: if true; // Everyone can read (e.g. for pricing info on landing page)
+      allow write: if isSuperAdmin();
+    }
+
+    // Payments
+    match /payments/{paymentId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Promo Codes
+    match /promo_codes/{codeId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    // Broadcasts
+    match /broadcasts/{broadcastId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+    
+    // Transactions (Revenue)
+    match /transactions/{transactionId} {
+      allow read: if isSuperAdmin();
+      allow write: if isAuthenticated(); // Users create transactions via payments
     }
   }
 }
