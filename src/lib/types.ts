@@ -106,3 +106,26 @@ export interface Broadcast {
   created_at: string;
   created_by: string;
 }
+
+export interface Payment {
+  payment_id: string;
+  tenant_id: string;
+  amount: number;
+  method: "bKash" | "Nagad" | "Manual";
+  status: "pending" | "approved" | "rejected" | "refunded";
+  transaction_id: string;
+  sender_number: string;
+  created_at: string;
+  approved_at?: string;
+  credits_added?: number;
+}
+
+export interface PromoCode {
+  id?: string;
+  code: string;
+  credit_value: number;
+  expiry_date: string;
+  status: "active" | "expired";
+  usage_count: number;
+  created_at: string;
+}
