@@ -96,3 +96,13 @@ export interface Transaction {
   claimed_by_tenant: string;
   timestamp: string;
 }
+
+export interface Broadcast {
+  id?: string;
+  title: string;
+  message: string;
+  video_url?: string;
+  target_role: "All" | "InstitutionAdmin" | "Teacher" | "Student";
+  created_at: string;
+  created_by: string;
+}

@@ -3,148 +3,327 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/src/hooks/useAuth";
 import { db } from "@/src/lib/firebase";
-import { collection, query, where, onSnapshot, limit } from "firebase/firestore";
-import { Tenant, Transaction, UserData } from "@/src/lib/types";
+import { 
+  collection, 
+  query, 
+  orderBy, 
+  onSnapshot, 
+  limit, 
+  addDoc, 
+  serverTimestamp 
+} from "firebase/firestore";
+import { Tenant, Transaction, UserData, Broadcast } from "@/src/lib/types";
 import { Card } from "@/src/components/ui/Card";
 import { 
   Database, 
-  History, 
   Users, 
   Wallet as WalletIcon,
-  Loader2
+  Loader2,
+  Megaphone,
+  Youtube,
+  Send,
+  Building2,
+  Clock,
+  ArrowRight
 } from "lucide-react";
+import { toast } from "sonner";
+import { cn } from "@/src/lib/utils";
 
+/**
+ * Super Admin Dashboard
+ * Step 3.1: Dashboard Module
+ * Features: Real-time stats, Global Broadcast System, and Recent Activities.
+ */
 export default function SuperAdminDashboard() {
   const { userData, loading: authLoading } = useAuth();
+  
+  // Dashboard Data State
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [allUsers, setAllUsers] = useState<UserData[]>([]);
+  const [recentBroadcasts, setRecentBroadcasts] = useState<Broadcast[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Broadcast Form State
+  const [broadcastForm, setBroadcastForm] = useState({
+    title: "",
+    message: "",
+    video_url: "",
+    target_role: "All" as "All" | "InstitutionAdmin" | "Teacher" | "Student"
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  // Load Dashboard Data
   useEffect(() => {
     if (!userData || userData.role !== "SuperAdmin") return;
     
+    // Real-time Tenants
     const unsubTenants = onSnapshot(query(collection(db, "tenants")), (snapshot) => {
       setTenants(snapshot.docs.map(doc => doc.data() as Tenant).filter(t => t.tenant_id !== "SUPER_ADMIN_TENANT"));
     });
 
+    // Real-time Transactions (Revenue)
     const unsubTransactions = onSnapshot(query(collection(db, "transactions")), (snapshot) => {
       setTransactions(snapshot.docs.map(doc => doc.data() as Transaction));
     });
 
-    const unsubUsers = onSnapshot(query(collection(db, "users"), limit(50)), (snapshot) => {
+    // Real-time Users
+    const unsubUsers = onSnapshot(query(collection(db, "users")), (snapshot) => {
       setAllUsers(snapshot.docs.map(doc => doc.data() as UserData));
-      setLoading(false);
     });
+
+    // Real-time Broadcasts (Last 5)
+    const unsubBroadcasts = onSnapshot(
+      query(collection(db, "broadcasts"), orderBy("created_at", "desc"), limit(5)), 
+      (snapshot) => {
+        setRecentBroadcasts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Broadcast));
+        setLoading(false);
+      }
+    );
 
     return () => {
       unsubTenants();
       unsubTransactions();
       unsubUsers();
+      unsubBroadcasts();
     };
   }, [userData]);
 
-  if (authLoading || (userData && loading) || (!userData && !authLoading)) {
-    return (
-      <div className="p-6 space-y-8 max-w-7xl mx-auto animate-pulse">
-        <div className="h-10 bg-gray-200 rounded-lg w-1/3 mb-2"></div>
-        <div className="h-4 bg-gray-100 rounded-md w-1/4 mb-8"></div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="h-32 bg-gray-50 rounded-2xl"></div>
-          ))}
-        </div>
+  // Handle Broadcast Submission
+  const handleBroadcast = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!broadcastForm.title || !broadcastForm.message) return;
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="h-64 bg-gray-50 rounded-2xl"></div>
-          <div className="h-64 bg-gray-50 rounded-2xl"></div>
-        </div>
+    setSubmitting(true);
+    try {
+      await addDoc(collection(db, "broadcasts"), {
+        ...broadcastForm,
+        created_at: new Date().toISOString(),
+        created_by: userData?.user_id,
+        server_timestamp: serverTimestamp()
+      });
+      toast.success("ব্রডকাস্ট সফলভাবে পাবলিশ হয়েছে!");
+      setBroadcastForm({ title: "", message: "", video_url: "", target_role: "All" });
+    } catch (error: any) {
+      toast.error("ভুল হয়েছে: " + error.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Auth Protection & Loading
+  if (authLoading || (userData && loading)) {
+    return (
+      <div className="flex h-screen items-center justify-center p-6">
+        <Loader2 className="w-10 h-10 text-purple-600 animate-spin" />
       </div>
     );
   }
 
   if (!userData || userData.role !== "SuperAdmin") {
-    return <div className="p-8 text-center text-red-500 font-bold uppercase tracking-widest">Access Denied</div>;
+    return (
+      <div className="p-8 text-center flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <Database className="w-16 h-16 text-red-200" />
+        <h2 className="text-2xl font-black text-red-500 font-bengali">অ্যাক্সেস ডিনাইড</h2>
+        <p className="text-gray-500 max-w-xs">এই পৃষ্ঠাটি দেখার জন্য উপযুক্ত পারমিশন আপনার নেই।</p>
+      </div>
+    );
   }
 
-  const earnedMoney = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+  // Calculations
+  const activeTenants = tenants.filter(t => t.status === "active").length;
+  const suspendedTenants = tenants.length - activeTenants;
+  const teachersCount = allUsers.filter(u => u.role === "Teacher").length;
+  const studentsCount = allUsers.filter(u => u.role === "Student").length;
+  const totalRevenue = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
 
   return (
-    <div className="p-6 space-y-8 max-w-7xl mx-auto transition-all duration-500 animate-in fade-in">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold text-gray-900 font-bengali">স্বাগতম, {userData.nameBN || userData.name} (Super Admin)</h1>
-          <p className="text-sm text-gray-500">Manage institutions, payments, and users across the platform.</p>
-        </div>
+    <div className="p-4 sm:p-8 space-y-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
+      
+      {/* Welcome Header */}
+      <div className="space-y-1">
+        <h1 className="text-2xl sm:text-3xl font-black text-gray-900 font-bengali">
+          স্বাগতম, {userData.nameBN || userData.name} 👋
+        </h1>
+        <p className="text-sm text-gray-500 font-medium tracking-tight">Super Admin Dashboard • System Control Center</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="p-6 space-y-2">
-          <div className="flex items-center justify-between">
-            <Database className="w-8 h-8 text-purple-600" />
-            <span className="text-2xl font-bold">{tenants.length}</span>
+      {/* Part 1: Global Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+        <Card className="p-5 flex flex-col justify-between border-transparent bg-gradient-to-br from-purple-500 to-purple-700 text-white shadow-purple-500/20">
+          <Database className="w-6 h-6 opacity-60 mb-4" />
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest opacity-80 mb-1">মোট প্রতিষ্ঠান</p>
+            <h3 className="text-3xl font-black">{tenants.length}</h3>
           </div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Institutions</p>
         </Card>
 
-        <Card className="p-6 space-y-2">
-          <div className="flex items-center justify-between">
-            <WalletIcon className="w-8 h-8 text-green-600" />
-            <span className="text-2xl font-bold">৳{earnedMoney}</span>
+        <Card className="p-5 flex flex-col justify-between hover:border-purple-200 transition-all border-purple-50">
+          <Building2 className="w-6 h-6 text-purple-600 mb-4" />
+          <div>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">সক্রিয় / স্থগিত</p>
+            <h3 className="text-2xl font-black text-gray-900">{activeTenants} <span className="text-gray-300 text-lg">/ {suspendedTenants}</span></h3>
           </div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Total Revenue</p>
         </Card>
 
-        <Card className="p-6 space-y-2">
-          <div className="flex items-center justify-between">
-            <Users className="w-8 h-8 text-blue-600" />
-            <span className="text-2xl font-bold">{allUsers.length}</span>
+        <Card className="p-5 flex flex-col justify-between hover:border-purple-200 transition-all border-purple-50">
+          <Users className="w-6 h-6 text-blue-600 mb-4" />
+          <div>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">শিক্ষক / শিক্ষার্থী</p>
+            <h3 className="text-2xl font-black text-gray-900">{teachersCount} <span className="text-gray-300 text-lg">/ {studentsCount}</span></h3>
           </div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Total Users</p>
         </Card>
 
-        <Card className="p-6 space-y-2">
-          <div className="flex items-center justify-between">
-            <History className="w-8 h-8 text-orange-600" />
-            <span className="text-2xl font-bold">{transactions.length}</span>
+        <Card className="p-5 flex flex-col justify-between hover:border-purple-200 transition-all border-purple-50">
+          <WalletIcon className="w-6 h-6 text-emerald-600 mb-4" />
+          <div>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">মোট রেভিনিউ</p>
+            <h3 className="text-2xl font-black text-gray-900">৳{totalRevenue.toLocaleString()}</h3>
           </div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Transactions</p>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Card title="Recent Institutions" icon={Database}>
-          <div className="divide-y divide-gray-100">
-            {tenants.slice(0, 5).map(t => (
-              <div key={t.tenant_id} className="py-4 flex items-center justify-between">
-                <div>
-                  <p className="font-bold text-sm">{t.name}</p>
-                  <p className="text-xs text-gray-400">EIIN: {t.eiin}</p>
-                </div>
-                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${t.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {t.status}
-                </span>
-              </div>
-            ))}
+        
+        {/* Part 2: Broadcast/Notification System */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Megaphone className="w-5 h-5 text-purple-600" />
+            <h2 className="text-lg font-black text-gray-900 font-bengali">গ্লোবাল ব্রডকাস্ট</h2>
           </div>
-        </Card>
 
-        <Card title="Recent Users" icon={Users}>
-          <div className="divide-y divide-gray-100">
-            {allUsers.slice(0, 5).map(u => (
-              <div key={u.user_id} className="py-4 flex items-center justify-between">
-                <div>
-                  <p className="font-bold text-sm">{u.name}</p>
-                  <p className="text-xs text-gray-400">{u.role} • {u.email}</p>
-                </div>
-                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${u.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                  {u.status}
-                </span>
+          <Card className="p-6 border-purple-50 shadow-sm">
+            <form onSubmit={handleBroadcast} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">শিরোনাম (Title)</label>
+                <input 
+                  required
+                  value={broadcastForm.title}
+                  onChange={e => setBroadcastForm({...broadcastForm, title: e.target.value})}
+                  className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                  placeholder="পেমেন্ট গেটওয়ে মেইনটেন্যান্স নোটিশ..."
+                />
               </div>
-            ))}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">টার্গেট রোল</label>
+                  <select 
+                    value={broadcastForm.target_role}
+                    onChange={e => setBroadcastForm({...broadcastForm, target_role: e.target.value as any})}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                  >
+                    <option value="All">All Users</option>
+                    <option value="InstitutionAdmin">Admins Only</option>
+                    <option value="Teacher">Teachers Only</option>
+                    <option value="Student">Students Only</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ভিডিও লিংক (ঐচ্ছিক)</label>
+                  <div className="relative">
+                    <Youtube className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-red-500" />
+                    <input 
+                      value={broadcastForm.video_url}
+                      onChange={e => setBroadcastForm({...broadcastForm, video_url: e.target.value})}
+                      className="w-full bg-gray-50 border border-gray-100 rounded-xl pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                      placeholder="youtu.be/..."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">বার্তা (Message)</label>
+                <textarea 
+                  required
+                  value={broadcastForm.message}
+                  onChange={e => setBroadcastForm({...broadcastForm, message: e.target.value})}
+                  className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm min-h-[100px] focus:ring-2 focus:ring-purple-500 outline-none"
+                  placeholder="আপনার বার্তাটি এখানে লিখুন..."
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={submitting}
+                className="w-full bg-purple-600 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest shadow-lg shadow-purple-500/20 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                পাবলিশ করুন
+              </button>
+            </form>
+          </Card>
+        </div>
+
+        {/* Part 3: Recent Activities */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-black text-gray-900 font-bengali">সাম্প্রতিক অ্যাক্টিভিটি</h2>
+            </div>
+            <button className="text-[10px] font-black uppercase text-purple-600 tracking-widest hover:underline flex items-center gap-1">
+              সব দেখুন <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
-        </Card>
+
+          <div className="space-y-4">
+            <Card className="overflow-hidden border-transparent shadow-sm">
+              <div className="bg-white">
+                <div className="px-6 py-4 border-b border-gray-50 flex items-center gap-2 bg-gray-50/50">
+                  <Building2 className="w-4 h-4 text-purple-600" />
+                  <span className="text-[11px] font-black uppercase text-gray-400 tracking-widest">নতুন নিবন্ধিত প্রতিষ্ঠান</span>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {tenants.slice(0, 5).map((t) => (
+                    <div key={t.tenant_id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-gray-800">{t.name}</span>
+                        <span className="text-[10px] text-gray-400 uppercase font-mono">EIIN: {t.eiin}</span>
+                      </div>
+                      <span className={cn(
+                        "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
+                        t.status === "active" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+                      )}>
+                        {t.status}
+                      </span>
+                    </div>
+                  ))}
+                  {tenants.length === 0 && (
+                    <div className="p-8 text-center text-gray-400 italic text-sm">কোন প্রতিষ্ঠান পাওয়া যায়নি</div>
+                  )}
+                </div>
+              </div>
+            </Card>
+
+            <Card className="overflow-hidden border-transparent shadow-sm">
+              <div className="bg-white">
+                <div className="px-6 py-4 border-b border-gray-50 flex items-center gap-2 bg-gray-50/50">
+                  <Megaphone className="w-4 h-4 text-blue-600" />
+                  <span className="text-[11px] font-black uppercase text-gray-400 tracking-widest">সাম্প্রতিক ব্রডকাস্ট</span>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {recentBroadcasts.map((b) => (
+                    <div key={b.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-bold text-gray-800 truncate mr-2">{b.title}</span>
+                        <span className="text-[9px] font-black text-purple-500 uppercase bg-purple-50 px-1.5 py-0.5 rounded">
+                          {b.target_role}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 line-clamp-1">{b.message}</p>
+                    </div>
+                  ))}
+                  {recentBroadcasts.length === 0 && (
+                    <div className="p-8 text-center text-gray-400 italic text-sm">কোন ব্রডকাস্ট নেই</div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+
       </div>
     </div>
   );
