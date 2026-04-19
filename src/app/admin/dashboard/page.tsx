@@ -10,7 +10,8 @@ import {
   collection, 
   query, 
   where, 
-  getDocs 
+  getDocs,
+  getDoc
 } from "firebase/firestore";
 import { toast } from "sonner";
 import { 
@@ -28,53 +29,118 @@ import {
   ArrowUpRight
 } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
-import { Tenant } from "@/src/lib/types";
+import { Tenant, UserData } from "@/src/lib/types";
 import { cn } from "@/src/lib/utils";
 
 /**
  * Institute Admin Dashboard & Onboarding
- * Step 4.1: Handle system setup (Google Sheets) and summary stats.
+ * Fixed version with robust error-handling, fallback tenant lookup, and hydration safety.
  */
 export default function AdminDashboard() {
   const { userData, loading: authLoading } = useAuth();
-  const { tenantId } = useUserStore();
+  const { tenantId: storeTenantId } = useUserStore();
   
+  // States
+  const [activeTenantId, setActiveTenantId] = useState<string | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [stats, setStats] = useState({ teachers: 0, students: 0 });
   const [loading, setLoading] = useState(true);
   const [onboarding, setOnboarding] = useState(false);
+  const [origin, setOrigin] = useState("");
+  const [errorStatus, setErrorStatus] = useState<string | null>(null);
 
-  // 1. Listen to Tenant Data
+  // 1. Hydration-Safe Origin Detection
   useEffect(() => {
-    if (!tenantId) return;
+    if (typeof window !== "undefined") {
+      setOrigin(window.location.origin);
+    }
+  }, []);
 
-    const unsubTenant = onSnapshot(doc(db, "tenants", tenantId), (snap) => {
-      if (snap.exists()) {
-        setTenant(snap.data() as Tenant);
+  // 2. Tenant ID Fallback Strategy
+  useEffect(() => {
+    const resolveTenantId = async () => {
+      // Priority 1: Zustand Store
+      if (storeTenantId) {
+        setActiveTenantId(storeTenantId);
+        return;
       }
-      setLoading(false);
-    });
 
-    const fetchStats = async () => {
-      const usersRef = collection(db, "users");
-      
-      const teacherQ = query(usersRef, where("tenant_id", "==", tenantId), where("role", "==", "Teacher"));
-      const studentQ = query(usersRef, where("tenant_id", "==", tenantId), where("role", "==", "Student"));
-      
-      const [tSnap, sSnap] = await Promise.all([getDocs(teacherQ), getDocs(studentQ)]);
-      setStats({
-        teachers: tSnap.size,
-        students: sSnap.size
-      });
+      // Priority 2: useAuth userData (already in memory)
+      if (userData?.tenant_id) {
+        setActiveTenantId(userData.tenant_id);
+        return;
+      }
+
+      // Priority 3: Deep check Firestore if store or auth is lagging
+      if (userData?.user_id) {
+        try {
+          const userDoc = await getDoc(doc(db, "users", userData.user_id));
+          if (userDoc.exists()) {
+            const data = userDoc.data() as UserData;
+            if (data.tenant_id) {
+              setActiveTenantId(data.tenant_id);
+            }
+          }
+        } catch (err) {
+          console.error("Fallback tenant lookup failed:", err);
+        }
+      }
     };
 
-    fetchStats();
-    return () => unsubTenant();
-  }, [tenantId]);
+    if (!authLoading) {
+      resolveTenantId();
+    }
+  }, [storeTenantId, userData, authLoading]);
 
-  // 2. Handle Google Sheet Setup (Onboarding)
+  // 3. Real-time Data Listeners & Stats
+  useEffect(() => {
+    if (!activeTenantId) return;
+
+    let unsubTenant = () => {};
+
+    const startListeners = async () => {
+      try {
+        // Tenant Real-time listener
+        unsubTenant = onSnapshot(doc(db, "tenants", activeTenantId), (snap) => {
+          if (snap.exists()) {
+            setTenant(snap.data() as Tenant);
+          }
+          // Only stop loading if we haven't hit a critical error yet
+          setLoading(false);
+        });
+
+        // 4. Fetch Stats with Robust Error Handling for Missing Indexes
+        const usersRef = collection(db, "users");
+        const teacherQ = query(usersRef, where("tenant_id", "==", activeTenantId), where("role", "==", "Teacher"));
+        const studentQ = query(usersRef, where("tenant_id", "==", activeTenantId), where("role", "==", "Student"));
+        
+        try {
+          const [tSnap, sSnap] = await Promise.all([getDocs(teacherQ), getDocs(studentQ)]);
+          setStats({
+            teachers: tSnap.size,
+            students: sSnap.size
+          });
+          setErrorStatus(null);
+        } catch (err: any) {
+          console.error("Firestore Index Error:", err);
+          if (err?.message?.includes("index")) {
+            setErrorStatus("ডাটাবেজ ইনডেক্স তৈরি করা নেই। দয়া করে ক্যাশ/কনসোল চেক করুন।");
+          }
+        }
+      } catch (err) {
+        console.error("Dashboard fetch error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    startListeners();
+    return () => unsubTenant();
+  }, [activeTenantId]);
+
+  // Handle Onboarding Setup
   const handleSetupSystem = async () => {
-    if (!tenantId || !userData?.email) return;
+    if (!activeTenantId || !userData?.email) return;
     
     setOnboarding(true);
     const toastId = toast.loading("সিস্টেম সেটআপ হচ্ছে... গুগল শীট তৈরি করা হচ্ছে।");
@@ -84,7 +150,7 @@ export default function AdminDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          tenantId, 
+          tenantId: activeTenantId, 
           adminEmail: userData.email 
         })
       });
@@ -104,15 +170,18 @@ export default function AdminDashboard() {
   };
 
   const copyReferralLink = () => {
-    const link = `https://ais-dev-ssggrbjivql236okgbocv3-792872969230.asia-southeast1.run.app/register?ref=${tenantId}`;
+    const link = `${origin}/register?ref=${activeTenantId}`;
     navigator.clipboard.writeText(link);
     toast.success("লিংকটি কপি করা হয়েছে!");
   };
 
-  // Auth Protection
-  if (authLoading || loading) return (
-    <div className="h-screen flex items-center justify-center">
-      <Loader2 className="w-10 h-10 text-[#6f42c1] animate-spin" />
+  // Auth & Loading Overlay
+  if (authLoading || (loading && !activeTenantId)) return (
+    <div className="h-screen flex items-center justify-center bg-white">
+      <div className="flex flex-col items-center gap-4">
+        <Loader2 className="w-10 h-10 text-[#6f42c1] animate-spin" />
+        <p className="text-xs font-black text-gray-400 uppercase tracking-widest animate-pulse">লোড হচ্ছে...</p>
+      </div>
     </div>
   );
 
@@ -125,7 +194,7 @@ export default function AdminDashboard() {
     </div>
   );
 
-  // Onboarding View (If no Sheet ID)
+  // Onboarding Phase
   if (!tenant?.googleSheetId) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center p-4">
@@ -157,7 +226,6 @@ export default function AdminDashboard() {
     );
   }
 
-  // Main Dashboard View
   return (
     <div className="p-4 sm:p-8 space-y-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
       
@@ -168,25 +236,36 @@ export default function AdminDashboard() {
             <LayoutDashboard className="w-7 h-7 text-[#6f42c1]" />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-gray-900 font-bengali">{tenant.nameBN || tenant.name}</h1>
+            <h1 className="text-2xl font-black text-gray-900 font-bengali tracking-tight">{tenant.nameBN || tenant.name}</h1>
             <p className="text-sm text-gray-500 font-medium">ইনস্টিটিউট অ্যাডমিন ড্যাশবোর্ড</p>
           </div>
         </div>
 
-        <a 
-          href={`https://docs.google.com/spreadsheets/d/${tenant.googleSheetId}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 bg-white border border-gray-100 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest text-emerald-600 shadow-sm hover:bg-emerald-50 transition-all group"
-        >
-          <ExternalLink className="w-4 h-4 group-hover:scale-110 transition-transform" />
-          গুগল শীট ওপেন করুন
-        </a>
+        <div className="flex gap-2">
+           <a 
+            href={`https://docs.google.com/spreadsheets/d/${tenant.googleSheetId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 bg-white border border-gray-100 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest text-emerald-600 shadow-sm hover:bg-emerald-50 transition-all group"
+          >
+            <ExternalLink className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            গুগল শীট
+          </a>
+        </div>
       </div>
+
+      {/* Index Error Display */}
+      {errorStatus && (
+        <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-500" />
+          <p className="text-xs font-bold text-amber-600 uppercase tracking-widest">
+            {errorStatus}
+          </p>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Credits Card */}
         <Card className="p-6 border-transparent bg-gradient-to-br from-purple-600 to-purple-800 text-white shadow-xl shadow-purple-500/20 relative overflow-hidden group">
           <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
           <div className="relative z-10 flex flex-col h-full justify-between gap-6">
@@ -203,7 +282,6 @@ export default function AdminDashboard() {
           </div>
         </Card>
 
-        {/* Teachers Card */}
         <Card className="p-6 hover:border-purple-200 transition-all border-purple-50">
           <div className="flex items-center justify-between mb-4">
             <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
@@ -215,7 +293,6 @@ export default function AdminDashboard() {
           <h3 className="text-3xl font-black text-gray-900">{stats.teachers}</h3>
         </Card>
 
-        {/* Students Card */}
         <Card className="p-6 hover:border-purple-200 transition-all border-purple-50">
           <div className="flex items-center justify-between mb-4">
             <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center">
@@ -242,8 +319,8 @@ export default function AdminDashboard() {
           </div>
 
           <div className="w-full md:w-auto flex flex-col sm:flex-row gap-3">
-            <div className="bg-white border border-purple-100 px-4 py-3 rounded-xl font-mono text-xs text-gray-400 truncate max-w-[200px] flex items-center">
-              https://hajira.com/ref={tenantId}
+            <div className="bg-white border border-purple-100 px-4 py-3 rounded-xl font-mono text-[10px] text-gray-400 truncate max-w-[220px] flex items-center">
+              {origin}/register?ref={activeTenantId}
             </div>
             <button 
               onClick={copyReferralLink}
