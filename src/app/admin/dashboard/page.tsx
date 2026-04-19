@@ -1,167 +1,269 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/hooks/useAuth";
+import { useUserStore } from "@/src/store/useUserStore";
 import { db } from "@/src/lib/firebase";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { 
-  Wallet as WalletIcon, 
-  FileText, 
+  doc, 
+  onSnapshot, 
+  collection, 
+  query, 
+  where, 
+  getDocs 
+} from "firebase/firestore";
+import { toast } from "sonner";
+import { 
+  LayoutDashboard, 
+  Loader2, 
+  ShieldAlert, 
+  Zap, 
   Users, 
-  ChevronRight, 
-  BookOpen, 
-  Settings,
-  Loader2,
-  Building2
+  GraduationCap, 
+  ExternalLink, 
+  Copy, 
+  Share2, 
+  CheckCircle2,
+  AlertTriangle,
+  ArrowUpRight
 } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
+import { Tenant } from "@/src/lib/types";
+import { cn } from "@/src/lib/utils";
 
+/**
+ * Institute Admin Dashboard & Onboarding
+ * Step 4.1: Handle system setup (Google Sheets) and summary stats.
+ */
 export default function AdminDashboard() {
-  const { userData, tenant, loading: authLoading } = useAuth();
-  const router = useRouter();
-  const [pendingTeachers, setPendingTeachers] = useState(0);
-  const [pendingStudents, setPendingStudents] = useState(0);
+  const { userData, loading: authLoading } = useAuth();
+  const { tenantId } = useUserStore();
+  
+  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [stats, setStats] = useState({ teachers: 0, students: 0 });
+  const [loading, setLoading] = useState(true);
+  const [onboarding, setOnboarding] = useState(false);
 
+  // 1. Listen to Tenant Data
   useEffect(() => {
-    if (!userData || userData.role !== "InstitutionAdmin" || !userData.tenant_id) return;
+    if (!tenantId) return;
 
-    const qT = query(collection(db, "users"), where("tenant_id", "==", userData.tenant_id), where("role", "==", "Teacher"), where("status", "==", "pending"));
-    const qS = query(collection(db, "users"), where("tenant_id", "==", userData.tenant_id), where("role", "==", "Student"), where("status", "==", "pending"));
-    
-    const unsubT = onSnapshot(qT, (s) => setPendingTeachers(s.size));
-    const unsubS = onSnapshot(qS, (s) => setPendingStudents(s.size));
-    
-    return () => { unsubT(); unsubS(); };
-  }, [userData]);
+    const unsubTenant = onSnapshot(doc(db, "tenants", tenantId), (snap) => {
+      if (snap.exists()) {
+        setTenant(snap.data() as Tenant);
+      }
+      setLoading(false);
+    });
 
-  if (authLoading || (!userData && !authLoading)) {
+    const fetchStats = async () => {
+      const usersRef = collection(db, "users");
+      
+      const teacherQ = query(usersRef, where("tenant_id", "==", tenantId), where("role", "==", "Teacher"));
+      const studentQ = query(usersRef, where("tenant_id", "==", tenantId), where("role", "==", "Student"));
+      
+      const [tSnap, sSnap] = await Promise.all([getDocs(teacherQ), getDocs(studentQ)]);
+      setStats({
+        teachers: tSnap.size,
+        students: sSnap.size
+      });
+    };
+
+    fetchStats();
+    return () => unsubTenant();
+  }, [tenantId]);
+
+  // 2. Handle Google Sheet Setup (Onboarding)
+  const handleSetupSystem = async () => {
+    if (!tenantId || !userData?.email) return;
+    
+    setOnboarding(true);
+    const toastId = toast.loading("সিস্টেম সেটআপ হচ্ছে... গুগল শীট তৈরি করা হচ্ছে।");
+    
+    try {
+      const response = await fetch("/api/onboarding/setup-sheet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          tenantId, 
+          adminEmail: userData.email 
+        })
+      });
+
+      const result = await response.json();
+      
+      if (response.ok) {
+        toast.success("অভিনন্দন! আপনার সিস্টেম এখন প্রস্তুত।", { id: toastId });
+      } else {
+        throw new Error(result.error || "সেটআপ ব্যর্থ হয়েছে");
+      }
+    } catch (error: any) {
+      toast.error(error.message, { id: toastId });
+    } finally {
+      setOnboarding(false);
+    }
+  };
+
+  const copyReferralLink = () => {
+    const link = `https://ais-dev-ssggrbjivql236okgbocv3-792872969230.asia-southeast1.run.app/register?ref=${tenantId}`;
+    navigator.clipboard.writeText(link);
+    toast.success("লিংকটি কপি করা হয়েছে!");
+  };
+
+  // Auth Protection
+  if (authLoading || loading) return (
+    <div className="h-screen flex items-center justify-center">
+      <Loader2 className="w-10 h-10 text-[#6f42c1] animate-spin" />
+    </div>
+  );
+
+  const isAuthorized = userData?.role === "InstitutionAdmin" || userData?.role === "SuperAdmin";
+  if (!isAuthorized) return (
+    <div className="flex flex-col items-center justify-center p-12 text-center space-y-4">
+      <ShieldAlert className="w-16 h-16 text-red-500" />
+      <h2 className="text-2xl font-black text-gray-900 font-bengali">অ্যাক্সেস ডিনাইড</h2>
+      <p className="text-gray-500">এই ড্যাশবোর্ডটি দেখার অনুমতি আপনার নেই।</p>
+    </div>
+  );
+
+  // Onboarding View (If no Sheet ID)
+  if (!tenant?.googleSheetId) {
     return (
-      <div className="p-6 space-y-6 max-w-md mx-auto animate-pulse">
-        <div className="h-8 bg-gray-200 rounded-lg w-3/4 mb-4"></div>
-        <div className="h-32 bg-gray-100 rounded-2xl w-full"></div>
-        <div className="space-y-3">
-          {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} className="h-16 bg-gray-100 rounded-xl w-full"></div>
-          ))}
-        </div>
+      <div className="min-h-[80vh] flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-8 text-center space-y-6 border-purple-100 shadow-2xl shadow-purple-500/10">
+          <div className="w-20 h-20 bg-purple-100 rounded-3xl flex items-center justify-center mx-auto animate-bounce">
+            <Zap className="w-10 h-10 text-[#6f42c1]" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-black text-gray-900 font-bengali">সাগরিকা স্বাগতম!</h2>
+            <p className="text-sm text-gray-500 leading-relaxed font-medium">
+              আপনার প্রতিষ্ঠানের হাজিরা সিস্টেম চালু করতে এবং ডাটা ব্যাকআপের জন্য আমাদের একটি গুগল শীট তৈরি করতে হবে।
+            </p>
+          </div>
+          
+          <button 
+            onClick={handleSetupSystem}
+            disabled={onboarding}
+            className="w-full bg-[#6f42c1] text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-purple-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          >
+            {onboarding ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+            সিস্টেম সেটআপ করুন
+          </button>
+          
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+            * এটি অটোমেটিক আপনার ইমেইলে শেয়ার করা হবে
+          </p>
+        </Card>
       </div>
     );
   }
 
-  if (!userData || userData.role !== "InstitutionAdmin") {
-    return <div className="p-8 text-center text-red-500 font-bold uppercase tracking-widest">Access Denied</div>;
-  }
-
+  // Main Dashboard View
   return (
-    <div className="p-6 space-y-6 max-w-md mx-auto transition-all duration-500 animate-in fade-in">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold text-gray-900 font-bengali">
-          স্বাগতম, {userData.nameBN || userData.name}
-        </h1>
-        <p className="text-xs text-purple-600 font-bold uppercase tracking-widest flex items-center gap-1.5">
-          <Building2 className="w-3 h-3" />
-          {tenant?.nameBN || tenant?.name || "Institution"}
-        </p>
-      </div>
-
-      <Card className="p-5 flex items-center justify-between shadow-sm border border-purple-100 bg-gradient-to-br from-white to-purple-50">
-        <div>
-          <span className="text-xs text-gray-500 font-bold uppercase tracking-wider block mb-1">ক্রেডিট ব্যালেন্স</span>
-          <div className="flex items-baseline gap-1">
-            <span className="text-3xl font-bold text-[#6f42c1]">{tenant?.credits_left || 0}</span>
-            <span className="text-xs text-gray-400 font-medium">Credits</span>
+    <div className="p-4 sm:p-8 space-y-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
+      
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center">
+            <LayoutDashboard className="w-7 h-7 text-[#6f42c1]" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black text-gray-900 font-bengali">{tenant.nameBN || tenant.name}</h1>
+            <p className="text-sm text-gray-500 font-medium">ইনস্টিটিউট অ্যাডমিন ড্যাশবোর্ড</p>
           </div>
         </div>
-        <button 
-          onClick={() => router.push("/wallet")}
-          className="bg-gradient-to-r from-[#6f42c1] to-[#59359a] hover:from-[#59359a] hover:to-[#4a2c82] text-white px-5 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all shadow-md hover:shadow-lg"
-        >
-          <WalletIcon className="w-4 h-4" />
-          রিচার্জ করুন
-        </button>
-      </Card>
 
-      <div className="grid grid-cols-1 gap-3">
-        <button 
-          onClick={() => router.push("/reports")}
-          className="w-full bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between hover:border-[#6f42c1] hover:bg-purple-50 transition-all"
+        <a 
+          href={`https://docs.google.com/spreadsheets/d/${tenant.googleSheetId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 bg-white border border-gray-100 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest text-emerald-600 shadow-sm hover:bg-emerald-50 transition-all group"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-              <FileText className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-gray-800">অ্যাটেন্ডেন্স রিপোর্ট</span>
-          </div>
-          <ChevronRight className="w-5 h-5 text-gray-400" />
-        </button>
-
-        <button 
-          onClick={() => router.push("/teachers")}
-          className="w-full bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between hover:border-[#6f42c1] hover:bg-purple-50 transition-all"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600">
-              <Users className="w-5 h-5" />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-gray-800">শিক্ষক ম্যানেজমেন্ট</span>
-              {pendingTeachers > 0 && (
-                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">
-                  {pendingTeachers}
-                </span>
-              )}
-            </div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-gray-400" />
-        </button>
-
-        <button 
-          onClick={() => router.push("/students")}
-          className="w-full bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between hover:border-[#6f42c1] hover:bg-purple-50 transition-all"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
-              <Users className="w-5 h-5" />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-gray-800">শিক্ষার্থী ম্যানেজমেন্ট</span>
-              {pendingStudents > 0 && (
-                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">
-                  {pendingStudents}
-                </span>
-              )}
-            </div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-gray-400" />
-        </button>
-
-        <button 
-          onClick={() => router.push("/subjects/add")}
-          className="w-full bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between hover:border-[#6f42c1] hover:bg-purple-50 transition-all"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-[#6f42c1]">
-              <BookOpen className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-gray-800">কোর্স ম্যানেজমেন্ট</span>
-          </div>
-          <ChevronRight className="w-5 h-5 text-gray-400" />
-        </button>
-
-        <button 
-          onClick={() => router.push("/settings/general")}
-          className="w-full bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between hover:border-[#6f42c1] hover:bg-purple-50 transition-all"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600">
-              <Settings className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-gray-800">ইনস্টিটিউট সেটিংস</span>
-          </div>
-          <ChevronRight className="w-5 h-5 text-gray-400" />
-        </button>
+          <ExternalLink className="w-4 h-4 group-hover:scale-110 transition-transform" />
+          গুগল শীট ওপেন করুন
+        </a>
       </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Credits Card */}
+        <Card className="p-6 border-transparent bg-gradient-to-br from-purple-600 to-purple-800 text-white shadow-xl shadow-purple-500/20 relative overflow-hidden group">
+          <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+          <div className="relative z-10 flex flex-col h-full justify-between gap-6">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-80">বর্তমান ক্রেডিট</p>
+              <Zap className="w-5 h-5 opacity-60" />
+            </div>
+            <div className="flex items-end justify-between gap-4">
+              <h3 className="text-4xl font-black">{tenant.credits_left}</h3>
+              <button className="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white border border-white/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                রিচার্জ করুন
+              </button>
+            </div>
+          </div>
+        </Card>
+
+        {/* Teachers Card */}
+        <Card className="p-6 hover:border-purple-200 transition-all border-purple-50">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+              <Users className="w-5 h-5 text-blue-600" />
+            </div>
+            <ArrowUpRight className="w-4 h-4 text-gray-300" />
+          </div>
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">মোট শিক্ষক</p>
+          <h3 className="text-3xl font-black text-gray-900">{stats.teachers}</h3>
+        </Card>
+
+        {/* Students Card */}
+        <Card className="p-6 hover:border-purple-200 transition-all border-purple-50">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center">
+              <GraduationCap className="w-5 h-5 text-orange-600" />
+            </div>
+            <ArrowUpRight className="w-4 h-4 text-gray-300" />
+          </div>
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">মোট শিক্ষার্থী</p>
+          <h3 className="text-3xl font-black text-gray-900">{stats.students}</h3>
+        </Card>
+      </div>
+
+      {/* Referral Section */}
+      <Card className="overflow-hidden border-purple-100 bg-purple-50/30">
+        <div className="px-8 py-8 flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="space-y-3 text-center md:text-left">
+            <div className="flex items-center justify-center md:justify-start gap-2">
+              <Share2 className="w-5 h-5 text-[#6f42c1]" />
+              <h3 className="text-lg font-black text-gray-900 font-bengali">রেফারেল বোনাস</h3>
+            </div>
+            <p className="text-sm text-gray-600 max-w-lg leading-relaxed font-medium">
+              আপনার ইউনিক রেফারেল লিংক দিয়ে সিস্টেমটি শেয়ার করুন। কেউ রেজিস্ট্রেশন করে ক্রেডিট ব্যবহার করলেই আপনি এবং তিনি উভয়ই <span className="text-[#6f42c1] font-black">২০ বোনাস ক্রেডিট</span> পাবেন।
+            </p>
+          </div>
+
+          <div className="w-full md:w-auto flex flex-col sm:flex-row gap-3">
+            <div className="bg-white border border-purple-100 px-4 py-3 rounded-xl font-mono text-xs text-gray-400 truncate max-w-[200px] flex items-center">
+              https://hajira.com/ref={tenantId}
+            </div>
+            <button 
+              onClick={copyReferralLink}
+              className="bg-[#6f42c1] text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all"
+            >
+              <Copy className="w-4 h-4" /> কপি করুন
+            </button>
+          </div>
+        </div>
+      </Card>
+      
+      {/* Alert if low balance */}
+      {tenant.credits_left < 20 && (
+        <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-500" />
+          <p className="text-xs font-bold text-red-600 uppercase tracking-widest">
+            সতর্কতা: আপনার ক্রেডিট ব্যালেন্স খুব কম। হাজিরা চালু রাখতে রিচার্জ করুন।
+          </p>
+        </div>
+      )}
     </div>
   );
 }
