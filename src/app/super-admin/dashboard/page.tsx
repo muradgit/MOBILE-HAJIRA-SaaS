@@ -24,7 +24,8 @@ import {
   Send,
   Building2,
   Clock,
-  ArrowRight
+  ArrowRight,
+  AlertTriangle
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/src/lib/utils";
@@ -33,6 +34,7 @@ import { cn } from "@/src/lib/utils";
  * Super Admin Dashboard
  * Step 3.1: Dashboard Module
  * Features: Real-time stats, Global Broadcast System, and Recent Activities.
+ * Optimized with robust error handling for missing indexes.
  */
 export default function SuperAdminDashboard() {
   const { userData, loading: authLoading } = useAuth();
@@ -43,6 +45,7 @@ export default function SuperAdminDashboard() {
   const [allUsers, setAllUsers] = useState<UserData[]>([]);
   const [recentBroadcasts, setRecentBroadcasts] = useState<Broadcast[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Broadcast Form State
   const [broadcastForm, setBroadcastForm] = useState({
@@ -57,35 +60,66 @@ export default function SuperAdminDashboard() {
   useEffect(() => {
     if (!userData || userData.role !== "SuperAdmin") return;
     
+    setLoading(true);
+    setError(null);
+
+    const handleError = (err: any) => {
+      console.error("Dashboard Fetch Error:", err);
+      // Display a clear error message for missing indexes or permission issues
+      setError("ডাটাবেজ ইনডেক্স তৈরি করা নেই বা পারমিশন এরর। দয়া করে ব্রাউজারের কনসোল (F12) চেক করুন।");
+      setLoading(false);
+    };
+
     // Real-time Tenants
-    const unsubTenants = onSnapshot(query(collection(db, "tenants")), (snapshot) => {
-      setTenants(snapshot.docs.map(doc => doc.data() as Tenant).filter(t => t.tenant_id !== "SUPER_ADMIN_TENANT"));
-    });
+    const unsubTenants = onSnapshot(
+      query(collection(db, "tenants")), 
+      (snapshot) => {
+        setTenants(snapshot.docs.map(doc => doc.data() as Tenant).filter(t => t.tenant_id !== "SUPER_ADMIN_TENANT"));
+      },
+      handleError
+    );
 
     // Real-time Transactions (Revenue)
-    const unsubTransactions = onSnapshot(query(collection(db, "transactions")), (snapshot) => {
-      setTransactions(snapshot.docs.map(doc => doc.data() as Transaction));
-    });
+    const unsubTransactions = onSnapshot(
+      query(collection(db, "transactions")), 
+      (snapshot) => {
+        setTransactions(snapshot.docs.map(doc => doc.data() as Transaction));
+      },
+      handleError
+    );
 
     // Real-time Users
-    const unsubUsers = onSnapshot(query(collection(db, "users")), (snapshot) => {
-      setAllUsers(snapshot.docs.map(doc => doc.data() as UserData));
-    });
+    const unsubUsers = onSnapshot(
+      query(collection(db, "users")), 
+      (snapshot) => {
+        setAllUsers(snapshot.docs.map(doc => doc.data() as UserData));
+      },
+      handleError
+    );
 
     // Real-time Broadcasts (Last 5)
     const unsubBroadcasts = onSnapshot(
       query(collection(db, "broadcasts"), orderBy("created_at", "desc"), limit(5)), 
       (snapshot) => {
         setRecentBroadcasts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Broadcast));
-        setLoading(false);
+        setLoading(false); // Only set loading false when the final query (which depends on index) completes or fails
+      },
+      (err) => {
+        handleError(err);
       }
     );
+
+    // Fallback timer to ensure loading completes even if listeners hang or fail silently
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
 
     return () => {
       unsubTenants();
       unsubTransactions();
       unsubUsers();
       unsubBroadcasts();
+      clearTimeout(timeout);
     };
   }, [userData]);
 
@@ -111,15 +145,19 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  // Auth Protection & Loading
-  if (authLoading || (userData && loading)) {
+  // Auth Protection & Loading Screen
+  if (authLoading || (userData && loading && !error)) {
     return (
-      <div className="flex h-screen items-center justify-center p-6">
-        <Loader2 className="w-10 h-10 text-purple-600 animate-spin" />
+      <div className="flex h-screen items-center justify-center p-6 bg-white">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 text-purple-600 animate-spin" />
+          <p className="text-xs font-black text-gray-400 uppercase tracking-widest animate-pulse">ড্যাশবোর্ড লোড হচ্ছে...</p>
+        </div>
       </div>
     );
   }
 
+  // Access Denied Screen
   if (!userData || userData.role !== "SuperAdmin") {
     return (
       <div className="p-8 text-center flex flex-col items-center justify-center min-h-[60vh] gap-4">
@@ -141,12 +179,32 @@ export default function SuperAdminDashboard() {
     <div className="p-4 sm:p-8 space-y-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
       
       {/* Welcome Header */}
-      <div className="space-y-1">
-        <h1 className="text-2xl sm:text-3xl font-black text-gray-900 font-bengali">
-          স্বাগতম, {userData.nameBN || userData.name} 👋
-        </h1>
-        <p className="text-sm text-gray-500 font-medium tracking-tight">Super Admin Dashboard • System Control Center</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 font-bengali">
+            স্বাগতম, {userData.nameBN || userData.name} 👋
+          </h1>
+          <p className="text-sm text-gray-500 font-medium tracking-tight">Super Admin Dashboard • System Control Center</p>
+        </div>
       </div>
+
+      {/* Error Message Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3 animate-in fade-in zoom-in-95">
+          <AlertTriangle className="w-6 h-6 text-red-500" />
+          <div className="flex-1">
+            <p className="text-sm font-black text-red-600 font-bengali leading-relaxed">
+              {error}
+            </p>
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="text-xs font-black uppercase text-red-500 hover:underline"
+          >
+            రీলোড করুন
+          </button>
+        </div>
+      )}
 
       {/* Part 1: Global Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
@@ -290,7 +348,7 @@ export default function SuperAdminDashboard() {
                       </span>
                     </div>
                   ))}
-                  {tenants.length === 0 && (
+                  {tenants.length === 0 && !loading && (
                     <div className="p-8 text-center text-gray-400 italic text-sm">কোন প্রতিষ্ঠান পাওয়া যায়নি</div>
                   )}
                 </div>
@@ -315,7 +373,7 @@ export default function SuperAdminDashboard() {
                       <p className="text-xs text-gray-500 line-clamp-1">{b.message}</p>
                     </div>
                   ))}
-                  {recentBroadcasts.length === 0 && (
+                  {recentBroadcasts.length === 0 && !loading && (
                     <div className="p-8 text-center text-gray-400 italic text-sm">কোন ব্রডকাস্ট নেই</div>
                   )}
                 </div>
