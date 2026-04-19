@@ -3,24 +3,10 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    // Collection: tenants
-    // Fields: tenant_id, name, nameBN, eiin, institutionType, academicLevels, department, credits_left, status, admin_name, admin_nameBN, admin_mobile, owner_email, googleSheetId, created_at
-    //
-    // Collection: users
-    // Fields: user_id, tenant_id, role, name, nameBN, email, phone, status, department, class, session, student_id, teacher_id, created_at
-    // ===============================================================
-
-    // ===============================================================
     // Helper Functions
     // ===============================================================
     function isAuthenticated() {
       return request.auth != null;
-    }
-
-    function isValidEmail(email) {
-      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
 
     function isSuperAdmin() {
@@ -40,25 +26,6 @@ service cloud.firestore {
       return isAuthenticated() && data.tenant_id == tenantId && data.role == "InstitutionAdmin";
     }
 
-    function isValidTenant(data) {
-      return data.tenant_id is string &&
-             data.name is string && data.name.size() > 0 &&
-             data.eiin is string &&
-             data.institutionType in ["University", "College", "School", "School and College", "Madrasha", "Coaching Center", "Training Institute", "Polytechnic"] &&
-             data.credits_left is number &&
-             data.status in ["active", "suspended", "deactivated"] &&
-             data.owner_email is string && isValidEmail(data.owner_email);
-    }
-
-    function isValidUser(data) {
-      return data.user_id is string &&
-             data.tenant_id is string &&
-             data.role in ["InstitutionAdmin", "Teacher", "Student"] &&
-             data.name is string && data.name.size() > 0 &&
-             data.email is string && isValidEmail(data.email) &&
-             data.status in ["pending", "approved"];
-    }
-
     // ===============================================================
     // Rules
     // ===============================================================
@@ -71,53 +38,48 @@ service cloud.firestore {
     // Tenants
     match /tenants/{tenantId} {
       allow read: if isSuperAdmin() || belongsToTenant(tenantId);
-      allow create: if isAuthenticated() && isValidTenant(request.resource.data) && request.resource.data.owner_email == request.auth.token.email;
-      allow update: if isSuperAdmin() || (isInstitutionAdmin(tenantId) && isValidTenant(request.resource.data));
+      allow create: if isAuthenticated();
+      allow update: if isSuperAdmin() || isInstitutionAdmin(tenantId);
       allow delete: if isSuperAdmin();
     }
 
     // Users
     match /users/{userId} {
       allow read: if isSuperAdmin() || request.auth.uid == userId || (isAuthenticated() && getUserData().tenant_id == resource.data.tenant_id);
-      allow create: if isAuthenticated() && request.auth.uid == userId && isValidUser(request.resource.data) && request.resource.data.role != "SuperAdmin";
-      allow update: if isSuperAdmin() || (request.auth.uid == userId && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role) || (isInstitutionAdmin(resource.data.tenant_id) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']));
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isSuperAdmin() || request.auth.uid == userId || isInstitutionAdmin(resource.data.tenant_id);
       allow delete: if isSuperAdmin();
     }
 
-    // Session Codes
-    match /session_codes/{codeId} {
-      allow read, write: if isAuthenticated();
-    }
+    // --- Super Admin - Dashboard Modules ---
 
-    // --- Added Super Admin Support Collections ---
-
-    // System Settings
+    // 1. System Settings
     match /system_settings/{docId} {
-      allow read: if true; // Everyone can read (e.g. for pricing info on landing page)
+      allow read: if true; 
       allow write: if isSuperAdmin();
     }
 
-    // Payments
+    // 2. Payments
     match /payments/{paymentId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if isAuthenticated(); // Admins create, SuperAdmin manages
     }
 
-    // Promo Codes
+    // 3. Promo Codes
     match /promo_codes/{codeId} {
       allow read: if isAuthenticated();
       allow write: if isSuperAdmin();
     }
 
-    // Broadcasts
+    // 4. Broadcasts
     match /broadcasts/{broadcastId} {
       allow read: if isAuthenticated();
       allow write: if isSuperAdmin();
     }
-    
-    // Transactions (Revenue)
+
+    // 5. Transactions
     match /transactions/{transactionId} {
       allow read: if isSuperAdmin();
-      allow write: if isAuthenticated(); // Users create transactions via payments
+      allow write: if isAuthenticated();
     }
   }
 }

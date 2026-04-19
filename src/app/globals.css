@@ -28,7 +28,14 @@
     -moz-osx-font-smoothing: grayscale;
     height: 100%;
     overflow: hidden;
-    background-color: #f9fafb;
+    background-color: #f8f9fa;
+  }
+
+  /* Main scrollable area */
+  .main-content {
+    height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Ensure Bengali text specifically respects the 15px minimum */
