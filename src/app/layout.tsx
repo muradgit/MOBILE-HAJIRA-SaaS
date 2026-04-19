@@ -29,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${notoBengali.variable} ${montserrat.variable}`}>
-      <body className="font-sans antialiased">
+      <body className="font-bengali antialiased">
         <ClientLayout>{children}</ClientLayout>
         <Toaster position="top-center" richColors />
       </body>

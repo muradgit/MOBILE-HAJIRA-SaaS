@@ -25,7 +25,8 @@ import {
   Building2,
   Clock,
   ArrowRight,
-  AlertTriangle
+  AlertTriangle,
+  AlertCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/src/lib/utils";
@@ -188,20 +189,20 @@ export default function SuperAdminDashboard() {
         </div>
       </div>
 
-      {/* Error Message Display */}
+      {/* Subtle Data Initialization Notice */}
       {error && (
-        <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3 animate-in fade-in zoom-in-95">
-          <AlertTriangle className="w-6 h-6 text-red-500" />
+        <div className="bg-purple-50/50 border border-purple-100 p-4 rounded-2xl flex items-center gap-3 animate-in fade-in zoom-in-95">
+          <AlertCircle className="w-5 h-5 text-purple-400" />
           <div className="flex-1">
-            <p className="text-sm font-black text-red-600 font-bengali leading-relaxed">
-              {error}
+            <p className="text-[10px] font-black text-purple-600 uppercase tracking-widest leading-relaxed">
+              সিস্টেম ডাটা ইনিশিয়ালাইজ হচ্ছে... সম্পূর্ণ তথ্য দেখতে কিছুক্ষণ অপেক্ষা করুন।
             </p>
           </div>
           <button 
             onClick={() => window.location.reload()}
-            className="text-xs font-black uppercase text-red-500 hover:underline"
+            className="text-[10px] font-black uppercase text-[#6f42c1] hover:underline"
           >
-            రీলোড করুন
+            Refresh
           </button>
         </div>
       )}

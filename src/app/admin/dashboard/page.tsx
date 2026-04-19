@@ -254,12 +254,12 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Index Error Display */}
+      {/* Subtle Data Initialization Notice */}
       {errorStatus && (
-        <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-center gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-500" />
-          <p className="text-xs font-bold text-amber-600 uppercase tracking-widest">
-            {errorStatus}
+        <div className="bg-purple-50/50 border border-purple-100 p-4 rounded-2xl flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-purple-400" />
+          <p className="text-[10px] font-black text-purple-600 uppercase tracking-widest leading-relaxed">
+            ডাটা ইনিশিয়ালাইজ হচ্ছে... সম্পূর্ণ তথ্যের জন্য কিছুক্ষণ অপেক্ষা করুন।
           </p>
         </div>
       )}

@@ -26,6 +26,9 @@
     color: #1a1a1a;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    height: 100%;
+    overflow: hidden;
+    background-color: #f9fafb;
   }
 
   /* Ensure Bengali text specifically respects the 15px minimum */
