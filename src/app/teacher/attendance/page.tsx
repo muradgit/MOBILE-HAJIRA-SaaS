@@ -107,7 +107,7 @@ export default function TeacherAttendancePage() {
         return {
           user_id: doc.id,
           name: data.name,
-          nameBN: data.name_bn || data.nameBN,
+          nameBN: data.nameBN || "",
           status: "present" as const, // Default to present
           roll: data.student_id ? data.student_id.split("-").pop() : "" // Mock roll from ID
         };
