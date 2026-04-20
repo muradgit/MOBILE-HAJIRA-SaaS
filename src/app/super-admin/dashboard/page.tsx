@@ -84,7 +84,7 @@ export default function SuperAdminDashboard() {
     const unsubTransactions = onSnapshot(
       query(collection(db, "payments")), 
       (snapshot) => {
-        setTransactions(snapshot.docs.map(doc => doc.data() as Transaction));
+        setTransactions(snapshot.docs.map(doc => ({ ...doc.data(), trx_id: doc.id } as unknown as Transaction)));
       },
       handleError
     );
