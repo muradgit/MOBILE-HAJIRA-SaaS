@@ -85,10 +85,10 @@ export const Layout = ({ children, user, tenant }: { children: React.ReactNode, 
       { label: "Reports", to: "/reports", icon: FileText },
     ],
     Teacher: [
-      { label: "Profile", to: "/teacher/profile", icon: User },
-      { label: "Attendance Taker", to: "/scanner", icon: QrCode },
-      { label: "Class Report", to: "/reports", icon: FileText },
-      { label: "Attendance History", to: "/reports/attendance", icon: ClipboardList },
+      { label: "Dashboard", to: "/teacher/dashboard", icon: Home },
+      { label: "Attendance Panel", to: "/teacher/attendance", icon: ClipboardList },
+      { label: "QR Scanner", to: "/scanner", icon: QrCode },
+      { label: "Attendance Reports", to: "/reports", icon: FileText },
     ],
     Student: [
       { label: "Attendance Giver", to: "/student/id", icon: QrCode },
@@ -343,7 +343,8 @@ export const Layout = ({ children, user, tenant }: { children: React.ReactNode, 
             </>
           ) : user.role === "Teacher" ? (
             <>
-              <NavButton icon={Home} label="Dashboard" to="/teacher/dashboard" />
+              <NavButton icon={Home} label="Home" to="/teacher/dashboard" />
+              <NavButton icon={ClipboardList} label="Attendance" to="/teacher/attendance" />
               <NavButton icon={QrCode} label="Scan" to="/scanner" />
               <NavButton icon={FileText} label="Report" to="/reports" />
             </>
