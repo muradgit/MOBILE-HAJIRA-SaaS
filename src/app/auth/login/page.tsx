@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { auth, db } from "@/src/lib/firebase";
+import { useUserStore } from "@/src/store/useUserStore";
 import { 
   GoogleAuthProvider, 
   signInWithPopup, 
@@ -22,6 +23,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const router = useRouter();
+  const setUser = useUserStore((state) => state.setUser);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,6 +82,9 @@ export default function LoginPage() {
     // Override role if it's the super admin email
     const finalRole = auth.currentUser?.email === superAdminEmail ? "SuperAdmin" : userData.role;
 
+    // Update Global Store
+    setUser({ ...userData, role: finalRole as any });
+
     // Set session cookie
     await fetch("/api/auth/session", {
       method: "POST",
@@ -110,15 +115,18 @@ export default function LoginPage() {
       return;
     }
 
-    // Route based on role
-    const roleRoutes = {
-      SuperAdmin: "/super-admin/dashboard",
-      InstitutionAdmin: "/admin/dashboard",
-      Teacher: "/teacher/dashboard",
-      Student: "/student/dashboard",
-    };
-    
-    router.push(roleRoutes[finalRole as keyof typeof roleRoutes] || "/");
+    // Role-Based Redirection Block
+    if (finalRole === "SuperAdmin") {
+      router.push("/super-admin/dashboard");
+    } else if (finalRole === "InstitutionAdmin") {
+      router.push("/admin/dashboard");
+    } else if (finalRole === "Teacher") {
+      router.push("/teacher/dashboard");
+    } else if (finalRole === "Student") {
+      router.push("/student/dashboard");
+    } else {
+      router.push("/");
+    }
   };
 
   return (

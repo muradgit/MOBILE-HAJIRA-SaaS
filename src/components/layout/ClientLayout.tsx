@@ -167,6 +167,23 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                  </div>
                  <span className="text-sm font-black font-bengali hidden sm:block">মেন্যু</span>
                </button>
+               {isLandingPage && (
+                 <button 
+                  onClick={() => {
+                    const dashboardMap: Record<string, string> = {
+                      SuperAdmin: "/super-admin/dashboard",
+                      InstitutionAdmin: "/admin/dashboard",
+                      Teacher: "/teacher/dashboard",
+                      Student: "/student/dashboard",
+                    };
+                    const target = userData?.role && dashboardMap[userData.role];
+                    if (target) router.push(target);
+                  }}
+                  className="bg-purple-50 text-[#6f42c1] text-xs font-black uppercase px-4 py-2.5 rounded-xl hover:bg-purple-100 transition-all flex items-center gap-2"
+                 >
+                   <LayoutDashboard className="w-4 h-4" /> Go to Dashboard
+                 </button>
+               )}
                <div className="hidden sm:flex flex-col">
                   <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest leading-none mb-1">
                     {userData.role === "SuperAdmin" ? "System HQ" : (tenant?.name || "Member Panel")}

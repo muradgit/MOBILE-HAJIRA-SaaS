@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { useAuth } from "@/src/hooks/useAuth";
 import { 
   Zap, 
   QrCode, 
@@ -11,7 +12,8 @@ import {
   ShieldCheck,
   Smartphone,
   Star,
-  Play
+  Play,
+  LayoutDashboard
 } from "lucide-react";
 
 import { cn } from "@/src/lib/utils";
@@ -20,6 +22,8 @@ import { cn } from "@/src/lib/utils";
  * Modern High-Converting Landing Page for MOBILE-HAJIRA-SaaS
  */
 export default function LandingPage() {
+  const { userData, loading: authLoading } = useAuth();
+
   return (
     <div className="bg-white -mt-8 -mx-4 sm:-mx-10">
       
@@ -41,18 +45,34 @@ export default function LandingPage() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link 
-            href="/auth/register"
-            className="w-full sm:w-auto bg-[#6f42c1] text-white px-10 py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-2xl shadow-purple-500/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2"
-          >
-            শুরু করুন <ArrowRight className="w-5 h-5" />
-          </Link>
-          <Link 
-            href="/auth/login"
-            className="w-full sm:w-auto bg-white text-[#6f42c1] border-2 border-purple-100 px-10 py-5 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-purple-50 transition-all flex items-center justify-center gap-2"
-          >
-            লগইন <Play className="w-4 h-4 fill-[#6f42c1]" />
-          </Link>
+          {!authLoading && userData ? (
+            <Link 
+              href={
+                userData.role === "SuperAdmin" ? "/super-admin/dashboard" :
+                userData.role === "InstitutionAdmin" ? "/admin/dashboard" :
+                userData.role === "Teacher" ? "/teacher/dashboard" :
+                "/student/dashboard"
+              }
+              className="w-full sm:w-auto bg-[#6f42c1] text-white px-10 py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-2xl shadow-purple-500/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              ড্যাশবোর্ডে যান <LayoutDashboard className="w-5 h-5" />
+            </Link>
+          ) : (
+            <>
+              <Link 
+                href="/auth/register"
+                className="w-full sm:w-auto bg-[#6f42c1] text-white px-10 py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-2xl shadow-purple-500/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                শুরু করুন <ArrowRight className="w-5 h-5" />
+              </Link>
+              <Link 
+                href="/auth/login"
+                className="w-full sm:w-auto bg-white text-[#6f42c1] border-2 border-purple-100 px-10 py-5 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-purple-50 transition-all flex items-center justify-center gap-2"
+              >
+                লগইন <Play className="w-4 h-4 fill-[#6f42c1]" />
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Hero Visual */}
