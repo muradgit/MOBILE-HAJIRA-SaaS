@@ -26,7 +26,9 @@ import {
   History,
   Share2,
   BookOpen,
-  GraduationCap
+  GraduationCap,
+  MessageSquare,
+  Settings
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { UserData, Tenant } from "@/src/lib/types";
@@ -69,30 +71,29 @@ export const Layout = ({ children, user, tenant }: { children: React.ReactNode, 
   const menuItems = {
     SuperAdmin: [
       { label: "Dashboard", to: "/super-admin/dashboard", icon: Home },
-      { label: "Institute Management", to: "/institutes", icon: Database },
-      { label: "Create Institute", to: "/institutes/create", icon: Plus },
-      { label: "Details", to: "/super-admin/details", icon: ClipboardList },
-      { label: "Payment Logs", to: "/payments", icon: History },
-      { label: "User Management", to: "/users", icon: Users },
+      { label: "Institutes", to: "/super-admin/institutes", icon: Database },
+      { label: "Payments", to: "/super-admin/payments", icon: History },
+      { label: "Users", to: "/super-admin/users", icon: Users },
+      { label: "System Settings", to: "/super-admin/settings", icon: Settings },
     ],
     InstitutionAdmin: [
-      { label: "Institute Settings", to: "/settings/general", icon: Database },
-      { label: "Teacher Management", to: "/teachers", icon: Users },
-      { label: "Student Management", to: "/students", icon: Users },
-      { label: "Course Management", to: "/subjects/add", icon: BookOpen },
-      { label: "Attendance Report", to: "/reports", icon: FileText },
-      { label: "Payment Management", to: "/wallet", icon: WalletIcon },
+      { label: "Dashboard", to: "/admin/dashboard", icon: Home },
+      { label: "User Management", to: "/admin/users", icon: Users },
+      { label: "SMS Management", to: "/admin/sms", icon: MessageSquare },
+      { label: "Billing & Credits", to: "/admin/billing", icon: WalletIcon },
+      { label: "Institute Settings", to: "/admin/settings", icon: Settings },
+      { label: "Reports", to: "/reports", icon: FileText },
     ],
     Teacher: [
       { label: "Profile", to: "/teacher/profile", icon: User },
       { label: "Attendance Taker", to: "/scanner", icon: QrCode },
       { label: "Class Report", to: "/reports", icon: FileText },
-      { label: "Attendance Report", to: "/reports/attendance", icon: ClipboardList },
+      { label: "Attendance History", to: "/reports/attendance", icon: ClipboardList },
     ],
     Student: [
       { label: "Attendance Giver", to: "/student/id", icon: QrCode },
       { label: "Profile", to: "/student/profile", icon: User },
-      { label: "Student Self-Attendance Report", to: "/reports/self", icon: FileText },
+      { label: "Attendance History", to: "/reports/history", icon: FileText },
     ],
   };
 
@@ -336,24 +337,28 @@ export const Layout = ({ children, user, tenant }: { children: React.ReactNode, 
           {user.role === "InstitutionAdmin" ? (
             <>
               <NavButton icon={Home} label="Dashboard" to="/admin/dashboard" />
-              <NavButton icon={WalletIcon} label="Payment" to="/wallet" />
-              <NavButton icon={LifeBuoy} label="Support" to="/support" />
+              <NavButton icon={Users} label="Users" to="/admin/users" />
+              <NavButton icon={MessageSquare} label="SMS" to="/admin/sms" />
+              <NavButton icon={WalletIcon} label="Billing" to="/admin/billing" />
             </>
           ) : user.role === "Teacher" ? (
             <>
-              <NavButton icon={QrCode} label="Attendance" to="/scanner" />
+              <NavButton icon={Home} label="Dashboard" to="/teacher/dashboard" />
+              <NavButton icon={QrCode} label="Scan" to="/scanner" />
               <NavButton icon={FileText} label="Report" to="/reports" />
             </>
           ) : user.role === "Student" ? (
             <>
-              <NavButton icon={QrCode} label="Attendance" to="/student/id" />
-              <NavButton icon={FileText} label="Report" to="/reports/self" />
+              <NavButton icon={Home} label="Dashboard" to="/student/dashboard" />
+              <NavButton icon={QrCode} label="My ID" to="/student/id" />
+              <NavButton icon={FileText} label="Report" to="/reports/history" />
             </>
           ) : (
             <>
               <NavButton icon={Home} label="Dashboard" to="/super-admin/dashboard" />
-              <NavButton icon={Database} label="Inst" to="/institutes" />
-              <NavButton icon={Users} label="Users" to="/users" />
+              <NavButton icon={Database} label="Inst" to="/super-admin/institutes" />
+              <NavButton icon={Users} label="Users" to="/super-admin/users" />
+              <NavButton icon={History} label="Payments" to="/super-admin/payments" />
             </>
           )}
         </nav>
