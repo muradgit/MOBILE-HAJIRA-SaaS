@@ -82,7 +82,7 @@ export default function SuperAdminDashboard() {
 
     // Real-time Transactions (Revenue)
     const unsubTransactions = onSnapshot(
-      query(collection(db, "transactions")), 
+      query(collection(db, "payments")), 
       (snapshot) => {
         setTransactions(snapshot.docs.map(doc => doc.data() as Transaction));
       },
