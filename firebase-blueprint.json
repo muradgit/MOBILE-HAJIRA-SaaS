@@ -19,6 +19,10 @@
         "admin_mobile": { "type": "string" },
         "owner_email": { "type": "string" },
         "googleSheetId": { "type": "string", "description": "The Master Google Sheet ID for this institution where attendance goes." },
+        "classes": { "type": "array", "items": { "type": "string" } },
+        "departments": { "type": "array", "items": { "type": "string" } },
+        "sessions": { "type": "array", "items": { "type": "string" } },
+        "shifts": { "type": "array", "items": { "type": "string" } },
         "created_at": { "type": "string", "format": "date-time" }
       },
       "required": ["tenant_id", "name", "eiin", "credits_left"]

@@ -50,6 +50,10 @@ export interface Tenant {
   students_amount?: number;
   institutionType?: "College" | "School" | "Madrasa" | "Coaching Center";
   departmentName?: string;
+  classes?: string[];
+  departments?: string[];
+  sessions?: string[];
+  shifts?: string[];
 }
 
 export interface UserData {
