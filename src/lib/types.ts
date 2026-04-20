@@ -71,7 +71,7 @@ export interface UserData {
   subject?: string;
   profile_image?: string;
   created_at?: string;
-  status?: "pending" | "approved";
+  status?: "pending" | "approved" | "suspended";
 }
 
 export interface Course {

@@ -39,7 +39,7 @@
         "nameBN": { "type": "string" },
         "email": { "type": "string", "format": "email" },
         "phone": { "type": "string" },
-        "status": { "type": "string", "enum": ["pending", "approved"] },
+        "status": { "type": "string", "enum": ["pending", "approved", "suspended"] },
         "department": { "type": "string" },
         "class": { "type": "string" },
         "session": { "type": "string" },
