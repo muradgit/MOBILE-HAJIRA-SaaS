@@ -10,7 +10,10 @@ service cloud.firestore {
     }
 
     function isSuperAdmin() {
-      return isAuthenticated() && request.auth.token.email == "hello@muradkhank31.com";
+      return isAuthenticated() && (
+        request.auth.token.email == "hello@muradkhank31.com" ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "SuperAdmin"
+      );
     }
 
     function getUserData() {

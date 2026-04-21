@@ -117,14 +117,15 @@ export default function LoginPage() {
 
     // 4. Approval Check (Teachers & Students)
     if (finalRole !== "SuperAdmin" && finalRole !== "InstitutionAdmin") {
-      if (userData.status !== "approved") {
+      const isAllowed = ["active", "approved"].includes(userData.status || "");
+      if (!isAllowed) {
         const tenantDoc = await getDoc(doc(db, "tenants", userData.tenant_id));
         const tenantData = tenantDoc.exists() ? tenantDoc.data() as Tenant : null;
         
         await signOut(auth);
         setErrorMsg(
           <div className="space-y-4 font-bengali">
-            <p className="text-red-600 font-bold">আপনার অ্যাকাউন্টটি এখনো অ্যাপ্রুভ হয়নি।</p>
+            <p className="text-red-600 font-bold">আপনার অ্যাকাউন্টটি বর্তমানে {userData.status === "suspended" ? "সাময়িকভাবে স্থগিত" : "অ্যাপ্রুভালের অপেক্ষায়"} আছে।</p>
             {tenantData && (
               <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-left">
                 <p className="text-[10px] uppercase font-black text-gray-400 mb-1">যোগাযোগ করুন:</p>
@@ -140,26 +141,26 @@ export default function LoginPage() {
     }
 
     /** 
-     * 5. CRITICAL: Update STATE before REDIRECTION
-     * Normalize role for route mapping 
+     * 5. CRITICAL: Update STATE and REDIRECT IMMEDIATELY
      */
     const normalizedRole = finalRole.toLowerCase().replace(/\s+/g, "");
     
     // Sync store
     setUser({ ...userData, role: finalRole as any });
 
-    // 6. Redirect with absolute path mapping
+    // Handle redirection map
+    let target = "/";
     if (normalizedRole === "superadmin") {
-      router.push("/super-admin/dashboard");
+      target = "/super-admin/dashboard";
     } else if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
-      router.push("/admin/dashboard");
+      target = "/admin/dashboard";
     } else if (normalizedRole === "teacher") {
-      router.push("/teacher/dashboard");
+      target = "/teacher/dashboard";
     } else if (normalizedRole === "student") {
-      router.push("/student/dashboard");
-    } else {
-      router.push("/");
+      target = "/student/dashboard";
     }
+
+    router.push(target);
   };
 
   return (

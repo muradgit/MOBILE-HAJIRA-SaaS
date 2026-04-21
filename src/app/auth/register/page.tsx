@@ -134,12 +134,18 @@ export default function RegisterPage() {
       const userSnap = await getDoc(userRef);
 
       if (userSnap.exists()) {
-        toast.error("আপনার ইমেইল দিয়ে অলরেডি অ্যাকাউন্ট আছে। সরাসরি লগইন করুন।", { id: toastId });
-        router.push("/auth/login");
-        return;
+        const existingData = userSnap.data();
+        if (existingData.tenant_id && existingData.role) {
+          toast.success("আপনার অলরেডি অ্যাকাউন্ট আছে। লগইন করা হচ্ছে...", { id: toastId });
+          setUser(existingData as any);
+          router.push("/auth/login");
+          return;
+        }
+        // If doc exists but is incomplete/corrupted, we might want to overwrite or fix it, 
+        // but the user specifically asked to fix the "Account already exists" error to allow proceeding.
       }
 
-      // 1. Create Tenant (if InstitutionAdmin)
+      // 1. Create/Update Tenant (if InstitutionAdmin)
       let finalTenantId = data.tenant_id;
       if (activeRole === "InstitutionAdmin") {
         finalTenantId = `tenant_${user.uid}`;
@@ -157,7 +163,7 @@ export default function RegisterPage() {
           credits_left: 100, // Bonus credits for new institute
           status: "active",
           created_at: serverTimestamp(),
-        });
+        }, { merge: true });
       }
 
       // 2. Create User Profile 
@@ -182,7 +188,7 @@ export default function RegisterPage() {
         });
       }
 
-      await setDoc(userRef, userData);
+      await setDoc(userRef, userData, { merge: true });
       
       // Update global store
       setUser(userData as any);

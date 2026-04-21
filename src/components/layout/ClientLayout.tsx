@@ -128,9 +128,15 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   // Maintenance: Handle redirect from root or auth pages to dashboard if logged in
   useEffect(() => {
     if (!loading && auth.currentUser && (isLandingPage || isAuthPage)) {
-      const target = getDashboardRoute(userData?.role);
-      if (target !== "/" && target !== pathname) {
-        router.replace(target);
+      // Check if user is blocked or pending
+      const status = userData?.status?.toLowerCase() || "";
+      const isAllowed = ["active", "approved"].includes(status);
+      
+      if (isAllowed) {
+        const target = getDashboardRoute(userData?.role);
+        if (target !== "/" && target !== pathname) {
+          router.replace(target);
+        }
       }
     }
   }, [loading, userData, isLandingPage, isAuthPage, router, pathname]);
