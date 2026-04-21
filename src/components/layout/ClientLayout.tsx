@@ -97,20 +97,39 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   };
 
   const mobileNavItems = (userData && mobileNavMapping[userData.role]) || [];
+  const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
 
-  // Maintenance: Handle redirect from root to dashboard if logged in
-  useEffect(() => {
-    if (!loading && auth.currentUser && isLandingPage) {
-        const dashboardMap: Record<string, string> = {
-          SuperAdmin: "/super-admin/dashboard",
-          InstitutionAdmin: "/admin/dashboard",
-          Teacher: "/teacher/dashboard",
-          Student: "/student/dashboard",
-        };
-        const target = userData?.role && dashboardMap[userData.role];
-        if (target) router.push(target);
+  // Helper for robust role-based redirection
+  const getDashboardRoute = (role: string | undefined): string => {
+    if (!role) return "/";
+    const normalizedRole = role.toLowerCase().replace(/\s+/g, "");
+    
+    // Check for SuperAdmin via email or role string
+    if (auth.currentUser?.email === superAdminEmail || normalizedRole === "superadmin") {
+      return "/super-admin/dashboard";
     }
-  }, [loading, userData, isLandingPage, router]);
+
+    if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
+      return "/admin/dashboard";
+    }
+    if (normalizedRole === "teacher") {
+      return "/teacher/dashboard";
+    }
+    if (normalizedRole === "student") {
+      return "/student/dashboard";
+    }
+    return "/";
+  };
+
+  // Maintenance: Handle redirect from root or auth pages to dashboard if logged in
+  useEffect(() => {
+    if (!loading && auth.currentUser && (isLandingPage || isAuthPage)) {
+      const target = getDashboardRoute(userData?.role);
+      if (target !== "/" && target !== pathname) {
+        router.replace(target);
+      }
+    }
+  }, [loading, userData, isLandingPage, isAuthPage, router, pathname]);
 
   // Logout Handler
   const handleLogout = async () => {
@@ -170,14 +189,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                {isLandingPage && (
                  <button 
                   onClick={() => {
-                    const dashboardMap: Record<string, string> = {
-                      SuperAdmin: "/super-admin/dashboard",
-                      InstitutionAdmin: "/admin/dashboard",
-                      Teacher: "/teacher/dashboard",
-                      Student: "/student/dashboard",
-                    };
-                    const target = userData?.role && dashboardMap[userData.role];
-                    if (target) router.push(target);
+                    const target = getDashboardRoute(userData?.role);
+                    if (target !== "/") router.push(target);
                   }}
                   className="bg-purple-50 text-[#6f42c1] text-xs font-black uppercase px-4 py-2.5 rounded-xl hover:bg-purple-100 transition-all flex items-center gap-2"
                  >

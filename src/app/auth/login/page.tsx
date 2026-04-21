@@ -85,12 +85,16 @@ export default function LoginPage() {
     // Update Global Store
     setUser({ ...userData, role: finalRole as any });
 
-    // Set session cookie
-    await fetch("/api/auth/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: finalRole, userId: userData.user_id }),
-    });
+    // Set session cookie (Non-blocking: if it fails, we still try to redirect)
+    try {
+      await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: finalRole, userId: userData.user_id }),
+      });
+    } catch (err) {
+      console.error("Session creation failed:", err);
+    }
 
     // Check for approval if Teacher or Student
     if ((finalRole === "Teacher" || finalRole === "Student") && userData.status !== "approved") {
@@ -115,14 +119,16 @@ export default function LoginPage() {
       return;
     }
 
-    // Role-Based Redirection Block
-    if (finalRole === "SuperAdmin") {
+    // Role-Based Redirection Block (Robust Normalization)
+    const normalizedRole = finalRole?.toLowerCase().replace(/\s+/g, "");
+    
+    if (normalizedRole === "superadmin") {
       router.push("/super-admin/dashboard");
-    } else if (finalRole === "InstitutionAdmin") {
+    } else if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
       router.push("/admin/dashboard");
-    } else if (finalRole === "Teacher") {
+    } else if (normalizedRole === "teacher") {
       router.push("/teacher/dashboard");
-    } else if (finalRole === "Student") {
+    } else if (normalizedRole === "student") {
       router.push("/student/dashboard");
     } else {
       router.push("/");
