@@ -20,7 +20,8 @@ import {
   Loader2, 
   CheckCircle2, 
   XCircle, 
-  AlertTriangle 
+  AlertTriangle,
+  ExternalLink 
 } from "lucide-react";
 import { DataTable } from "@/src/components/shared/DataTable";
 import { SlideOverForm } from "@/src/components/shared/SlideOverForm";
