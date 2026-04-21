@@ -148,19 +148,22 @@ export default function LoginPage() {
     // Sync store
     setUser({ ...userData, role: finalRole as any });
 
-    // Handle redirection map
-    let target = "/";
-    if (normalizedRole === "superadmin") {
-      target = "/super-admin/dashboard";
-    } else if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
-      target = "/admin/dashboard";
-    } else if (normalizedRole === "teacher") {
-      target = "/teacher/dashboard";
-    } else if (normalizedRole === "student") {
-      target = "/student/dashboard";
-    }
+    // 100ms delay for Zustand store to settle
+    setTimeout(() => {
+      // Handle redirection map
+      let target = "/";
+      if (normalizedRole === "superadmin") {
+        target = "/super-admin/dashboard";
+      } else if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
+        target = "/admin/dashboard";
+      } else if (normalizedRole === "teacher") {
+        target = "/teacher/dashboard";
+      } else if (normalizedRole === "student") {
+        target = "/student/dashboard";
+      }
 
-    router.push(target);
+      router.push(target);
+    }, 100);
   };
 
   return (

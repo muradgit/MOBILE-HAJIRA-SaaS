@@ -71,7 +71,21 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     ],
   };
 
-  const currentMenu = (userData && menuItems[userData.role]) || [];
+  // Helper for robust role-based navigation mapping
+  const getNormalizedMenuKey = (role: string | undefined): string => {
+    if (!role) return "";
+    const normalized = role.toLowerCase().replace(/\s+/g, "");
+    if (["institutionadmin", "instituteadmin", "admin"].includes(normalized)) {
+      return "InstitutionAdmin";
+    }
+    if (normalized === "superadmin") return "SuperAdmin";
+    if (normalized === "teacher") return "Teacher";
+    if (normalized === "student") return "Student";
+    return role; // Fallback
+  };
+
+  const menuKey = getNormalizedMenuKey(userData?.role);
+  const currentMenu = (userData && menuItems[menuKey]) || [];
 
   // 2. Mobile Bottom Navigation Config
   const mobileNavMapping: Record<string, any[]> = {
@@ -96,7 +110,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     ],
   };
 
-  const mobileNavItems = (userData && mobileNavMapping[userData.role]) || [];
+  const mobileNavItems = (userData && mobileNavMapping[menuKey]) || [];
   const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
 
   // Helper for robust role-based redirection
