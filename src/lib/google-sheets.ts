@@ -35,35 +35,68 @@ export async function createInstitutionSheet(tenantName: string, adminEmail: str
     const drive = google.drive({ version: "v3", auth });
 
     // 1. Create the Spreadsheet
-    const resource = {
-       properties: {
-         title: `MH_SaaS_${tenantName}`,
-       },
-    };
+    let spreadsheetId: string | undefined;
+    try {
+      const resource = {
+         properties: {
+           title: `MH_SaaS_${tenantName}`,
+         },
+      };
 
-    const spreadsheet = await sheets.spreadsheets.create({
-      requestBody: resource,
-      fields: "spreadsheetId",
-    });
+      const spreadsheet = await sheets.spreadsheets.create({
+        requestBody: resource,
+        fields: "spreadsheetId",
+      });
 
-    const spreadsheetId = spreadsheet.data.spreadsheetId;
+      spreadsheetId = spreadsheet.data.spreadsheetId ?? undefined;
+    } catch (apiError: any) {
+      console.error("Sheets API Error Detail:", JSON.stringify(apiError, null, 2));
+      
+      const isPermissionError = 
+        apiError.code === 403 || 
+        apiError.status === 403 ||
+        JSON.stringify(apiError).toLowerCase().includes("permission") ||
+        JSON.stringify(apiError).toLowerCase().includes("forbidden");
+
+      if (isPermissionError) {
+        throw new Error(
+          "গুগল শীট এপিআই (Google Sheets API) আপনার গুগল ক্লাউড প্রজেক্টে এনাবল করা নেই অথবা সার্ভিস অ্যাকাউন্টের পর্যাপ্ত পারমিশন নেই। " +
+          "অনুগ্রহ করে গুগল ক্লাউড কনসোল (console.cloud.google.com) থেকে 'Google Sheets API' এনাবল করুন এবং সার্ভিস অ্যাকাউন্টকে 'Editor' রোল দিন।"
+        );
+      }
+      throw apiError;
+    }
 
     if (!spreadsheetId) {
-      throw new Error("Failed to create spreadsheet.");
+      throw new Error("গুগল শীট তৈরি করা সম্ভব হয়নি (ID missing)।");
     }
 
     // 2. Share the sheet with Admin Email (Reverse Sharing)
-    await drive.permissions.create({
-      fileId: spreadsheetId,
-      requestBody: {
-        role: "writer",
-        type: "user",
-        emailAddress: adminEmail,
-      },
-    });
+    try {
+      await drive.permissions.create({
+        fileId: spreadsheetId,
+        requestBody: {
+          role: "writer",
+          type: "user",
+          emailAddress: adminEmail,
+        },
+      });
+    } catch (shareError: any) {
+      console.error("Drive API Sharing Error Detail:", JSON.stringify(shareError, null, 2));
+      
+      const isDrivePermissionError = 
+        shareError.code === 403 || 
+        shareError.status === 403 ||
+        JSON.stringify(shareError).toLowerCase().includes("permission");
 
-    // 3. Optional: Initialize tabs (Attendance, Students, etc.)
-    // For now, return the ID
+      if (isDrivePermissionError) {
+        // We log this but don't strictly fail, as the sheet is created.
+        // However, we should inform the user that sharing failed.
+        console.warn("Google Drive API is likely not enabled. Sharing failed.");
+      }
+      // Note: We don't throw here to allow the process to proceed if the sheet was created
+    }
+
     return spreadsheetId;
 
   } catch (error: any) {
