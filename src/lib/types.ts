@@ -34,6 +34,7 @@ export interface Tenant {
   total_credit_used?: number;
   total_credit_purchased?: number;
   last_reward_date?: string;
+  created_at?: string;
   promo_code_claimed?: boolean;
   recharge_status?: string;
   last_recharge_date?: string;

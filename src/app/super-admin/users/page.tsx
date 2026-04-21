@@ -11,7 +11,10 @@ import {
   updateDoc, 
   orderBy, 
   limit, 
-  getDocs 
+  getDocs,
+  deleteDoc,
+  setDoc,
+  serverTimestamp 
 } from "firebase/firestore";
 import { toast } from "sonner";
 import { 
@@ -23,7 +26,9 @@ import {
   Mail,
   Building,
   AlertTriangle,
-  ExternalLink 
+  ExternalLink,
+  Plus,
+  Trash2 
 } from "lucide-react";
 import { DataTable } from "@/src/components/shared/DataTable";
 import { SlideOverForm } from "@/src/components/shared/SlideOverForm";
@@ -32,15 +37,17 @@ import { cn } from "@/src/lib/utils";
 
 /**
  * Super Admin - Global User Management Module
- * Allows Super Admin to oversee all users across all institutes.
+ * Allows Super Admin to oversee and manage all users across all institutes.
  */
 export default function UserManagement() {
   const { userData, loading: authLoading } = useAuth();
   const [users, setUsers] = useState<UserData[]>([]);
   const [tenantsMap, setTenantsMap] = useState<Record<string, string>>({});
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [indexError, setIndexError] = useState<string | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
 
   // Form State for Editing
@@ -49,19 +56,34 @@ export default function UserManagement() {
     status: "" as any,
   });
 
-  // 1. Fetch Tenants once to map IDs to Names
+  // Form State for Creating
+  const [createData, setCreateData] = useState({
+    name: "",
+    nameBN: "",
+    email: "",
+    role: "Teacher" as any,
+    tenant_id: "",
+    status: "approved" as any,
+  });
+
+  // 1. Fetch Tenants for Mapping and Selects
   useEffect(() => {
     if (userData?.role !== "SuperAdmin") return;
 
     const fetchTenants = async () => {
       try {
-        const q = query(collection(db, "tenants"));
+        const q = query(collection(db, "tenants"), orderBy("name", "asc"));
         const snapshot = await getDocs(q);
+        const data: Tenant[] = [];
         const mapping: Record<string, string> = { "SUPER_ADMIN": "System Owner" };
-        snapshot.forEach(doc => {
-          const data = doc.data() as Tenant;
-          mapping[data.tenant_id] = data.name;
+        
+        snapshot.forEach(docSnap => {
+          const t = docSnap.data() as Tenant;
+          data.push(t);
+          mapping[t.tenant_id] = t.name;
         });
+        
+        setTenants(data);
         setTenantsMap(mapping);
       } catch (error) {
         console.error("Tenant Fetch Error:", error);
@@ -71,15 +93,16 @@ export default function UserManagement() {
     fetchTenants();
   }, [userData]);
 
-  // 2. Real-time Users Fetch (Batch of 100)
+  // 2. Real-time Users Fetch (Total Collection for SuperAdmin)
   useEffect(() => {
     if (userData?.role !== "SuperAdmin") return;
 
     try {
+      // For SuperAdmin, we fetch everything across all tenants
       const q = query(
         collection(db, "users"), 
         orderBy("created_at", "desc"), 
-        limit(100)
+        limit(500) // Increased limit for global view
       );
 
       const unsubscribe = onSnapshot(q, 
@@ -90,10 +113,12 @@ export default function UserManagement() {
           setIndexError(null);
         },
         (error) => {
-          console.error("Firestore Error:", error);
+          console.error("Firestore Users Error:", error);
           if (error.message.includes("index")) {
             const url = error.message.match(/https:\/\/console\.firebase\.google\.com[^\s]*/)?.[0];
-            setIndexError(url || "Index Required");
+            setIndexError(url || "Index Required. Check console for URL.");
+          } else {
+            toast.error("ডাটা লোড করতে সমস্যা হয়েছে: " + error.message);
           }
           setLoading(false);
         }
@@ -124,7 +149,41 @@ export default function UserManagement() {
     }
   };
 
-  // 4. Quick Toggle Status
+  // 4. Create New User
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const toastId = toast.loading("ইউজার তৈরি হচ্ছে...");
+    try {
+      // This is a manual entry; user_id will be generated or use email hash.
+      // Better to use a random ID if not using Auth yet.
+      const userId = `manual_${Date.now()}`;
+      await setDoc(doc(db, "users", userId), {
+        user_id: userId,
+        ...createData,
+        created_at: serverTimestamp(),
+      });
+      toast.success("নতুন ইউজার তৈরি সফল হয়েছে", { id: toastId });
+      setIsCreateDrawerOpen(false);
+      setCreateData({ name: "", nameBN: "", email: "", role: "Teacher", tenant_id: "", status: "approved" });
+    } catch (error: any) {
+      toast.error("ইউজার তৈরি ব্যর্থ: " + error.message, { id: toastId });
+    }
+  };
+
+  // 5. Hard Delete User
+  const handleHardDelete = async (user: UserData) => {
+    if (!confirm(`আপনি কি নিশ্চিত যে ${user.name} কে স্থায়ীভাবে সরিয়ে ফেলতে চান? এই অ্যাকশনটি ফিরিয়ে আনা যাবে না।`)) return;
+    
+    const toastId = toast.loading("ইউজার ডিলিট হচ্ছে...");
+    try {
+      await deleteDoc(doc(db, "users", user.user_id));
+      toast.success("ইউজার স্থায়ীভাবে সরিয়ে ফেলা হয়েছে", { id: toastId });
+    } catch (error: any) {
+      toast.error("ডিলিট ব্যর্থ: " + error.message, { id: toastId });
+    }
+  };
+
+  // 6. Quick Toggle Status
   const toggleStatus = async (user: UserData) => {
     const nextStatus = user.status === "approved" ? "suspended" : "approved";
     const toastId = toast.loading(`স্ট্যাটাস পরিবর্তন হচ্ছে...`);
@@ -165,8 +224,8 @@ export default function UserManagement() {
             )}
           </div>
           <div className="flex flex-col">
-            <span className="font-bold text-gray-900">{item.name}</span>
-            <span className="text-[11px] text-gray-400 flex items-center gap-1 font-medium">
+            <span className="font-bold text-gray-900 leading-none">{item.name}</span>
+            <span className="text-[10px] text-gray-400 mt-1 flex items-center gap-1 font-medium lowercase">
               <Mail className="w-3 h-3" /> {item.email}
             </span>
           </div>
@@ -194,7 +253,7 @@ export default function UserManagement() {
       cell: (item: UserData) => (
         <div className="flex items-center gap-1.5 text-gray-500 font-medium">
           <Building className="w-3.5 h-3.5 text-gray-300" />
-          <span className="max-w-[150px] truncate">{tenantsMap[item.tenant_id] || "অজানা প্রতিষ্ঠান"}</span>
+          <span className="max-w-[150px] truncate text-[11px] font-bold uppercase">{tenantsMap[item.tenant_id] || "অজানা প্রতিষ্ঠান"}</span>
         </div>
       )
     },
@@ -215,16 +274,25 @@ export default function UserManagement() {
   ];
 
   return (
-    <div className="min-h-screen space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="min-h-screen space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
       {/* Header Area */}
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center">
-          <Users className="w-6 h-6 text-[#6f42c1]" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center">
+            <Users className="w-6 h-6 text-[#6f42c1]" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black text-gray-900 font-bengali">ইউজার ম্যানেজমেন্ট</h1>
+            <p className="text-sm text-gray-500">প্ল্যাটফর্মের সকল প্রতিষ্ঠানের ইউজার লিস্ট এবং রোল কন্ট্রোল</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-black text-gray-900 font-bengali">ইউজার ম্যানেজমেন্ট</h1>
-          <p className="text-sm text-gray-500">প্ল্যাটফর্মের সকল প্রতিষ্ঠানের ইউজার লিস্ট এবং রোল কন্ট্রোল</p>
-        </div>
+
+        <button 
+          onClick={() => setIsCreateDrawerOpen(true)}
+          className="bg-[#6f42c1] text-white px-6 py-3 rounded-xl font-black text-sm uppercase tracking-widest shadow-lg shadow-purple-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+        >
+          <Plus className="w-5 h-5" /> নতুন ইউজার তৈরি করুন
+        </button>
       </div>
 
       {/* Main Table Container */}
@@ -232,7 +300,7 @@ export default function UserManagement() {
         {loading ? (
           <div className="py-20 flex flex-col items-center justify-center text-gray-400 gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-[#6f42c1]" />
-            <p className="text-sm font-bold animate-pulse">ইউজার লিস্ট লোড হচ্ছে...</p>
+            <p className="text-sm font-bold animate-pulse uppercase tracking-widest">ইউজার লিস্ট লোড হচ্ছে...</p>
           </div>
         ) : indexError ? (
           <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
@@ -240,9 +308,10 @@ export default function UserManagement() {
              <div className="space-y-1">
                 <h3 className="text-lg font-black text-gray-900 font-bengali tracking-tight">ডাটাবেজ ইনডেক্স প্রয়োজন</h3>
                 <p className="text-sm text-gray-500 font-medium">ইউজার লিস্ট দেখার জন্য আপনাকে একটি ফায়ারবেস ইনডেক্স তৈরি করতে হবে।</p>
+                <div className="bg-gray-50 p-4 rounded-xl text-xs font-mono text-gray-400 mt-2 max-w-lg mx-auto">Error: {indexError}</div>
              </div>
              <a 
-               href={indexError} 
+               href={indexError?.startsWith("http") ? indexError : "#"} 
                target="_blank" 
                className="bg-orange-500 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20"
              >
@@ -258,12 +327,58 @@ export default function UserManagement() {
               setFormData({ role: user.role, status: user.status || "pending" });
               setIsDrawerOpen(true);
             }}
-            onDelete={(user) => toggleStatus(user)}
+            onDelete={(user) => handleHardDelete(user)}
           />
         )}
       </div>
 
-      {/* SlideOver Drawer for Editing */}
+      {/* SlideOver Drawer for Creating New User */}
+      <SlideOverForm 
+        isOpen={isCreateDrawerOpen} 
+        onClose={() => setIsCreateDrawerOpen(false)} 
+        title="নতুন ইউজার তৈরি করুন"
+      >
+        <form onSubmit={handleCreateUser} className="space-y-6">
+           <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Full Name (EN)</label>
+                <input required value={createData.name} onChange={e => setCreateData({...createData, name: e.target.value})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3.5 text-sm font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all" placeholder="John Doe" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">নাম (বাংলা)</label>
+                <input required value={createData.nameBN} onChange={e => setCreateData({...createData, nameBN: e.target.value})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3.5 text-sm font-bengali font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all" placeholder="নাম উল্লেখ করুন" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
+                <input required type="email" value={createData.email} onChange={e => setCreateData({...createData, email: e.target.value})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3.5 text-sm font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all" placeholder="user@domain.com" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Role</label>
+                <select value={createData.role} onChange={e => setCreateData({...createData, role: e.target.value as any})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3.5 text-sm font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all">
+                   <option value="SuperAdmin">SuperAdmin</option>
+                   <option value="InstitutionAdmin">Institution Admin</option>
+                   <option value="Teacher">Teacher</option>
+                   <option value="Student">Student</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Tenant / Institution</label>
+                <select value={createData.tenant_id} onChange={e => setCreateData({...createData, tenant_id: e.target.value})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3.5 text-sm font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all">
+                   <option value="">System-wide (No Tenant)</option>
+                   <option value="SUPER_ADMIN">System Global</option>
+                   {tenants.map(t => (
+                     <option key={t.tenant_id} value={t.tenant_id}>{t.name}</option>
+                   ))}
+                </select>
+              </div>
+           </div>
+           <button type="submit" className="w-full bg-[#6f42c1] text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-purple-500/20 hover:scale-[1.01] active:scale-[0.99] transition-all">
+              তৈরি করুন
+           </button>
+        </form>
+      </SlideOverForm>
+
+      {/* SlideOver Drawer for Editing Existing User */}
       <SlideOverForm 
         isOpen={isDrawerOpen} 
         onClose={() => setIsDrawerOpen(false)} 
@@ -327,15 +442,10 @@ export default function UserManagement() {
 
             <button 
               type="button"
-              onClick={() => toggleStatus(selectedUser)}
-              className={cn(
-                "w-full py-4 rounded-2xl border font-black text-[10px] uppercase tracking-widest transition-all",
-                selectedUser.status === "approved" 
-                  ? "bg-red-50 text-red-500 border-red-100 hover:bg-red-100" 
-                  : "bg-green-50 text-green-500 border-green-100 hover:bg-green-100"
-              )}
+              onClick={() => handleHardDelete(selectedUser)}
+              className="w-full py-4 rounded-2xl border border-red-100 bg-red-50 text-red-500 font-black text-[10px] uppercase tracking-widest transition-all hover:bg-red-100 flex items-center justify-center gap-2"
             >
-              {selectedUser.status === "approved" ? "Suspend Account" : "Activate Account"}
+              <Trash2 className="w-4 h-4" /> ইউজারকে চিরতরে মুছে ফেলুন
             </button>
           </form>
         )}
@@ -343,3 +453,4 @@ export default function UserManagement() {
     </div>
   );
 }
+

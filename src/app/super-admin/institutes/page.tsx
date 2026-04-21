@@ -10,7 +10,8 @@ import {
   doc, 
   setDoc, 
   updateDoc, 
-  orderBy 
+  orderBy,
+  deleteDoc 
 } from "firebase/firestore";
 import { toast } from "sonner";
 import { 
@@ -21,7 +22,8 @@ import {
   CheckCircle2, 
   XCircle, 
   AlertTriangle,
-  ExternalLink 
+  ExternalLink,
+  Trash2 
 } from "lucide-react";
 import { DataTable } from "@/src/components/shared/DataTable";
 import { SlideOverForm } from "@/src/components/shared/SlideOverForm";
@@ -29,10 +31,10 @@ import { Tenant } from "@/src/lib/types";
 import { cn } from "@/src/lib/utils";
 
 /**
- * Super Admin - Institute Management Page
- * Handles CRUD for institutions (Tenants) with Soft Delete policies.
+ * Super Admin - Global Institution Management Module
+ * Full control over all tenants in the system.
  */
-export default function InstituteManagement() {
+export default function InstitutionManagement() {
   const { userData, loading: authLoading } = useAuth();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,12 +53,14 @@ export default function InstituteManagement() {
     credits_left: 100,
   });
 
-  // Fetch Tenants
+  // Fetch Tenants (Global for SuperAdmin)
   useEffect(() => {
     if (userData?.role !== "SuperAdmin") return;
 
     try {
+      // SuperAdmins fetch everything
       const q = query(collection(db, "tenants"), orderBy("name", "asc"));
+      
       const unsubscribe = onSnapshot(q, 
         (snapshot) => {
           const data = snapshot.docs.map(doc => doc.data() as Tenant);
@@ -65,10 +69,12 @@ export default function InstituteManagement() {
           setIndexError(null);
         },
         (error) => {
-          console.error("Firestore Error:", error);
+          console.error("Firestore Tenants Error:", error);
           if (error.message.includes("index")) {
             const url = error.message.match(/https:\/\/console\.firebase\.google\.com[^\s]*/)?.[0];
-            setIndexError(url || "Index Required");
+            setIndexError(url || "Index Required. Check browser console.");
+          } else {
+            toast.error("ডাটা লোড করতে সমস্যা হয়েছে: " + error.message);
           }
           setLoading(false);
         }
@@ -84,43 +90,24 @@ export default function InstituteManagement() {
   // Handle Create/Update
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const toastId = toast.loading("সেভ করা হচ্ছে...");
-
+    const toastId = toast.loading(editingTenant ? "আপডেট হচ্ছে..." : "তৈরি হচ্ছে...");
+    
     try {
       const tenantId = editingTenant?.tenant_id || `tenant_${Date.now()}`;
-      const docRef = doc(db, "tenants", tenantId);
-
-      const finalData: Partial<Tenant> = {
-        ...formData,
+      const tenantData = {
         tenant_id: tenantId,
+        ...formData,
         status: editingTenant?.status || "active",
-        googleSheetId: editingTenant?.googleSheetId || "",
-        promo_code: editingTenant?.promo_code || `PROMO_${Math.random().toString(36).substring(7).toUpperCase()}`,
-        referral_count: editingTenant?.referral_count || 0,
-        credits_left: Number(formData.credits_left)
+        created_at: editingTenant?.created_at || new Date().toISOString(),
       };
 
-      await setDoc(docRef, finalData, { merge: true });
-      
-      toast.success(editingTenant ? "আপডেট সফল হয়েছে" : "প্রতিষ্ঠান তৈরি সফল হয়েছে", { id: toastId });
+      await setDoc(doc(db, "tenants", tenantId), tenantData, { merge: true });
+      toast.success(editingTenant ? "সফলভাবে আপডেট হয়েছে" : "সফলভাবে তৈরি হয়েছে", { id: toastId });
       setIsDrawerOpen(false);
       resetForm();
     } catch (error: any) {
-      toast.error("ভুল হয়েছে: " + error.message, { id: toastId });
+      toast.error(error.message, { id: toastId });
     }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      nameBN: "",
-      eiin: "",
-      institutionType: "School",
-      owner_email: "",
-      phone: "",
-      credits_left: 100,
-    });
-    setEditingTenant(null);
   };
 
   const handleEdit = (tenant: Tenant) => {
@@ -137,27 +124,30 @@ export default function InstituteManagement() {
     setIsDrawerOpen(true);
   };
 
-  const toggleStatus = async (tenant: Tenant) => {
-    const newStatus = tenant.status === "active" ? "suspended" : "active";
-    const toastId = toast.loading(`স্ট্যাটাস পরিবর্তন হচ্ছে...`);
+  // Hard Delete Institution
+  const handleHardDelete = async (tenant: Tenant) => {
+    if (!confirm(`আপনি কি নিশ্চিত যে "${tenant.name}" কে স্থায়ীভাবে মুছে ফেলতে চান? এই প্রতিষ্ঠানের সকল ইউজার এবং ডাটা অ্যাক্সেস চিরতরে বন্ধ হয়ে যাবে।`)) return;
+    
+    const toastId = toast.loading(`স্থায়ীভাবে মুছে ফেলা হচ্ছে...`);
     try {
-      await updateDoc(doc(db, "tenants", tenant.tenant_id), { status: newStatus });
-      toast.success(`এখন এটি ${newStatus}`, { id: toastId });
+      await deleteDoc(doc(db, "tenants", tenant.tenant_id));
+      toast.success(`সাফল্যজনকভাবে মুছে ফেলা হয়েছে`, { id: toastId });
     } catch (error: any) {
       toast.error(error.message, { id: toastId });
     }
   };
 
-  const handleDelete = async (tenant: Tenant) => {
-    if (!confirm("আপনি কি নিশ্চিত যে এই প্রতিষ্ঠানটি সফট ডিলিট করতে চান? এটি ডিয়াক্টিভেটেড হয়ে থাকবে।")) return;
-    
-    const toastId = toast.loading(`সফট ডিলিট হচ্ছে...`);
-    try {
-      await updateDoc(doc(db, "tenants", tenant.tenant_id), { status: "deactivated" });
-      toast.success(`সফলভাবে ডিয়াক্টিভেট করা হয়েছে`, { id: toastId });
-    } catch (error: any) {
-      toast.error(error.message, { id: toastId });
-    }
+  const resetForm = () => {
+    setEditingTenant(null);
+    setFormData({
+      name: "",
+      nameBN: "",
+      eiin: "",
+      institutionType: "School",
+      owner_email: "",
+      phone: "",
+      credits_left: 100,
+    });
   };
 
   // Auth Protection
@@ -181,8 +171,8 @@ export default function InstituteManagement() {
       accessorKey: "name",
       cell: (item: Tenant) => (
         <div className="flex flex-col">
-          <span className="font-bold text-gray-900">{item.name}</span>
-          <span className="text-xs text-gray-400 font-bengali">{item.nameBN}</span>
+          <span className="font-bold text-gray-900 leading-none">{item.name}</span>
+          <span className="text-[11px] text-gray-400 font-bengali mt-1">{item.nameBN}</span>
         </div>
       )
     },
@@ -223,7 +213,7 @@ export default function InstituteManagement() {
   ];
 
   return (
-    <div className="min-h-screen space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="min-h-screen space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
       {/* Header Area */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -232,7 +222,7 @@ export default function InstituteManagement() {
           </div>
           <div>
             <h1 className="text-2xl font-black text-gray-900 font-bengali">প্রতিষ্ঠান ম্যানেজমেন্ট</h1>
-            <p className="text-sm text-gray-500">সকল নিবন্ধিত প্রতিষ্ঠানের তালিকা এবং নিয়ন্ত্রণ</p>
+            <p className="text-sm text-gray-500">নিবন্ধিত প্রতিষ্ঠানের তালিকা এবং নিয়ন্ত্রণ কেন্দ্র</p>
           </div>
         </div>
         
@@ -251,10 +241,11 @@ export default function InstituteManagement() {
              <AlertTriangle className="w-16 h-16 text-orange-500" />
              <div className="space-y-1">
                 <h3 className="text-lg font-black text-gray-900 font-bengali tracking-tight">ডাটাবেজ ইনডেক্স প্রয়োজন</h3>
-                <p className="text-sm text-gray-500 font-medium">লিস্টটি দেখার জন্য আপনাকে একটি ফায়ারবেস ইনডেক্স তৈরি করতে হবে।</p>
+                <p className="text-sm text-gray-500 font-medium tracking-tight">লিস্টটি দেখার জন্য আপনাকে একটি ফায়ারবেস ইনডেক্স তৈরি করতে হবে।</p>
+                <p className="text-[10px] text-gray-400 font-mono mt-2">{indexError}</p>
              </div>
              <a 
-               href={indexError} 
+               href={indexError.startsWith("http") ? indexError : "#"} 
                target="_blank" 
                className="bg-orange-500 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20"
              >
@@ -266,7 +257,7 @@ export default function InstituteManagement() {
             columns={columns} 
             data={tenants}
             onEdit={handleEdit}
-            onDelete={handleDelete}
+            onDelete={(t) => handleHardDelete(t)}
           />
         )}
       </div>
@@ -275,115 +266,66 @@ export default function InstituteManagement() {
       <SlideOverForm 
         isOpen={isDrawerOpen} 
         onClose={() => setIsDrawerOpen(false)} 
-        title={editingTenant ? "প্রতিষ্ঠান এডিট করুন" : "নতুন প্রতিষ্ঠান যোগ করুন"}
+        title={editingTenant ? "প্রতিষ্ঠানের তথ্য এডিট" : "নতুন প্রতিষ্ঠান যোগ করুন"}
       >
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6 pb-20">
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Institute Name (English)</label>
-                <input 
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all"
-                  placeholder="e.g. Dhaka International College"
-                />
-              </div>
+             <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Institution Name (English)</label>
+                  <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none" placeholder="Primary School" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">প্রতিষ্ঠানের নাম (বাংলা)</label>
+                  <input required value={formData.nameBN} onChange={e => setFormData({...formData, nameBN: e.target.value})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bengali font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none" placeholder="প্রাথমিক বিদ্যালয়" />
+                </div>
+             </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">প্রতিষ্ঠানের নাম (বাংলা)</label>
-                <input 
-                  required
-                  value={formData.nameBN}
-                  onChange={(e) => setFormData({...formData, nameBN: e.target.value})}
-                  className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bengali focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all"
-                  placeholder="উদা: ঢাকা ইন্টারন্যাশনাল কলেজ"
-                />
-              </div>
-            </div>
+             <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">EIIN / Code</label>
+                  <input required value={formData.eiin} onChange={e => setFormData({...formData, eiin: e.target.value})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none" placeholder="123456" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Type</label>
+                  <select value={formData.institutionType} onChange={e => setFormData({...formData, institutionType: e.target.value as any})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none">
+                     <option value="School">School</option>
+                     <option value="College">College</option>
+                     <option value="Madrasha">Madrasha</option>
+                     <option value="University">University</option>
+                     <option value="Coaching Center">Coaching Center</option>
+                  </select>
+                </div>
+             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">EIIN</label>
-                <input 
-                  required
-                  value={formData.eiin}
-                  onChange={(e) => setFormData({...formData, eiin: e.target.value})}
-                  className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all"
-                  placeholder="123456"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Type</label>
-                <select 
-                  value={formData.institutionType}
-                  onChange={(e) => setFormData({...formData, institutionType: e.target.value as any})}
-                  className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all appearance-none"
-                >
-                  <option value="School">School</option>
-                  <option value="College">College</option>
-                  <option value="University">University</option>
-                  <option value="Coaching Center">Coaching Center</option>
-                </select>
-              </div>
-            </div>
+             <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Owner Email</label>
+                <input required type="email" value={formData.owner_email} onChange={e => setFormData({...formData, owner_email: e.target.value})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none" placeholder="admin@domain.com" />
+             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Admin Email</label>
-              <input 
-                required
-                type="email"
-                value={formData.owner_email}
-                onChange={(e) => setFormData({...formData, owner_email: e.target.value})}
-                className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all"
-                placeholder="admin@institution.com"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Admin Phone</label>
-              <input 
-                required
-                value={formData.phone}
-                onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all"
-                placeholder="017XXXXXXXX"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Initial Credits</label>
-              <input 
-                required
-                type="number"
-                value={formData.credits_left}
-                onChange={(e) => setFormData({...formData, credits_left: Number(e.target.value)})}
-                className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all"
-                placeholder="100"
-              />
-            </div>
+             <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Phone</label>
+                  <input required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none" placeholder="01XXX" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">SMS Credits</label>
+                  <input required type="number" value={formData.credits_left} onChange={e => setFormData({...formData, credits_left: parseInt(e.target.value)})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none" />
+                </div>
+             </div>
           </div>
 
-          <button 
-            type="submit"
-            className="w-full bg-[#6f42c1] text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-purple-500/30 hover:scale-[1.01] active:scale-[0.99] transition-all"
-          >
-            {editingTenant ? "আপডেট করুন" : "প্রতিষ্ঠান সংরক্ষণ করুন"}
+          <button type="submit" className="w-full bg-[#6f42c1] text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-purple-500/20 hover:scale-[1.01] active:scale-[0.99] transition-all">
+            {editingTenant ? "আপডেট নিশ্চিত করুন" : "প্রতিষ্ঠান যোগ করুন"}
           </button>
 
           {editingTenant && (
             <button 
               type="button"
-              onClick={() => toggleStatus(editingTenant as Tenant)}
-              className={cn(
-                "w-full py-3 rounded-xl border font-bold text-xs uppercase tracking-widest transition-all",
-                editingTenant.status === "active" 
-                  ? "border-orange-100 text-orange-500 bg-orange-50 hover:bg-orange-100" 
-                  : "border-green-100 text-green-500 bg-green-50 hover:bg-green-100"
-              )}
+              onClick={() => handleHardDelete(editingTenant as Tenant)}
+              className="w-full py-4 rounded-2xl border border-red-100 bg-red-50 text-red-500 font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-red-100 transition-all"
             >
-              {editingTenant.status === "active" ? "Suspend Institute" : "Activate Institute"}
+              <Trash2 className="w-4 h-4" /> এই প্রতিষ্ঠানটি চিরতরে মুছে ফেলুন
             </button>
           )}
         </form>

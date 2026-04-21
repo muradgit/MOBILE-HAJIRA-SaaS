@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { auth } from "@/src/lib/firebase";
+import { auth, db } from "@/src/lib/firebase";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { toast } from "sonner";
 import { 
   ShieldCheck, 
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
 import { cn } from "@/src/lib/utils";
+import { useUserStore } from "@/src/store/useUserStore";
 
 type Role = "InstitutionAdmin" | "Teacher" | "Student";
 
@@ -45,6 +47,7 @@ export default function RegisterPage() {
   const [searching, setSearching] = useState(false);
   
   const router = useRouter();
+  const setUser = useUserStore((state) => state.setUser);
 
   useEffect(() => {
     setShowDept(
@@ -118,16 +121,87 @@ export default function RegisterPage() {
       }
     }
 
-    // Save to localStorage temporarily
-    localStorage.setItem("pendingRegistration", JSON.stringify(data));
-    
     setLoading(true);
+    const toastId = toast.loading("রেজিস্ট্রেশন প্রসেস হচ্ছে...");
+
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      // ClientLayout will handle the Firestore record creation upon auth change
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      // Check if user document already exists
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        toast.error("আপনার ইমেইল দিয়ে অলরেডি অ্যাকাউন্ট আছে। সরাসরি লগইন করুন।", { id: toastId });
+        router.push("/auth/login");
+        return;
+      }
+
+      // 1. Create Tenant (if InstitutionAdmin)
+      let finalTenantId = data.tenant_id;
+      if (activeRole === "InstitutionAdmin") {
+        finalTenantId = `tenant_${user.uid}`;
+        await setDoc(doc(db, "tenants", finalTenantId), {
+          tenant_id: finalTenantId,
+          name: data.institutionNameEN,
+          nameBN: data.institutionNameBN,
+          eiin: data.eiin,
+          institutionType: data.institutionType,
+          academicLevels: data.academicLevels,
+          department: data.department || "",
+          owner_email: user.email,
+          admin_name: data.name,
+          phone: data.phone,
+          credits_left: 100, // Bonus credits for new institute
+          status: "active",
+          created_at: serverTimestamp(),
+        });
+      }
+
+      // 2. Create User Profile 
+      const userData = {
+        user_id: user.uid,
+        email: user.email,
+        name: data.name,
+        nameBN: data.nameBN,
+        phone: data.phone,
+        role: activeRole,
+        tenant_id: finalTenantId,
+        status: activeRole === "InstitutionAdmin" ? "approved" : "pending",
+        profile_image: user.photoURL,
+        created_at: serverTimestamp(),
+      };
+
+      if (activeRole === "Student") {
+        Object.assign(userData, {
+          class: data.class,
+          department: data.department,
+          session: data.session
+        });
+      }
+
+      await setDoc(userRef, userData);
+      
+      // Update global store
+      setUser(userData as any);
+
+      toast.success("নিবন্ধন সফল হয়েছে!", { id: toastId });
+
+      // 3. Clear pending if any and redirect
+      localStorage.removeItem("pendingRegistration");
+
+      const dashboardMap: Record<string, string> = {
+        InstitutionAdmin: "/admin/dashboard",
+        Teacher: "/teacher/dashboard",
+        Student: "/student/dashboard",
+      };
+      
+      router.push(dashboardMap[activeRole] || "/");
+
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error("রেজিস্ট্রেশন ব্যর্থ: " + (error.message || "Unknown error"), { id: toastId });
     } finally {
       setLoading(false);
     }
