@@ -11,7 +11,7 @@ import {
   signOut,
   signInWithEmailAndPassword 
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { toast } from "sonner";
 import { ShieldCheck, AlertCircle, Loader2, Mail, Lock } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
@@ -56,72 +56,99 @@ export default function LoginPage() {
   };
 
   const processLogin = async (uid: string) => {
-    // Check if user exists in Firestore
-    const userDoc = await getDoc(doc(db, "users", uid));
+    const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
+    const currentEmail = auth.currentUser?.email;
     
+    // 1. Fetch user data from Firestore
+    let userDoc = await getDoc(doc(db, "users", uid));
+    let userData: UserData;
+
     if (!userDoc.exists()) {
-      await signOut(auth);
-      setErrorMsg(
-        <div className="space-y-4">
-          <p className="text-red-600 font-bold">আপনার এই অ্যাকাউন্টটি আমাদের ডাটাবেজে পাওয়া যায়নি।</p>
-          <p className="text-sm text-gray-600">অনুগ্রহ করে প্রথমে রেজিস্ট্রেশন করুন।</p>
-          <Link 
-            href="/auth/register"
-            className="block w-full bg-[#6f42c1] text-white py-3 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-[#59359a] text-center"
-          >
-            রেজিস্ট্রেশন করুন
-          </Link>
-        </div>
-      );
-      return;
+      // If user doesn't exist, check if they should be SuperAdmin based on email
+      if (currentEmail === superAdminEmail) {
+        userData = {
+          user_id: uid,
+          tenant_id: "SUPER_ADMIN",
+          role: "SuperAdmin",
+          name: auth.currentUser?.displayName || "Super Admin",
+          nameBN: "সুপার এডমিন",
+          email: currentEmail,
+          status: "approved",
+          created_at: new Date().toISOString()
+        };
+        await setDoc(doc(db, "users", uid), {
+          ...userData,
+          created_at: serverTimestamp()
+        });
+      } else {
+        // Not a super admin and doesn't exist? They must register first.
+        await signOut(auth);
+        setErrorMsg(
+          <div className="space-y-4">
+            <p className="text-red-600 font-bold">আপনার এই অ্যাকাউন্টটি আমাদের ডাটাবেজে পাওয়া যায়নি।</p>
+            <p className="text-sm text-gray-600">অনুগ্রহ করে প্রথমে রেজিস্ট্রেশন করুন।</p>
+            <Link 
+              href="/auth/register"
+              className="block w-full bg-[#6f42c1] text-white py-3 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-[#59359a] text-center"
+            >
+              রেজিস্ট্রেশন করুন
+            </Link>
+          </div>
+        );
+        return;
+      }
+    } else {
+      userData = userDoc.data() as UserData;
     }
 
-    const userData = userDoc.data() as UserData;
-    const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
-    
-    // Override role if it's the super admin email
-    const finalRole = auth.currentUser?.email === superAdminEmail ? "SuperAdmin" : userData.role;
+    // 2. Resolve Role
+    const finalRole = currentEmail === superAdminEmail ? "SuperAdmin" : userData.role;
 
-    // Update Global Store
-    setUser({ ...userData, role: finalRole as any });
-
-    // Set session cookie (Non-blocking: if it fails, we still try to redirect)
+    // 3. Set session cookie (Safe background task)
     try {
-      await fetch("/api/auth/session", {
+      fetch("/api/auth/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: finalRole, userId: userData.user_id }),
+        body: JSON.stringify({ role: finalRole, userId: uid }),
       });
     } catch (err) {
-      console.error("Session creation failed:", err);
+      console.error("Session Error:", err);
     }
 
-    // Check for approval if Teacher or Student
-    if ((finalRole === "Teacher" || finalRole === "Student") && userData.status !== "approved") {
-      // Fetch tenant to get admin info
-      const tenantDoc = await getDoc(doc(db, "tenants", userData.tenant_id));
-      const tenantData = tenantDoc.exists() ? tenantDoc.data() as Tenant : null;
-      
-      await signOut(auth);
-      setErrorMsg(
-        <div className="space-y-4">
-          <p className="text-red-600 font-bold">আপনার একাউন্টটি এখনো Institute Admin দ্বারা এপ্রুভ হয়নি।</p>
-          {tenantData && (
-            <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-left">
-              <p className="text-xs font-bold text-gray-400 uppercase mb-2">যোগাযোগ করুন:</p>
-              <p className="font-bold text-gray-800">{tenantData.admin_name}</p>
-              <p className="text-sm text-gray-600">Institute Admin</p>
-              {tenantData.admin_mobile && <p className="text-sm text-gray-600">মোবাইল: {tenantData.admin_mobile}</p>}
-            </div>
-          )}
-        </div>
-      );
-      return;
+    // 4. Approval Check (Teachers & Students)
+    if (finalRole !== "SuperAdmin" && finalRole !== "InstitutionAdmin") {
+      if (userData.status !== "approved") {
+        const tenantDoc = await getDoc(doc(db, "tenants", userData.tenant_id));
+        const tenantData = tenantDoc.exists() ? tenantDoc.data() as Tenant : null;
+        
+        await signOut(auth);
+        setErrorMsg(
+          <div className="space-y-4 font-bengali">
+            <p className="text-red-600 font-bold">আপনার অ্যাকাউন্টটি এখনো অ্যাপ্রুভ হয়নি।</p>
+            {tenantData && (
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-left">
+                <p className="text-[10px] uppercase font-black text-gray-400 mb-1">যোগাযোগ করুন:</p>
+                <p className="font-bold text-gray-800">{tenantData.admin_name || tenantData.name}</p>
+                <p className="text-xs text-gray-500">Institute Admin</p>
+                {tenantData.admin_mobile && <p className="text-xs text-purple-600 mt-1">Mobile: {tenantData.admin_mobile}</p>}
+              </div>
+            )}
+          </div>
+        );
+        return;
+      }
     }
 
-    // Role-Based Redirection Block (Robust Normalization)
-    const normalizedRole = finalRole?.toLowerCase().replace(/\s+/g, "");
+    /** 
+     * 5. CRITICAL: Update STATE before REDIRECTION
+     * Normalize role for route mapping 
+     */
+    const normalizedRole = finalRole.toLowerCase().replace(/\s+/g, "");
     
+    // Sync store
+    setUser({ ...userData, role: finalRole as any });
+
+    // 6. Redirect with absolute path mapping
     if (normalizedRole === "superadmin") {
       router.push("/super-admin/dashboard");
     } else if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {

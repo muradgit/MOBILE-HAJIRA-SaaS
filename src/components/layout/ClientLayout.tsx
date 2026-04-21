@@ -109,15 +109,19 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       return "/super-admin/dashboard";
     }
 
+    // Explicitly mapping all Admin variations to /admin/dashboard
     if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
       return "/admin/dashboard";
     }
+    
     if (normalizedRole === "teacher") {
       return "/teacher/dashboard";
     }
+    
     if (normalizedRole === "student") {
       return "/student/dashboard";
     }
+    
     return "/";
   };
 

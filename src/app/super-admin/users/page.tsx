@@ -21,7 +21,9 @@ import {
   UserCheck, 
   UserX, 
   Mail,
-  Building 
+  Building,
+  AlertTriangle,
+  ExternalLink 
 } from "lucide-react";
 import { DataTable } from "@/src/components/shared/DataTable";
 import { SlideOverForm } from "@/src/components/shared/SlideOverForm";
@@ -37,6 +39,7 @@ export default function UserManagement() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [tenantsMap, setTenantsMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [indexError, setIndexError] = useState<string | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
 
@@ -51,14 +54,18 @@ export default function UserManagement() {
     if (userData?.role !== "SuperAdmin") return;
 
     const fetchTenants = async () => {
-      const q = query(collection(db, "tenants"));
-      const snapshot = await getDocs(q);
-      const mapping: Record<string, string> = { "SUPER_ADMIN": "System Owner" };
-      snapshot.forEach(doc => {
-        const data = doc.data() as Tenant;
-        mapping[data.tenant_id] = data.name;
-      });
-      setTenantsMap(mapping);
+      try {
+        const q = query(collection(db, "tenants"));
+        const snapshot = await getDocs(q);
+        const mapping: Record<string, string> = { "SUPER_ADMIN": "System Owner" };
+        snapshot.forEach(doc => {
+          const data = doc.data() as Tenant;
+          mapping[data.tenant_id] = data.name;
+        });
+        setTenantsMap(mapping);
+      } catch (error) {
+        console.error("Tenant Fetch Error:", error);
+      }
     };
 
     fetchTenants();
@@ -68,19 +75,35 @@ export default function UserManagement() {
   useEffect(() => {
     if (userData?.role !== "SuperAdmin") return;
 
-    const q = query(
-      collection(db, "users"), 
-      orderBy("created_at", "desc"), 
-      limit(100)
-    );
+    try {
+      const q = query(
+        collection(db, "users"), 
+        orderBy("created_at", "desc"), 
+        limit(100)
+      );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const usersData = snapshot.docs.map(doc => doc.data() as UserData);
-      setUsers(usersData);
+      const unsubscribe = onSnapshot(q, 
+        (snapshot) => {
+          const usersData = snapshot.docs.map(doc => doc.data() as UserData);
+          setUsers(usersData);
+          setLoading(false);
+          setIndexError(null);
+        },
+        (error) => {
+          console.error("Firestore Error:", error);
+          if (error.message.includes("index")) {
+            const url = error.message.match(/https:\/\/console\.firebase\.google\.com[^\s]*/)?.[0];
+            setIndexError(url || "Index Required");
+          }
+          setLoading(false);
+        }
+      );
+
+      return () => unsubscribe();
+    } catch (err: any) {
+      console.error("Query Init Error:", err);
       setLoading(false);
-    });
-
-    return () => unsubscribe();
+    }
   }, [userData]);
 
   // 3. Handle Update User
@@ -210,6 +233,21 @@ export default function UserManagement() {
           <div className="py-20 flex flex-col items-center justify-center text-gray-400 gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-[#6f42c1]" />
             <p className="text-sm font-bold animate-pulse">ইউজার লিস্ট লোড হচ্ছে...</p>
+          </div>
+        ) : indexError ? (
+          <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
+             <AlertTriangle className="w-16 h-16 text-orange-500" />
+             <div className="space-y-1">
+                <h3 className="text-lg font-black text-gray-900 font-bengali tracking-tight">ডাটাবেজ ইনডেক্স প্রয়োজন</h3>
+                <p className="text-sm text-gray-500 font-medium">ইউজার লিস্ট দেখার জন্য আপনাকে একটি ফায়ারবেস ইনডেক্স তৈরি করতে হবে।</p>
+             </div>
+             <a 
+               href={indexError} 
+               target="_blank" 
+               className="bg-orange-500 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20"
+             >
+               Database Index Setup Required - Click here to fix <ExternalLink className="w-4 h-4" />
+             </a>
           </div>
         ) : (
           <DataTable 
