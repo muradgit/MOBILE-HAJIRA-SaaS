@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/src/lib/firebase"; // Assuming server-side firebase is handled or use admin sdk
-// For simplicity in this demo environment, we will mock the backend logic 
-// but in real production, you'd use firebase-admin and googleapis
+import { adminDb } from "@/src/lib/firebase-admin";
+import { createInstitutionSheet } from "@/src/lib/google-sheets";
 
 /**
  * API Route: /api/onboarding/setup-sheet
@@ -15,27 +14,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
     }
 
-    // --- REAL PRODUCTION LOGIC FLOW ---
-    // 1. Authenticate Service Account using googleapis
-    // 2. Create a new Google Sheet named: `MH_SaaS_${tenantId}`
-    // 3. Share the sheet with `adminEmail` as 'editor'
-    // 4. Initialize Sheet structure (Tabs: Attendance, Students, Teachers, etc.)
-    // 5. Update the `tenants/{tenantId}` document in Firestore with the new `googleSheetId`
-    // ----------------------------------
+    // 1. Get Tenant details for naming the sheet
+    const tenantRef = adminDb.collection("tenants").doc(tenantId);
+    const tenantDoc = await tenantRef.get();
+    
+    if (!tenantDoc.exists) {
+      return NextResponse.json({ error: "Institution not found" }, { status: 404 });
+    }
 
-    // MOCK RESPONSE: Simulate a delay and return success
-    // In AI Studio, we can't run the full server-side OAuth flow without actual creds,
-    // so we simulate the result to show the front-end transition.
+    const tenantData = tenantDoc.data();
+    const sheetName = tenantData?.name || tenantId;
+
+    // 2. Create the Google Sheet and share it
+    // Note: If credentials are missing, this will throw an error now instead of silent mock success.
+    let googleSheetId: string;
     
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // NOTE: In a real implementation, you'd perform the Firestore update server-side.
-    // For this prototype, we return a mock success.
+    try {
+      googleSheetId = await createInstitutionSheet(sheetName, adminEmail);
+    } catch (sheetError: any) {
+      console.error("Sheet Creation Failed:", sheetError);
+      
+      // Fallback for demo: If service account is NOT configured, we might still want to allow proceeding in AI Studio
+      // but the user's specific complaint is that nothing happened.
+      // I will return a 500 error if it fails so the user knows WHY.
+      return NextResponse.json({ 
+        error: `গুগল শীট তৈরি করা সম্ভব হয়নি। কারিগরি সমস্যা: ${sheetError.message}` 
+      }, { status: 500 });
+    }
+
+    // 3. Update the `tenants/{tenantId}` document in Firestore
+    await tenantRef.update({
+      googleSheetId: googleSheetId,
+      setupCompleted: true,
+      updated_at: new Date().toISOString()
+    });
     
     return NextResponse.json({ 
       success: true, 
       message: "System setup completed successfully",
-      googleSheetId: "1_mock_sheet_id_from_server" 
+      googleSheetId: googleSheetId 
     });
 
   } catch (error: any) {
