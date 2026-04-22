@@ -5,32 +5,44 @@ import { google } from "googleapis";
  * Handles sheet creation and reverse sharing.
  */
 export async function createInstitutionSheet(tenantName: string, adminEmail: string) {
-  const serviceAccountVar = process.env.GOOGLE_SERVICE_ACCOUNT;
-  const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  
-  let clientEmail: string;
-  let finalPrivateKey: string;
+  let clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "";
+  let privateKey = process.env.GOOGLE_PRIVATE_KEY || "";
 
-  if (serviceAccountVar) {
-    const creds = JSON.parse(serviceAccountVar);
-    clientEmail = creds.client_email;
-    finalPrivateKey = creds.private_key;
-  } else if (serviceAccountEmail && privateKey) {
-    clientEmail = serviceAccountEmail.trim();
-    finalPrivateKey = privateKey;
-  } else {
+  // 1. If the user provided the full service account JSON in any of the vars, extract it
+  const serviceAccountVar = process.env.GOOGLE_SERVICE_ACCOUNT;
+  if (serviceAccountVar && serviceAccountVar.trim().startsWith('{')) {
+    try {
+      const creds = JSON.parse(serviceAccountVar);
+      clientEmail = creds.client_email;
+      privateKey = creds.private_key;
+    } catch (e) {
+      console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT as JSON");
+    }
+  } else if (privateKey.trim().startsWith('{')) {
+    try {
+      const parsedKey = JSON.parse(privateKey);
+      if (parsedKey.private_key) {
+        privateKey = parsedKey.private_key;
+        if (parsedKey.client_email) clientEmail = parsedKey.client_email;
+      }
+    } catch (e) {
+      console.error("Failed to parse private key environment variable as JSON");
+    }
+  }
+
+  if (!clientEmail || !privateKey) {
     console.warn("Google Service Account credentials missing.");
     throw new Error("গুগল সার্ভিস অ্যাকাউন্ট (Service Account) কনফিগার করা নেই। অনুগ্রহ করে .env ফাইল চেক করুন।");
   }
 
   try {
-    // Robustly handle private key newlines for Vercel/Env var compatibility
-    // Some env var managers escape the \n differently.
-    const cleanPrivateKey = finalPrivateKey
-      .replace(/\\n/g, "\n")
-      .replace(/"/g, "") // Remove accidental quotes
-      .trim();
+    // 2. Ultra-robust deep clean for OpenSSL compatibility
+    const cleanPrivateKey = privateKey
+      .replace(/^"|"$/g, '')          // Remove surrounding quotes if Vercel added them
+      .split('\\n').join('\n')        // Force replace literal '\n' text with actual line breaks
+      .trim();                        // Remove trailing whitespace
+
+    console.log("Initializing Google Auth with clean private key...");
 
     const auth = new google.auth.JWT(
       clientEmail,
