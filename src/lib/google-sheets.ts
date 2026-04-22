@@ -17,7 +17,7 @@ export async function createInstitutionSheet(tenantName: string, adminEmail: str
     clientEmail = creds.client_email;
     finalPrivateKey = creds.private_key;
   } else if (serviceAccountEmail && privateKey) {
-    clientEmail = serviceAccountEmail;
+    clientEmail = serviceAccountEmail.trim();
     finalPrivateKey = privateKey;
   } else {
     console.warn("Google Service Account credentials missing.");
@@ -26,7 +26,11 @@ export async function createInstitutionSheet(tenantName: string, adminEmail: str
 
   try {
     // Robustly handle private key newlines for Vercel/Env var compatibility
-    const cleanPrivateKey = finalPrivateKey.replace(/\\n/g, "\n");
+    // Some env var managers escape the \n differently.
+    const cleanPrivateKey = finalPrivateKey
+      .replace(/\\n/g, "\n")
+      .replace(/"/g, "") // Remove accidental quotes
+      .trim();
 
     const auth = new google.auth.JWT(
       clientEmail,

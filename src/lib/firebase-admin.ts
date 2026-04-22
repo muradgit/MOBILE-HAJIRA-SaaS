@@ -23,7 +23,10 @@ if (!admin.apps || admin.apps.length === 0) {
       
       // Fix for Vercel/Env var newline escaping
       if (parsedServiceAccount.private_key) {
-        parsedServiceAccount.private_key = parsedServiceAccount.private_key.replace(/\\n/g, "\n");
+        parsedServiceAccount.private_key = parsedServiceAccount.private_key
+          .replace(/\\n/g, "\n")
+          .replace(/"/g, "")
+          .trim();
       }
 
       admin.initializeApp({
