@@ -25,10 +25,13 @@ export async function createInstitutionSheet(tenantName: string, adminEmail: str
   }
 
   try {
+    // Robustly handle private key newlines for Vercel/Env var compatibility
+    const cleanPrivateKey = finalPrivateKey.replace(/\\n/g, "\n");
+
     const auth = new google.auth.JWT(
       clientEmail,
       undefined,
-      finalPrivateKey.replace(/\\n/g, "\n"),
+      cleanPrivateKey,
       [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive.file"

@@ -20,11 +20,18 @@ if (!admin.apps || admin.apps.length === 0) {
   if (serviceAccount) {
     try {
       const parsedServiceAccount = JSON.parse(serviceAccount);
+      
+      // Fix for Vercel/Env var newline escaping
+      if (parsedServiceAccount.private_key) {
+        parsedServiceAccount.private_key = parsedServiceAccount.private_key.replace(/\\n/g, "\n");
+      }
+
       admin.initializeApp({
         credential: admin.credential.cert(parsedServiceAccount),
         databaseURL: projectId ? `https://${projectId}.firebaseio.com` : undefined
       });
     } catch (e) {
+      console.error("Firebase Admin JSON Parse/Init Error:", e);
       admin.initializeApp({ projectId });
     }
   } else {
