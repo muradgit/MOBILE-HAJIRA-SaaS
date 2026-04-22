@@ -5,54 +5,36 @@ import { google } from "googleapis";
  * Handles sheet creation and reverse sharing.
  */
 export async function createInstitutionSheet(tenantName: string, adminEmail: string) {
-  let clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "";
-  let privateKey = process.env.GOOGLE_PRIVATE_KEY || "";
-
-  // 1. If the user provided the full service account JSON in any of the vars, extract it
-  const serviceAccountVar = process.env.GOOGLE_SERVICE_ACCOUNT;
-  if (serviceAccountVar && serviceAccountVar.trim().startsWith('{')) {
-    try {
-      const creds = JSON.parse(serviceAccountVar);
-      clientEmail = creds.client_email;
-      privateKey = creds.private_key;
-    } catch (e) {
-      console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT as JSON");
-    }
-  } else if (privateKey.trim().startsWith('{')) {
-    try {
-      const parsedKey = JSON.parse(privateKey);
-      if (parsedKey.private_key) {
-        privateKey = parsedKey.private_key;
-        if (parsedKey.client_email) clientEmail = parsedKey.client_email;
-      }
-    } catch (e) {
-      console.error("Failed to parse private key environment variable as JSON");
-    }
-  }
-
-  if (!clientEmail || !privateKey) {
-    console.warn("Google Service Account credentials missing.");
+  const credentialsRaw = process.env.GOOGLE_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT;
+  
+  if (!credentialsRaw) {
+    console.warn("GOOGLE_CREDENTIALS_JSON environment variable is missing.");
     throw new Error("গুগল সার্ভিস অ্যাকাউন্ট (Service Account) কনফিগার করা নেই। অনুগ্রহ করে .env ফাইল চেক করুন।");
   }
 
   try {
-    // 2. Ultra-robust deep clean for OpenSSL compatibility
-    const cleanPrivateKey = privateKey
-      .replace(/^"|"$/g, '')          // Remove surrounding quotes if Vercel added them
-      .split('\\n').join('\n')        // Force replace literal '\n' text with actual line breaks
-      .trim();                        // Remove trailing whitespace
+    const credentials = JSON.parse(credentialsRaw);
+    
+    // Standardize private key just in case, though GoogleAuth is usually better at this
+    if (credentials.private_key) {
+      credentials.private_key = credentials.private_key
+        .replace(/\\n/g, '\n')
+        .replace(/^"|"$/g, '')
+        .trim();
+    }
 
-    console.log("Initializing Google Auth with clean private key...");
+    console.log("Initializing Google Auth via JSON Credentials...");
 
-    const auth = new google.auth.JWT(
-      clientEmail,
-      undefined,
-      cleanPrivateKey,
-      [
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: credentials.client_email,
+        private_key: credentials.private_key,
+      },
+      scopes: [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive.file"
-      ]
-    );
+      ],
+    });
 
     const sheets = google.sheets({ version: "v4", auth });
     const drive = google.drive({ version: "v3", auth });
