@@ -9,27 +9,31 @@ export async function createInstitutionSheet(tenantName: string, adminEmail: str
   const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
   
-  let credentials;
+  let clientEmail: string;
+  let finalPrivateKey: string;
+
   if (serviceAccountVar) {
-    credentials = JSON.parse(serviceAccountVar);
+    const creds = JSON.parse(serviceAccountVar);
+    clientEmail = creds.client_email;
+    finalPrivateKey = creds.private_key;
   } else if (serviceAccountEmail && privateKey) {
-    credentials = {
-      client_email: serviceAccountEmail,
-      private_key: privateKey,
-    };
+    clientEmail = serviceAccountEmail;
+    finalPrivateKey = privateKey;
   } else {
-    console.warn("Google Google Service Account credentials missing.");
+    console.warn("Google Service Account credentials missing.");
     throw new Error("গুগল সার্ভিস অ্যাকাউন্ট (Service Account) কনফিগার করা নেই। অনুগ্রহ করে .env ফাইল চেক করুন।");
   }
 
   try {
-    const auth = new google.auth.GoogleAuth({
-      credentials,
-      scopes: [
+    const auth = new google.auth.JWT(
+      clientEmail,
+      undefined,
+      finalPrivateKey.replace(/\\n/g, "\n"),
+      [
         "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-      ],
-    });
+        "https://www.googleapis.com/auth/drive.file"
+      ]
+    );
 
     const sheets = google.sheets({ version: "v4", auth });
     const drive = google.drive({ version: "v3", auth });
