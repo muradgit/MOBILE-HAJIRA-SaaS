@@ -23,19 +23,18 @@ export async function createInstitutionSheet(tenantName: string, adminEmail: str
         .trim();
     }
 
-    console.log("Initializing Google Auth via JSON Credentials...");
+    console.log("Using Service Account Email:", credentials.client_email);
+    console.log("Initializing Google Auth via JWT...");
 
-    const auth = new google.auth.GoogleAuth({
-      projectId: credentials.project_id,
-      credentials: {
-        client_email: credentials.client_email,
-        private_key: credentials.private_key,
-      },
-      scopes: [
+    const auth = new google.auth.JWT(
+      credentials.client_email,
+      undefined,
+      credentials.private_key,
+      [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
-      ],
-    });
+      ]
+    );
 
     const sheets = google.sheets({ version: "v4", auth });
     const drive = google.drive({ version: "v3", auth });
