@@ -58,19 +58,12 @@ export async function createInstitutionSheet(tenantName: string, adminEmail: str
     } catch (apiError: any) {
       console.error("Sheets API Error Detail:", JSON.stringify(apiError, null, 2));
       
-      const isPermissionError = 
-        apiError.code === 403 || 
-        apiError.status === 403 ||
-        JSON.stringify(apiError).toLowerCase().includes("permission") ||
-        JSON.stringify(apiError).toLowerCase().includes("forbidden");
+      // Extract the most descriptive error message from Google
+      const rawErrorMessage = apiError?.response?.data?.error?.message 
+                           || apiError?.message 
+                           || JSON.stringify(apiError);
 
-      if (isPermissionError) {
-        throw new Error(
-          "গুগল শীট এপিআই (Google Sheets API) আপনার গুগল ক্লাউড প্রজেক্টে এনাবল করা নেই অথবা সার্ভিস অ্যাকাউন্টের পর্যাপ্ত পারমিশন নেই। " +
-          "অনুগ্রহ করে গুগল ক্লাউড কনসোল (console.cloud.google.com) থেকে 'Google Sheets API' এনাবল করুন এবং সার্ভিস অ্যাকাউন্টকে 'Editor' রোল দিন।"
-        );
-      }
-      throw apiError;
+      throw new Error(`Google API Raw Error: ${rawErrorMessage}`);
     }
 
     if (!spreadsheetId) {
