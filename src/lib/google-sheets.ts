@@ -26,13 +26,14 @@ export async function createInstitutionSheet(tenantName: string, adminEmail: str
     console.log("Initializing Google Auth via JSON Credentials...");
 
     const auth = new google.auth.GoogleAuth({
+      projectId: credentials.project_id,
       credentials: {
         client_email: credentials.client_email,
         private_key: credentials.private_key,
       },
       scopes: [
         "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive.file"
+        "https://www.googleapis.com/auth/drive"
       ],
     });
 
@@ -80,6 +81,7 @@ export async function createInstitutionSheet(tenantName: string, adminEmail: str
     try {
       await drive.permissions.create({
         fileId: spreadsheetId,
+        sendNotificationEmail: false, // Critical for Service Accounts without domain-wide delegation
         requestBody: {
           role: "writer",
           type: "user",
@@ -95,11 +97,12 @@ export async function createInstitutionSheet(tenantName: string, adminEmail: str
         JSON.stringify(shareError).toLowerCase().includes("permission");
 
       if (isDrivePermissionError) {
-        // We log this but don't strictly fail, as the sheet is created.
-        // However, we should inform the user that sharing failed.
-        console.warn("Google Drive API is likely not enabled. Sharing failed.");
+        throw new Error(
+          "গুগল ড্রাইভ এপিআই (Google Drive API) পারমিশন এরর। অনুগ্রহ করে গুগল ক্লাউড কনসোল থেকে " +
+          "'Google Drive API' এনাবল করুন এবং আপনার সার্ভিস অ্যাকাউন্টকে 'Editor' রোল দিন।"
+        );
       }
-      // Note: We don't throw here to allow the process to proceed if the sheet was created
+      throw shareError;
     }
 
     return spreadsheetId;
