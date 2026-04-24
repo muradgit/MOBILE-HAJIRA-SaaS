@@ -76,8 +76,40 @@ export async function createInstitutionSheet(
     );
   }
 
-  const sheets = google.sheets({ version: "v4", auth });
-  const drive = google.drive({ version: "v3", auth });
+  const sheets = google.sheets({ 
+    version: "v4", 
+    auth,
+    params: { quotaUser: adminEmail } 
+  });
+  
+  const drive = google.drive({ 
+    version: "v3", 
+    auth,
+    params: { quotaUser: adminEmail }
+  });
+
+  // Helper for retry logic
+  const withRetry = async <T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> => {
+    let lastError: any;
+    for (let i = 0; i <= maxRetries; i++) {
+      try {
+        return await fn();
+      } catch (err: any) {
+        lastError = err;
+        const errMsg = err?.response?.data?.error?.message || err?.message || "";
+        const isQuotaError = errMsg.toLowerCase().includes("quota") || err?.response?.status === 403;
+        
+        if (isQuotaError && i < maxRetries) {
+          const delay = Math.pow(2, i) * 1000;
+          console.warn(`[Sheets] Quota/403 error. Retrying in ${delay}ms... (${i + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        break;
+      }
+    }
+    throw lastError;
+  };
 
   // 5. Create the Spreadsheet inside the Shared Folder
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
@@ -87,23 +119,24 @@ export async function createInstitutionSheet(
 
   let spreadsheetId: string;
   try {
-    console.log(`Calling drive.files.create to create sheet inside folder: ${folderId}...`);
+    console.log(`Calling drive.files.create to create sheet inside folder: ${folderId} (quotaUser: ${adminEmail})...`);
+    
     const fileMetadata = {
       name: `MH_${tenantName}_${new Date().getFullYear()}`,
       mimeType: 'application/vnd.google-apps.spreadsheet',
       parents: [folderId]
     };
 
-    const file = await drive.files.create({
+    const file = await withRetry(() => drive.files.create({
       requestBody: fileMetadata,
       fields: 'id',
-    });
+    }));
 
     spreadsheetId = file.data.id!;
     console.log("Spreadsheet created with ID:", spreadsheetId);
 
     // Setup the 5 default tabs (A new sheet has "Sheet1" by default)
-    await sheets.spreadsheets.batchUpdate({
+    await withRetry(() => sheets.spreadsheets.batchUpdate({
       spreadsheetId,
       requestBody: {
         requests: [
@@ -114,27 +147,26 @@ export async function createInstitutionSheet(
           { addSheet: { properties: { title: "Payment History", index: 4 } } },
         ]
       }
-    });
+    }));
 
     console.log(`[Sheets] Tabs initialized for: ${spreadsheetId}`);
   } catch (apiError: any) {
     console.error("Sheets/Drive API Error Detail:", JSON.stringify(apiError, null, 2));
     const rawErrorMessage = apiError?.response?.data?.error?.message || apiError?.message || JSON.stringify(apiError);
-    throw new Error(`Google API Raw Error: ${rawErrorMessage}`);
+    throw new Error(`Google API Raw Error (Quota/Permission): ${rawErrorMessage}`);
   }
 
-  // 6. Share with admin — Fix: try with notification first, fallback without
+  // 6. Share with admin ──────────────────────────────────────────────────────
   try {
-    await drive.permissions.create({
+    await withRetry(() => drive.permissions.create({
       fileId: spreadsheetId,
-      // Fix: sendNotificationEmail: true is more permissive; false can cause 403
       sendNotificationEmail: false,
       requestBody: {
         role: "writer",
         type: "user",
         emailAddress: adminEmail,
       },
-    });
+    }));
     console.log(`[Sheets] Shared with ${adminEmail}`);
   } catch (shareErr: any) {
     const shareErrMsg = shareErr?.response?.data?.error?.message || shareErr?.message || "";

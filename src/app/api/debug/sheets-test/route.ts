@@ -6,7 +6,7 @@ import { google } from "googleapis";
  * Tests each step of Google API access individually.
  * Visit: /api/debug/sheets-test
  */
-export async function GET() {
+export async function GET(req: Request) {
   const results: Record<string, any> = {
     step1_env: null,
     step2_parse: null,
@@ -79,6 +79,9 @@ export async function GET() {
   }
 
   // ── Step 4: Authenticate with Google ──────────────────────────────────────
+  const { searchParams } = new URL(req.url);
+  const testEmail = searchParams.get("email") || "hello@muradkhank31.com"; // Default for debug
+
   const auth = new google.auth.JWT({
     email: credentials.client_email,
     key: privateKey,
@@ -94,6 +97,7 @@ export async function GET() {
       ok: true,
       token_type: token.token_type,
       expires: token.expiry_date,
+      quotaUserUsed: testEmail,
       message: "Auth সফল — Service account valid",
     };
   } catch (authErr: any) {
@@ -111,7 +115,12 @@ export async function GET() {
   }
 
   // ── Step 5: Test Drive API (list files — minimal permission needed) ────────
-  const drive = google.drive({ version: "v3", auth });
+  const drive = google.drive({ 
+    version: "v3", 
+    auth, 
+    params: { quotaUser: testEmail } 
+  });
+
   try {
     const driveRes = await drive.files.list({
       pageSize: 1,
@@ -140,7 +149,12 @@ export async function GET() {
 
   // ── Step 6: Test Sheets API create inside Folder ──────────────────────────
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-  const sheets = google.sheets({ version: "v4", auth });
+  const sheets = google.sheets({ 
+    version: "v4", 
+    auth,
+    params: { quotaUser: testEmail }
+  });
+
   try {
     if (!folderId) {
        throw new Error("GOOGLE_DRIVE_FOLDER_ID is missing in environment");
@@ -148,7 +162,7 @@ export async function GET() {
 
     const res = await drive.files.create({
       requestBody: {
-        name: "DEBUG_TEST_FOLDER_DELETE_ME",
+        name: "DEBUG_TEST_QUOTA_DELETE_ME",
         mimeType: 'application/vnd.google-apps.spreadsheet',
         parents: [folderId]
       },
@@ -158,8 +172,9 @@ export async function GET() {
     results.step6_sheetsCreate = {
       ok: true,
       folderIdConfigured: folderId,
+      quotaUserUsed: testEmail,
       spreadsheetId: res.data.id,
-      message: "✅ Sheet successfully created inside the shared folder! এই entry টি manually delete করুন।",
+      message: "✅ Sheet successfully created inside the shared folder with quotaUser check! এই entry টি manually delete করুন।",
     };
 
     return NextResponse.json({ success: true, results });
