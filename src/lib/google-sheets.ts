@@ -79,30 +79,48 @@ export async function createInstitutionSheet(
   const sheets = google.sheets({ version: "v4", auth });
   const drive = google.drive({ version: "v3", auth });
 
-  // 5. Create the Spreadsheet
+  // 5. Create the Spreadsheet inside the Shared Folder
+  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+  if (!folderId) {
+    throw new Error("GOOGLE_DRIVE_FOLDER_ID environment variable is missing.");
+  }
+
   let spreadsheetId: string;
   try {
-    const response = await sheets.spreadsheets.create({
-      requestBody: {
-        properties: {
-          title: `MH_${tenantName}_${new Date().getFullYear()}`,
-        },
-        sheets: [
-          { properties: { title: "Attendance Log", index: 0 } },
-          { properties: { title: "Students", index: 1 } },
-          { properties: { title: "Teachers", index: 2 } },
-          { properties: { title: "Settings", index: 3 } },
-          { properties: { title: "Payment History", index: 4 } },
-        ],
-      },
-      fields: "spreadsheetId",
+    console.log(`Calling drive.files.create to create sheet inside folder: ${folderId}...`);
+    const fileMetadata = {
+      name: `MH_${tenantName}_${new Date().getFullYear()}`,
+      mimeType: 'application/vnd.google-apps.spreadsheet',
+      parents: [folderId]
+    };
+
+    const file = await drive.files.create({
+      requestBody: fileMetadata,
+      fields: 'id',
     });
 
-    spreadsheetId = response.data.spreadsheetId!;
-    console.log(`[Sheets] Created spreadsheet: ${spreadsheetId}`);
-  } catch (err: any) {
-    const msg = err?.response?.data?.error?.message || err?.message || String(err);
-    throw new Error(`Spreadsheet তৈরি ব্যর্থ: ${msg}`);
+    spreadsheetId = file.data.id!;
+    console.log("Spreadsheet created with ID:", spreadsheetId);
+
+    // Setup the 5 default tabs (A new sheet has "Sheet1" by default)
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          { updateSheetProperties: { properties: { sheetId: 0, title: "Attendance Log", index: 0 }, fields: "title,index" } },
+          { addSheet: { properties: { title: "Students", index: 1 } } },
+          { addSheet: { properties: { title: "Teachers", index: 2 } } },
+          { addSheet: { properties: { title: "Settings", index: 3 } } },
+          { addSheet: { properties: { title: "Payment History", index: 4 } } },
+        ]
+      }
+    });
+
+    console.log(`[Sheets] Tabs initialized for: ${spreadsheetId}`);
+  } catch (apiError: any) {
+    console.error("Sheets/Drive API Error Detail:", JSON.stringify(apiError, null, 2));
+    const rawErrorMessage = apiError?.response?.data?.error?.message || apiError?.message || JSON.stringify(apiError);
+    throw new Error(`Google API Raw Error: ${rawErrorMessage}`);
   }
 
   // 6. Share with admin — Fix: try with notification first, fallback without

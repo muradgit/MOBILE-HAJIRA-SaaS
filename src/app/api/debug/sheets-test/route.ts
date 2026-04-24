@@ -138,21 +138,28 @@ export async function GET() {
     // Continue to step 6 anyway to get Sheets-specific error
   }
 
-  // ── Step 6: Test Sheets API create ────────────────────────────────────────
+  // ── Step 6: Test Sheets API create inside Folder ──────────────────────────
+  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
   const sheets = google.sheets({ version: "v4", auth });
   try {
-    const res = await sheets.spreadsheets.create({
+    if (!folderId) {
+       throw new Error("GOOGLE_DRIVE_FOLDER_ID is missing in environment");
+    }
+
+    const res = await drive.files.create({
       requestBody: {
-        properties: { title: "DEBUG_TEST_DELETE_ME" },
+        name: "DEBUG_TEST_FOLDER_DELETE_ME",
+        mimeType: 'application/vnd.google-apps.spreadsheet',
+        parents: [folderId]
       },
-      fields: "spreadsheetId,spreadsheetUrl",
+      fields: "id",
     });
 
     results.step6_sheetsCreate = {
       ok: true,
-      spreadsheetId: res.data.spreadsheetId,
-      url: res.data.spreadsheetUrl,
-      message: "✅ Sheet তৈরি সফল! এই sheet টি manually delete করুন।",
+      folderIdConfigured: folderId,
+      spreadsheetId: res.data.id,
+      message: "✅ Sheet successfully created inside the shared folder! এই entry টি manually delete করুন।",
     };
 
     return NextResponse.json({ success: true, results });
@@ -163,15 +170,14 @@ export async function GET() {
 
     results.step6_sheetsCreate = {
       ok: false,
+      folderIdConfigured: folderId || "MISSING",
       status,
       error: message,
       hint:
-        status === 403 && message?.includes("permission")
-          ? "❌ Google Sheets API আপনার Google Cloud Project-এ ENABLED নেই অথবা Service Account-এর project-level permission নেই। Console → APIs & Services → Enable 'Google Sheets API'"
+        status === 404
+          ? "❌ Folder ID খুঁজে পাওয়া যায়নি। Folder টি Delete করা হয়েছে কি?"
           : status === 403
-          ? "❌ 403 Forbidden — API enabled কিনা চেক করুন"
-          : status === 400
-          ? "Request format সমস্যা"
+          ? "❌ 403 Forbidden — Service Account-এর Folder-এ Access নেই। Folder টি share করেছেন কি?"
           : "Unknown error",
     };
 
