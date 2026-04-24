@@ -130,6 +130,7 @@ export async function createInstitutionSheet(
     const file = await withRetry(() => drive.files.create({
       requestBody: fileMetadata,
       fields: 'id',
+      supportsAllDrives: true,
     }));
 
     spreadsheetId = file.data.id!;
@@ -161,6 +162,7 @@ export async function createInstitutionSheet(
     await withRetry(() => drive.permissions.create({
       fileId: spreadsheetId,
       sendNotificationEmail: false,
+      supportsAllDrives: true,
       requestBody: {
         role: "writer",
         type: "user",
@@ -177,6 +179,7 @@ export async function createInstitutionSheet(
       await drive.permissions.create({
         fileId: spreadsheetId,
         sendNotificationEmail: true,
+        supportsAllDrives: true,
         requestBody: {
           role: "writer",
           type: "user",

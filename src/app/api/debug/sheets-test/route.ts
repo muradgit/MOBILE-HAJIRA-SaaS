@@ -167,6 +167,7 @@ export async function GET(req: Request) {
         parents: [folderId]
       },
       fields: "id",
+      supportsAllDrives: true,
     });
 
     results.step6_sheetsCreate = {
