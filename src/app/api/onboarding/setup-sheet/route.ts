@@ -2,73 +2,78 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/src/lib/firebase-admin";
 import { createInstitutionSheet } from "@/src/lib/google-sheets";
 
-/**
- * API Route: /api/onboarding/setup-sheet
- * Step 4.1: Master Logic for Google Sheet Onboarding (Reverse Sharing)
- */
 export async function POST(req: NextRequest) {
   try {
     const { tenantId, adminEmail } = await req.json();
 
     if (!tenantId || !adminEmail) {
-      return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
+      return NextResponse.json(
+        { error: "tenantId এবং adminEmail আবশ্যক" },
+        { status: 400 }
+      );
     }
 
-    // 1. Get Tenant details for naming the sheet
-    console.log("Onboarding Start - Tenant ID:", tenantId);
-    let tenantRef;
-    let tenantDoc;
-    try {
-      tenantRef = adminDb.collection("tenants").doc(tenantId);
-      tenantDoc = await tenantRef.get();
-    } catch (dbError: any) {
-      console.error("Firestore Get Error:", dbError);
-      return NextResponse.json({ error: `ডাটাবেজ কানেক্ট করা সম্ভব হয়নি: ${dbError.message}` }, { status: 500 });
-    }
-    
+    // 1. Fetch tenant
+    const tenantRef = adminDb.collection("tenants").doc(tenantId);
+    const tenantDoc = await tenantRef.get();
+
     if (!tenantDoc.exists) {
-      console.warn("Tenant not found:", tenantId);
-      return NextResponse.json({ error: "Institution not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "প্রতিষ্ঠান খুঁজে পাওয়া যায়নি" },
+        { status: 404 }
+      );
     }
 
     const tenantData = tenantDoc.data();
-    const sheetName = tenantData?.name || tenantId;
-    console.log("Creating Sheet for:", sheetName);
 
-    // 2. Create the Google Sheet and share it
+    // 2. Check if already set up
+    if (tenantData?.googleSheetId) {
+      return NextResponse.json({
+        success: true,
+        message: "সিস্টেম আগেই সেটআপ করা হয়েছে",
+        googleSheetId: tenantData.googleSheetId,
+        alreadySetup: true,
+      });
+    }
+
+    const sheetName = tenantData?.name || tenantId;
+    console.log(`[Onboarding] Starting setup for: ${sheetName} (${tenantId})`);
+
+    // 3. Create Google Sheet
     let googleSheetId: string;
-    
     try {
       googleSheetId = await createInstitutionSheet(sheetName, adminEmail);
-      console.log("Sheet Created:", googleSheetId);
     } catch (sheetError: any) {
-      console.error("Sheet Creation Failed:", sheetError);
-      return NextResponse.json({ 
-        error: `গুগল শীট তৈরি করা সম্ভব হয়নি। কারিগরি সমস্যা: ${sheetError.message}` 
-      }, { status: 500 });
+      console.error("[Onboarding] Sheet creation error:", sheetError.message);
+      return NextResponse.json(
+        {
+          error: sheetError.message,
+          hint: "Vercel-এ GOOGLE_CREDENTIALS_JSON সঠিকভাবে সেট করা আছে কিনা চেক করুন",
+        },
+        { status: 500 }
+      );
     }
 
-    // 3. Update the `tenants/{tenantId}` document in Firestore
-    try {
-      await tenantRef.update({
-        googleSheetId: googleSheetId,
-        setupCompleted: true,
-        updated_at: new Date().toISOString()
-      });
-      console.log("Firestore Updated Successfully");
-    } catch (updateError: any) {
-      console.error("Firestore Update Error:", updateError);
-      return NextResponse.json({ error: `ডাটা আপডেট করা সম্ভব হয়নি: ${updateError.message}` }, { status: 500 });
-    }
-    
-    return NextResponse.json({ 
-      success: true, 
-      message: "System setup completed successfully",
-      googleSheetId: googleSheetId 
+    // 4. Update Firestore
+    await tenantRef.update({
+      googleSheetId,
+      setupCompleted: true,
+      setupAt: new Date().toISOString(),
+    });
+
+    console.log(`[Onboarding] Setup complete. Sheet: ${googleSheetId}`);
+
+    return NextResponse.json({
+      success: true,
+      message: "সিস্টেম সফলভাবে সেটআপ হয়েছে!",
+      googleSheetId,
     });
 
   } catch (error: any) {
-    console.error("Onboarding Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[Onboarding] Unexpected error:", error);
+    return NextResponse.json(
+      { error: `অপ্রত্যাশিত সমস্যা: ${error.message}` },
+      { status: 500 }
+    );
   }
 }

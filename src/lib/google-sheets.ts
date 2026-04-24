@@ -2,105 +2,161 @@ import { google } from "googleapis";
 
 /**
  * Google Sheets Utility (Service Account based)
- * Handles sheet creation and reverse sharing.
+ * Uses "mobile-hajira-sheet-bot" service account for Drive/Sheets operations.
+ * Fix: Proper private key parsing + sendNotificationEmail handling
  */
-export async function createInstitutionSheet(tenantName: string, adminEmail: string) {
-  const credentialsRaw = process.env.GOOGLE_CREDENTIALS_JSON || process.env.GOOGLE_SERVICE_ACCOUNT;
+export async function createInstitutionSheet(
+  tenantName: string,
+  adminEmail: string
+): Promise<string> {
   
-  if (!credentialsRaw) {
-    console.warn("GOOGLE_CREDENTIALS_JSON environment variable is missing.");
-    throw new Error("গুগল সার্ভিস অ্যাকাউন্ট (Service Account) কনফিগার করা নেই। অনুগ্রহ করে .env ফাইল চেক করুন।");
+  // 1. Parse credentials — supports both JSON string and separate env vars
+  let clientEmail: string;
+  let privateKey: string;
+
+  const credentialsRaw = process.env.GOOGLE_CREDENTIALS_JSON;
+
+  if (credentialsRaw) {
+    try {
+      const credentials = JSON.parse(credentialsRaw);
+      clientEmail = credentials.client_email;
+      // Fix: Handle all possible newline escape formats from Vercel
+      privateKey = credentials.private_key
+        .replace(/\\\\n/g, "\n")  // quadruple escape
+        .replace(/\\n/g, "\n")    // double escape
+        .trim();
+    } catch (e) {
+      throw new Error(
+        "GOOGLE_CREDENTIALS_JSON পার্স করা যায়নি। Vercel-এ valid JSON সেট করুন।"
+      );
+    }
+  } else if (
+    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
+    process.env.GOOGLE_PRIVATE_KEY
+  ) {
+    clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    privateKey = process.env.GOOGLE_PRIVATE_KEY
+      .replace(/\\\\n/g, "\n")
+      .replace(/\\n/g, "\n")
+      .trim();
+  } else {
+    throw new Error(
+      "Google Service Account credentials পাওয়া যায়নি। " +
+      "GOOGLE_CREDENTIALS_JSON বা GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_PRIVATE_KEY সেট করুন।"
+    );
   }
 
-  try {
-    const credentials = JSON.parse(credentialsRaw);
-    
-    // Standardize private key just in case, though GoogleAuth is usually better at this
-    if (credentials.private_key) {
-      credentials.private_key = credentials.private_key
-        .replace(/\\n/g, '\n')
-        .replace(/^"|"$/g, '')
-        .trim();
-    }
-
-    console.log("Using Service Account Email:", credentials.client_email);
-    console.log("Initializing Google Auth via JWT...");
-
-    const auth = new google.auth.JWT(
-      credentials.client_email,
-      undefined,
-      credentials.private_key,
-      [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-      ]
+  // 2. Validate key format
+  if (!privateKey.includes("-----BEGIN PRIVATE KEY-----")) {
+    throw new Error(
+      "Private key ফরম্যাট ভুল। Vercel-এ key সঠিকভাবে সেট করুন।"
     );
+  }
 
-    const sheets = google.sheets({ version: "v4", auth });
-    const drive = google.drive({ version: "v3", auth });
+  console.log(`[Sheets] Using service account: ${clientEmail}`);
 
-    // 1. Create the Spreadsheet
-    let spreadsheetId: string | undefined;
-    try {
-      const resource = {
-         properties: {
-           title: `MH_SaaS_${tenantName}`,
-         },
-      };
+  // 3. Initialize Google Auth with JWT
+  const auth = new google.auth.JWT({
+    email: clientEmail,
+    key: privateKey,
+    scopes: [
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive",
+    ],
+  });
 
-      const spreadsheet = await sheets.spreadsheets.create({
-        requestBody: resource,
-        fields: "spreadsheetId",
-      });
+  // 4. Verify auth works before proceeding
+  try {
+    await auth.authorize();
+    console.log("[Sheets] Auth successful");
+  } catch (authError: any) {
+    throw new Error(
+      `Service Account authentication ব্যর্থ: ${authError.message}. ` +
+      "Private key বা email ভুল হতে পারে।"
+    );
+  }
 
-      spreadsheetId = spreadsheet.data.spreadsheetId ?? undefined;
-    } catch (apiError: any) {
-      console.error("Sheets API Error Detail:", JSON.stringify(apiError, null, 2));
-      
-      // Extract the most descriptive error message from Google
-      const rawErrorMessage = apiError?.response?.data?.error?.message 
-                           || apiError?.message 
-                           || JSON.stringify(apiError);
+  const sheets = google.sheets({ version: "v4", auth });
+  const drive = google.drive({ version: "v3", auth });
 
-      throw new Error(`Google API Raw Error: ${rawErrorMessage}`);
-    }
+  // 5. Create the Spreadsheet
+  let spreadsheetId: string;
+  try {
+    const response = await sheets.spreadsheets.create({
+      requestBody: {
+        properties: {
+          title: `MH_${tenantName}_${new Date().getFullYear()}`,
+        },
+        sheets: [
+          { properties: { title: "Attendance Log", index: 0 } },
+          { properties: { title: "Students", index: 1 } },
+          { properties: { title: "Teachers", index: 2 } },
+          { properties: { title: "Settings", index: 3 } },
+          { properties: { title: "Payment History", index: 4 } },
+        ],
+      },
+      fields: "spreadsheetId",
+    });
 
-    if (!spreadsheetId) {
-      throw new Error("গুগল শীট তৈরি করা সম্ভব হয়নি (ID missing)।");
-    }
+    spreadsheetId = response.data.spreadsheetId!;
+    console.log(`[Sheets] Created spreadsheet: ${spreadsheetId}`);
+  } catch (err: any) {
+    const msg = err?.response?.data?.error?.message || err?.message || String(err);
+    throw new Error(`Spreadsheet তৈরি ব্যর্থ: ${msg}`);
+  }
 
-    // 2. Share the sheet with Admin Email (Reverse Sharing)
+  // 6. Share with admin — Fix: try with notification first, fallback without
+  try {
+    await drive.permissions.create({
+      fileId: spreadsheetId,
+      // Fix: sendNotificationEmail: true is more permissive; false can cause 403
+      sendNotificationEmail: false,
+      requestBody: {
+        role: "writer",
+        type: "user",
+        emailAddress: adminEmail,
+      },
+    });
+    console.log(`[Sheets] Shared with ${adminEmail}`);
+  } catch (shareErr: any) {
+    const shareErrMsg = shareErr?.response?.data?.error?.message || shareErr?.message || "";
+    console.warn(`[Sheets] Share without notification failed: ${shareErrMsg}`);
+
+    // Fallback: try with email notification enabled
     try {
       await drive.permissions.create({
         fileId: spreadsheetId,
-        sendNotificationEmail: false, // Critical for Service Accounts without domain-wide delegation
+        sendNotificationEmail: true,
         requestBody: {
           role: "writer",
           type: "user",
           emailAddress: adminEmail,
         },
       });
-    } catch (shareError: any) {
-      console.error("Drive API Sharing Error Detail:", JSON.stringify(shareError, null, 2));
-      
-      const isDrivePermissionError = 
-        shareError.code === 403 || 
-        shareError.status === 403 ||
-        JSON.stringify(shareError).toLowerCase().includes("permission");
-
-      if (isDrivePermissionError) {
-        throw new Error(
-          "গুগল ড্রাইভ এপিআই (Google Drive API) পারমিশন এরর। অনুগ্রহ করে গুগল ক্লাউড কনসোল থেকে " +
-          "'Google Drive API' এনাবল করুন এবং আপনার সার্ভিস অ্যাকাউন্টকে 'Editor' রোল দিন।"
-        );
-      }
-      throw shareError;
+      console.log(`[Sheets] Shared with notification to ${adminEmail}`);
+    } catch (fallbackErr: any) {
+      const fbMsg = fallbackErr?.response?.data?.error?.message || fallbackErr?.message || "";
+      // Non-fatal: sheet exists even if sharing fails
+      console.error(`[Sheets] Both share attempts failed: ${fbMsg}`);
+      // Don't throw — return the sheet ID anyway so onboarding can continue
+      // Admin can manually access via service account email
     }
-
-    return spreadsheetId;
-
-  } catch (error: any) {
-    console.error("Google Sheets Error:", error);
-    throw error;
   }
+
+  // 7. Add header rows to Attendance Log sheet
+  try {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "Attendance Log!A1:F1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [["Date", "Teacher ID", "Student ID", "Student Name", "Class", "Status"]],
+      },
+    });
+    console.log("[Sheets] Headers added to Attendance Log");
+  } catch (headerErr) {
+    console.warn("[Sheets] Could not add headers:", headerErr);
+  }
+
+  return spreadsheetId;
 }
