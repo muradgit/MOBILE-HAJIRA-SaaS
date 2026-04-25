@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
-import { google } from "googleapis";
 import { adminDb } from "@/src/lib/firebase-admin";
 import { authenticate, errorResponse, successResponse } from "@/src/lib/api-utils";
+import { queueGoogleSheetSync } from "@/src/lib/qstash";
 
 /**
- * API Route to submit attendance directly to Google Sheets.
+ * API Route to submit attendance via QStash background queue.
  * Strict Rule: No attendance data is written to Firestore.
  */
 export async function POST(req: NextRequest) {
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { tenant_id, teacher_id, student_id, date, status } = body;
+    const { tenant_id, teacher_id, student_id, student_name, class_name, date, status } = body;
 
     // Validate required fields
     if (!tenant_id || !teacher_id || !student_id || !date || !status) {
@@ -34,46 +34,28 @@ export async function POST(req: NextRequest) {
       return errorResponse("Google Sheet ID is not configured for this institution", 400);
     }
 
-    // 3. Authenticate with Google Sheets API using Service Account
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        // Handle potential newline issues in private key from env variables
-        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-      },
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-    });
+    // 3. Queue the background sync job to QStash
+    // We send a more complete payload for the worker
+    const attendanceData = {
+      date,
+      teacher_id,
+      student_id,
+      student_name: student_name || "N/A",
+      class_name: class_name || "N/A",
+      status
+    };
 
-    const sheets = google.sheets({ version: "v4", auth });
+    console.log(`[Attendance] Queuing sync for tenant: ${tenant_id}`);
+    await queueGoogleSheetSync(tenant_id, attendanceData, "ATTENDANCE");
 
-    // 4. Append the attendance record as a new row
-    // Row format: [Date, Teacher ID, Student ID, Status]
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: googleSheetId,
-      range: "Sheet1!A:D", // Assumes the target sheet is named 'Sheet1'
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values: [[date, teacher_id, student_id, status]],
-      },
-    });
-
-    // Success response - No Firestore write performed for attendance data
+    // Success response - Job is now in the queue
     return successResponse({ 
       success: true, 
-      message: "Attendance successfully recorded in Google Sheets" 
+      message: "Attendance submission queued successfully. It will appear in Google Sheets shortly." 
     });
 
   } catch (error: any) {
-    console.error("Google Sheets API Error:", error);
-    
-    // Handle specific Google API errors
-    if (error.code === 403) {
-      return errorResponse("Permission denied: Ensure the service account has 'Editor' access to the Google Sheet", 403);
-    }
-    if (error.code === 404) {
-      return errorResponse("Google Sheet not found: Check if the googleSheetId is correct", 404);
-    }
-
+    console.error("Attendance Submission Error:", error);
     return errorResponse(error.message || "Internal Server Error", 500);
   }
 }

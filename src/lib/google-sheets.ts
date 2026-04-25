@@ -213,3 +213,73 @@ export async function createInstitutionSheet(
 
   return spreadsheetId;
 }
+
+/**
+ * Appends attendance records to the institution's Google Sheet
+ * Called by QStash worker in the background
+ */
+export async function appendAttendanceToSheet(tenantId: string, data: any) {
+  // 1. Fetch googleSheetId from Firestore (READ ONLY)
+  const { adminDb } = await import("@/src/lib/firebase-admin");
+  const tenantDoc = await adminDb.collection("tenants").doc(tenantId).get();
+  
+  if (!tenantDoc.exists) {
+    throw new Error(`Institution with ID ${tenantId} not found`);
+  }
+  
+  const tenantData = tenantDoc.data();
+  const spreadsheetId = tenantData?.googleSheetId;
+  const adminEmail = tenantData?.adminEmail || "hello@muradkhank31.com";
+
+  if (!spreadsheetId) {
+    throw new Error(`Google Sheet ID not configured for institution: ${tenantId}`);
+  }
+
+  // 2. Initialize Auth
+  const credentialsRaw = process.env.GOOGLE_CREDENTIALS_JSON;
+  let clientEmail: string;
+  let privateKey: string;
+
+  if (credentialsRaw) {
+    const credentials = JSON.parse(credentialsRaw);
+    clientEmail = credentials.client_email;
+    privateKey = credentials.private_key.replace(/\\n/g, "\n");
+  } else {
+    clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "";
+    privateKey = (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n");
+  }
+
+  const auth = new google.auth.JWT({
+    email: clientEmail,
+    key: privateKey,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+  });
+
+  const sheets = google.sheets({ 
+    version: "v4", 
+    auth,
+    params: { quotaUser: adminEmail }
+  });
+
+  // 3. Append row
+  // Data format expected: { date, teacher_id, student_id, student_name, class_name, status }
+  const { date, teacher_id, student_id, student_name, class_name, status } = data;
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: "Attendance Log!A:F",
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [[
+        date, 
+        teacher_id, 
+        student_id, 
+        student_name || "N/A", 
+        class_name || "N/A", 
+        status
+      ]],
+    },
+  });
+
+  console.log(`[Sheets] Appended attendance for tenant: ${tenantId}`);
+}
