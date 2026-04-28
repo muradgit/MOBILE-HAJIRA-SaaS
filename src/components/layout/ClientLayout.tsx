@@ -54,21 +54,25 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       { label: "প্রতিষ্ঠান", href: "/super-admin/institutes", icon: Building2 },
       { label: "ইউজার", href: "/super-admin/users", icon: Users },
       { label: "পেমেন্ট ও ক্রেডিট", href: "/super-admin/payments", icon: CreditCard },
+      { label: "প্রোফাইল", href: "/profile", icon: User },
       { label: "সেটিংস", href: "/super-admin/settings", icon: Settings },
     ],
     InstitutionAdmin: [
       { label: "ড্যাশবোর্ড", href: "/admin/dashboard", icon: LayoutDashboard },
       { label: "শিক্ষক", href: "/admin/teachers", icon: Users },
       { label: "শিক্ষার্থী", href: "/admin/students", icon: UserPlus },
+      { label: "প্রোফাইল", href: "/profile", icon: User },
       { label: "সেটিংস", href: "/admin/settings", icon: Settings },
     ],
     Teacher: [
       { label: "ড্যাশবোর্ড", href: "/teacher/dashboard", icon: LayoutDashboard },
       { label: "হাজিরা প্যানেল", href: "/teacher/attendance", icon: ClipboardCheck },
+      { label: "প্রোফাইল", href: "/profile", icon: User },
     ],
     Student: [
       { label: "ড্যাশবোর্ড", href: "/student/dashboard", icon: LayoutDashboard },
       { label: "আইডি কার্ড", href: "/student/id-card", icon: Contact },
+      { label: "প্রোফাইল", href: "/profile", icon: User },
     ],
   };
 
@@ -255,7 +259,13 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                        <p className="text-xs font-black text-gray-900 truncate">{userData.email}</p>
                        <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest mt-1">{userData.role}</p>
                     </div>
-                    <button className="w-full px-4 py-2.5 text-left text-sm font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-3">
+                    <button 
+                      onClick={() => {
+                        router.push("/profile");
+                        setIsProfileOpen(false);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-sm font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                    >
                       <User className="w-4 h-4" /> Profile
                     </button>
                     <button 
