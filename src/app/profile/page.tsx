@@ -89,13 +89,25 @@ export default function ProfilePage() {
       // 1. Update Firebase Auth Profile
       await updateProfile(user, { displayName: name });
 
-      // 2. Update Firestore User Doc
+      // 2. Update Firestore User Doc (Both top-level and subcollection)
       const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, {
+      const updatePayload = {
         name,
         nameBN,
         updated_at: new Date().toISOString()
-      });
+      };
+      await updateDoc(userRef, updatePayload);
+
+      // Also update subcollection if applicable
+      if (userData.tenant_id && (userData.role === "Teacher" || userData.role === "Student")) {
+        const subCollName = userData.role === "Teacher" ? "teachers" : "students";
+        const subRef = doc(db, "tenants", userData.tenant_id, subCollName, user.uid);
+        try {
+          await updateDoc(subRef, updatePayload);
+        } catch (e) {
+          console.warn("Subcollection update skipped (might not exist):", e);
+        }
+      }
 
       toast.success("প্রোফাইল সফলভাবে আপডেট করা হয়েছে।");
     } catch (err: any) {
@@ -144,6 +156,25 @@ export default function ProfilePage() {
       } else {
         const credential = EmailAuthProvider.credential(freshUser.email!, newPassword);
         await linkWithCredential(freshUser, credential);
+      }
+
+      // Update Firestore to mark that the user has a password set (Both top-level and subcollection)
+      const userRef = doc(db, "users", freshUser.uid);
+      const passPayload = {
+        has_password: true,
+        updated_at: new Date().toISOString()
+      };
+      await updateDoc(userRef, passPayload);
+
+      // Also update subcollection if applicable
+      if (userData?.tenant_id && (userData?.role === "Teacher" || userData?.role === "Student")) {
+        const subCollName = userData.role === "Teacher" ? "teachers" : "students";
+        const subRef = doc(db, "tenants", userData.tenant_id, subCollName, freshUser.uid);
+        try {
+          await updateDoc(subRef, passPayload);
+        } catch (e) {
+             console.warn("Subcollection password update skipped:", e);
+        }
       }
 
       // Reload again to refresh the local state for the UI

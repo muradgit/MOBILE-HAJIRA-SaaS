@@ -70,7 +70,10 @@ export default function LoginPage() {
       userDoc = await getDoc(doc(db, "users", uid));
     } catch (err: any) {
       console.error("Firestore read error during login:", err);
-      throw new Error("আপনার ইউজার ডাটা পড়তে সমস্যা হচ্ছে। দয়া করে ইন্টারনেট কানেকশন চেক করুন।");
+      if (err.message?.includes("permissions")) {
+        throw new Error("আপনার ইউজার ডাটা পড়ার অনুমতি নেই। দয়া করে এডমিনের সাথে যোগাযোগ করুন। (Firestore Rules Error)");
+      }
+      throw new Error(`আপনার ইউজার ডাটা পড়তে সমস্যা হচ্ছে: ${err.message || "Unknown Error"}`);
     }
     
     let userData: UserData;
@@ -130,11 +133,20 @@ export default function LoginPage() {
     // 4. Approval Check (Teachers & Students)
     const normalizedRole = (finalRole || "").toLowerCase().replace(/\s+/g, "");
     
-    if (normalizedRole !== "superadmin" && normalizedRole !== "institutionadmin" && normalizedRole !== "admin") {
+    // Explicitly allow admins and superadmins
+    const isPrivileged = ["superadmin", "institutionadmin", "instituteadmin", "admin"].includes(normalizedRole);
+    
+    if (!isPrivileged) {
       const isAllowed = ["active", "approved"].includes(userData.status || "");
       if (!isAllowed) {
-        const tenantDoc = await getDoc(doc(db, "tenants", userData.tenant_id));
-        const tenantData = tenantDoc.exists() ? tenantDoc.data() as Tenant : null;
+        console.warn(`User ${uid} blocked: Status is ${userData.status}`);
+        let tenantData: Tenant | null = null;
+        try {
+          const tenantDoc = await getDoc(doc(db, "tenants", userData.tenant_id));
+          tenantData = tenantDoc.exists() ? tenantDoc.data() as Tenant : null;
+        } catch (e) {
+          console.error("Failed to fetch tenant info for blocked user", e);
+        }
         
         await signOut(auth);
         setErrorMsg(

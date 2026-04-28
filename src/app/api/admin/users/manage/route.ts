@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       tenant_id,
     });
 
-    // 3. Save to Firestore
+    // 3. Save to Firestore (Both top-level and subcollection)
     const profileData = {
       user_id: userRecord.uid,
       tenant_id,
@@ -48,6 +48,10 @@ export async function POST(req: NextRequest) {
       ...extra_data, // e.g. class, section for students
     };
 
+    // TOP-LEVEL USERS COLLECTION (Required for generic login/auth hooks)
+    await adminDb.collection("users").doc(userRecord.uid).set(profileData);
+
+    // TENANT SUBCOLLECTION (Required for institution specific views and GS sync)
     const collectionName = role === "teacher" ? "teachers" : "students";
     await adminDb.collection("tenants").doc(tenant_id).collection(collectionName).doc(userRecord.uid).set(profileData);
 

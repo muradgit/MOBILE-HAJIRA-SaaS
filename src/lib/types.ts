@@ -76,6 +76,7 @@ export interface UserData {
   is_also_teacher?: boolean;
   department?: string;
   institutionName?: string;
+  has_password?: boolean;
 }
 
 export interface Course {
