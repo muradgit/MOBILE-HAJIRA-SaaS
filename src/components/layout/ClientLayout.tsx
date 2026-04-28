@@ -30,14 +30,23 @@ import {
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 
+import { useUserStore } from "@/src/store/useUserStore";
+
 /**
  * Professional Overlay UI for MOBILE-HAJIRA-SaaS
  * Features: Dynamic Header, Role-Based Mobile Nav, Professional Sidebar.
  */
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const { userData, tenant, loading } = useAuth();
+  const { activeRole, setActiveRole, setUser, user: storeUser } = useUserStore();
   const router = useRouter();
   const pathname = usePathname();
+
+  useEffect(() => {
+    if (userData && (!storeUser || storeUser.user_id !== userData.user_id)) {
+      setUser(userData);
+    }
+  }, [userData, storeUser, setUser]);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -77,7 +86,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   };
 
   // Helper for robust role-based navigation mapping
-  const getNormalizedMenuKey = (role: string | undefined): string => {
+  const getNormalizedMenuKey = (role: string | undefined | null): string => {
     if (!role) return "";
     const normalized = role.toLowerCase().replace(/\s+/g, "");
     if (["institutionadmin", "instituteadmin", "admin"].includes(normalized)) {
@@ -89,7 +98,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     return role; // Fallback
   };
 
-  const menuKey = getNormalizedMenuKey(userData?.role);
+  const menuKey = getNormalizedMenuKey(activeRole);
   const currentMenu = (userData && menuItems[menuKey]) || [];
 
   // 2. Mobile Bottom Navigation Config
@@ -120,7 +129,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
 
   // Helper for robust role-based redirection
-  const getDashboardRoute = (role: string | undefined): string => {
+  const getDashboardRoute = (role: string | undefined | null): string => {
     if (!role) return "/";
     const normalizedRole = role.toLowerCase().replace(/\s+/g, "");
     
@@ -153,18 +162,27 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       const isAllowed = ["active", "approved"].includes(status);
       
       if (isAllowed) {
-        const target = getDashboardRoute(userData?.role);
+        const target = getDashboardRoute(activeRole);
         if (target !== "/" && target !== pathname) {
           router.replace(target);
         }
       }
     }
-  }, [loading, userData, isLandingPage, isAuthPage, router, pathname]);
+  }, [loading, userData, isLandingPage, isAuthPage, router, pathname, activeRole]);
 
   // Logout Handler
   const handleLogout = async () => {
     await signOut(auth);
     router.push("/auth/login");
+  };
+
+  const isDualRole = (userData?.role === "InstitutionAdmin" || (userData?.role as string) === "Admin") && userData?.is_also_teacher;
+
+  const handleRoleSwitch = () => {
+    const nextRole = activeRole === "Teacher" ? (userData?.role || "InstitutionAdmin") : "Teacher";
+    setActiveRole(nextRole);
+    router.push(getDashboardRoute(nextRole));
+    setIsProfileOpen(false);
   };
 
   if (loading) {
@@ -268,6 +286,18 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                     >
                       <User className="w-4 h-4" /> Profile
                     </button>
+                    {isDualRole && (
+                      <button 
+                        onClick={handleRoleSwitch}
+                        className="w-full px-4 py-2.5 text-left text-sm font-bold text-purple-600 hover:bg-purple-50 flex items-center justify-between group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <ShieldCheck className="w-4 h-4" /> 
+                          {activeRole === "Teacher" ? "Admin View" : "Teacher View"}
+                        </div>
+                        <div className="px-1.5 py-0.5 rounded-md bg-purple-100 text-[8px] font-black uppercase">Switch</div>
+                      </button>
+                    )}
                     <button 
                       onClick={handleLogout}
                       className="w-full px-4 py-2.5 text-left text-sm font-bold text-red-500 hover:bg-red-50 flex items-center gap-3"

@@ -20,20 +20,56 @@ import {
   AlertCircle,
   Loader2,
   Camera,
-  Save
+  Save,
+  Users,
+  ShieldCheck,
+  ChevronRight
 } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
 import { toast } from "sonner";
 import Image from "next/image";
+import { useUserStore } from "@/src/store/useUserStore";
 
 export default function ProfilePage() {
   const { userData, user, loading } = useAuth();
+  const { setActiveRole } = useUserStore();
   const [submitting, setSubmitting] = useState(false);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+  const [promoting, setPromoting] = useState(false);
 
   // Profile Info State
   const [name, setName] = useState(userData?.name || "");
   const [nameBN, setNameBN] = useState(userData?.nameBN || "");
+
+  const canBeTeacher = userData?.role === "InstitutionAdmin" || (userData?.role as string) === "Admin";
+  const isAlreadyTeacher = userData?.is_also_teacher;
+
+  const handleAssignAsTeacher = async () => {
+    if (!user || !userData) return;
+    setPromoting(true);
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch("/api/admin/self-assign-teacher", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          tenant_id: userData.tenant_id,
+        })
+      });
+
+      if (!res.ok) throw new Error("অ্যাসাইন করতে ব্যর্থ হয়েছে");
+
+      toast.success("আপনি এখন একজন শিক্ষক হিসেবে তালিকাভুক্ত!");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setPromoting(false);
+    }
+  };
 
   // Password State
   const [currentPassword, setCurrentPassword] = useState("");
@@ -161,6 +197,42 @@ export default function ProfilePage() {
                     <p className="text-xs font-bold text-green-600">{userData?.status}</p>
                   </div>
                </div>
+
+               {/* Dual Role Assignment (For Admins Only) */}
+               {canBeTeacher && !isAlreadyTeacher && (
+                 <div className="mt-4 pt-4 border-t border-gray-50">
+                    <button 
+                      onClick={handleAssignAsTeacher}
+                      disabled={promoting}
+                      className="w-full flex items-center justify-between p-4 bg-purple-50 hover:bg-purple-100 rounded-2xl group transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-white rounded-xl text-purple-600 shadow-sm">
+                          <Users className="w-4 h-4" />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-xs font-black text-gray-900">নিজেকে শিক্ষক হিসেবে যুক্ত করুন</p>
+                          <p className="text-[10px] text-gray-500 font-medium">Assign yourself to Teacher list</p>
+                        </div>
+                      </div>
+                      {promoting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-all" />}
+                    </button>
+                 </div>
+               )}
+
+               {isAlreadyTeacher && (
+                 <div className="mt-4 pt-4 border-t border-gray-50">
+                   <div className="flex items-center gap-3 p-4 bg-green-50 rounded-2xl">
+                     <div className="p-2 bg-white rounded-xl text-green-600 shadow-sm">
+                       <ShieldCheck className="w-4 h-4" />
+                     </div>
+                     <div className="text-left">
+                       <p className="text-xs font-black text-gray-900">আপনি একজন শিক্ষক হিসেবে যুক্ত আছেন</p>
+                       <p className="text-[10px] text-green-600 font-bold uppercase tracking-widest">Active Dual Role</p>
+                     </div>
+                   </div>
+                 </div>
+               )}
             </div>
           </Card>
         </div>

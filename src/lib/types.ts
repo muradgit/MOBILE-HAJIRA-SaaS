@@ -60,7 +60,7 @@ export interface Tenant {
 export interface UserData {
   user_id: string;
   tenant_id: string;
-  role: "SuperAdmin" | "InstitutionAdmin" | "Teacher" | "Student";
+  role: "SuperAdmin" | "InstitutionAdmin" | "Teacher" | "Student" | string;
   name: string;
   nameBN?: string;
   email?: string;
@@ -72,7 +72,8 @@ export interface UserData {
   subject?: string;
   profile_image?: string;
   created_at?: string;
-  status?: "pending" | "approved" | "suspended";
+  status?: "pending" | "approved" | "suspended" | string;
+  is_also_teacher?: boolean;
 }
 
 export interface Course {
