@@ -10,22 +10,26 @@ export async function POST(req: NextRequest) {
   const authUser = await authenticate(req);
   if (!authUser) return errorResponse("Unauthorized", 401);
   
-  if (authUser.role !== "InstitutionAdmin" && authUser.role !== "Admin") {
-    return errorResponse("Forbidden: Only Institution Admins can self-assign as teacher", 403);
+  const role = (authUser.role as string)?.toLowerCase();
+  if (role !== "institutionadmin" && role !== "admin" && role !== "superadmin") {
+    return errorResponse("Forbidden: Only Admins can self-assign", 403);
   }
 
   try {
     const { tenant_id } = await req.json();
-    if (!tenant_id || tenant_id !== authUser.tenant_id) {
-      return errorResponse("Invalid tenant ID", 400);
-    }
-
+    
     // 1. Get current admin data
     const userRef = adminDb.collection("users").doc(authUser.uid);
     const userDoc = await userRef.get();
     const userData = userDoc.data();
 
     if (!userData) return errorResponse("User data not found", 404);
+
+    // Verify tenant
+    const userTenantId = userData.tenant_id || authUser.tenant_id;
+    if (!tenant_id || tenant_id !== userTenantId) {
+      return errorResponse("Invalid tenant ID", 400);
+    }
 
     // 2. Add to Teacher collection for the tenant
     const teacherProfile = {

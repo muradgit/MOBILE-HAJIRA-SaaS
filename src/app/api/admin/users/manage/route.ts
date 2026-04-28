@@ -9,7 +9,9 @@ import { queueGoogleSheetSync } from "@/src/lib/qstash";
 export async function POST(req: NextRequest) {
   const auth = await authenticate(req);
   if (!auth) return errorResponse("Unauthorized", 401);
-  if (auth.role !== "admin" && auth.role !== "super-admin") {
+  const role = auth.role as string;
+  const normalizedRole = role?.toLowerCase();
+  if (normalizedRole !== "admin" && normalizedRole !== "institutionadmin" && normalizedRole !== "superadmin" && normalizedRole !== "super-admin") {
     return errorResponse("Forbidden", 403);
   }
 
