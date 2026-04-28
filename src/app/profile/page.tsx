@@ -76,6 +76,9 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const isGoogleUser = user?.providerData.some(p => p.providerId === "google.com");
+  const hasPassword = user?.providerData.some(p => p.providerId === "password");
+
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !userData) return;
@@ -114,14 +117,19 @@ export default function ProfilePage() {
 
     setPasswordSubmitting(true);
     try {
-      // Re-authenticate user first (required for sensitive operations)
-      const credential = EmailAuthProvider.credential(user.email!, currentPassword);
-      await reauthenticateWithCredential(user, credential);
+      // If user already has a password, re-authenticate first
+      if (hasPassword) {
+        if (!currentPassword) {
+          throw new Error("বর্তমান পাসওয়ার্ড আবশ্যক।");
+        }
+        const credential = EmailAuthProvider.credential(user.email!, currentPassword);
+        await reauthenticateWithCredential(user, credential);
+      }
 
-      // Update password
+      // Set/Update password
       await updatePassword(user, newPassword);
 
-      toast.success("পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।");
+      toast.success(hasPassword ? "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।" : "পাসওয়ার্ড সফলভাবে সেট করা হয়েছে।");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -129,8 +137,10 @@ export default function ProfilePage() {
       console.error(err);
       if (err.code === "auth/wrong-password") {
         toast.error("বর্তমান পাসওয়ার্ডটি সঠিক নয়।");
+      } else if (err.code === "auth/requires-recent-login") {
+        toast.error("নিরাপত্তার স্বার্থে পুনরায় লগইন করে চেষ্টা করুন।");
       } else {
-        toast.error("পাসওয়ার্ড পরিবর্তন করা সম্ভব হয়নি। পুনরায় ট্রাই করুন।");
+        toast.error(err.message || "পাসওয়ার্ড পরিবর্তন করা সম্ভব হয়নি।");
       }
     } finally {
       setPasswordSubmitting(false);
@@ -301,22 +311,48 @@ export default function ProfilePage() {
 
             <form onSubmit={handleChangePassword} className="space-y-6">
               <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                    <KeyRound className="w-3 h-3" /> বর্তমান পাসওয়ার্ড
-                  </label>
-                  <input 
-                    required
-                    type="password" 
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 focus:ring-red-500 transition-all"
-                    placeholder="••••••••"
-                  />
-                </div>
+                {isGoogleUser && (
+                  <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-center gap-3">
+                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
+                      <Image 
+                        src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" 
+                        alt="Google" 
+                        width={16} 
+                        height={16} 
+                      />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">গুগল অ্যাকাউন্ট কানেক্টেড</p>
+                      <p className="text-xs font-bold text-gray-700">
+                        {hasPassword 
+                          ? "আপনি জিমেইল বা পাসওয়ার্ড যেকোনোটি দিয়ে লগইন করতে পারেন।" 
+                          : "ভবিষ্যতে জিমেইল ছাড়াই লগইন করতে নিচের পাসওয়ার্ডটি সেট করুন।"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {hasPassword && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                      <KeyRound className="w-3 h-3" /> বর্তমান পাসওয়ার্ড
+                    </label>
+                    <input 
+                      required
+                      type="password" 
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 focus:ring-red-500 transition-all"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">নতুন পাসওয়ার্ড</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                      {hasPassword ? "নতুন পাসওয়ার্ড" : "পাসওয়ার্ড সেট করুন"}
+                    </label>
                     <input 
                       required
                       type="password" 
@@ -346,7 +382,7 @@ export default function ProfilePage() {
                 className="bg-gray-900 text-white px-8 py-3.5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-gray-900/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {passwordSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
-                পাসওয়ার্ড পরিবর্তন করুন
+                {hasPassword ? "পাসওয়ার্ড পরিবর্তন করুন" : "পাসওয়ার্ড সেট করুন"}
               </button>
             </form>
           </Card>
