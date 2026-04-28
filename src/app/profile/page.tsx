@@ -7,7 +7,8 @@ import {
   updatePassword, 
   updateProfile, 
   EmailAuthProvider, 
-  reauthenticateWithCredential 
+  reauthenticateWithCredential,
+  linkWithCredential
 } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import { 
@@ -127,7 +128,12 @@ export default function ProfilePage() {
       }
 
       // Set/Update password
-      await updatePassword(user, newPassword);
+      if (hasPassword) {
+        await updatePassword(user, newPassword);
+      } else {
+        const credential = EmailAuthProvider.credential(user.email!, newPassword);
+        await linkWithCredential(user, credential);
+      }
 
       toast.success(hasPassword ? "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।" : "পাসওয়ার্ড সফলভাবে সেট করা হয়েছে।");
       setCurrentPassword("");

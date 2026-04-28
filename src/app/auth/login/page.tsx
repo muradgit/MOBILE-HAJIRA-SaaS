@@ -31,9 +31,14 @@ export default function LoginPage() {
     setErrorMsg(null);
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
-      await processLogin(result.user.uid);
+      await processLogin(result.user.uid, result.user.email);
     } catch (error: any) {
-      toast.error("Login failed: " + error.message);
+      console.error("Login attempt failed:", error);
+      if (error.code === "auth/user-not-found" || error.code === "auth/wrong-password" || error.code === "auth/invalid-credential") {
+        toast.error("লগইন ব্যর্থ হয়েছে। আপনার ইমেইল বা পাসওয়ার্ড সঠিক আছে কিনা যাচাই করুন। আপনি যদি গুগল দিয়ে অ্যাকাউন্ট খুলে থাকেন, তবে গুগলের মাধ্যমে লগইন করার চেষ্টা করুন।");
+      } else {
+        toast.error("Login failed: " + (error.message || "Unknown error"));
+      }
     } finally {
       setLoading(false);
     }
@@ -45,7 +50,7 @@ export default function LoginPage() {
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
-      await processLogin(result.user.uid);
+      await processLogin(result.user.uid, result.user.email);
     } catch (error: any) {
       if (error.code !== 'auth/popup-closed-by-user') {
         toast.error(error.message);
@@ -55,12 +60,19 @@ export default function LoginPage() {
     }
   };
 
-  const processLogin = async (uid: string) => {
+  const processLogin = async (uid: string, userEmail: string | null) => {
     const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
-    const currentEmail = auth.currentUser?.email;
+    const currentEmail = userEmail;
     
     // 1. Fetch user data from Firestore
-    let userDoc = await getDoc(doc(db, "users", uid));
+    let userDoc;
+    try {
+      userDoc = await getDoc(doc(db, "users", uid));
+    } catch (err: any) {
+      console.error("Firestore read error during login:", err);
+      throw new Error("আপনার ইউজার ডাটা পড়তে সমস্যা হচ্ছে। দয়া করে ইন্টারনেট কানেকশন চেক করুন।");
+    }
+    
     let userData: UserData;
 
     if (!userDoc.exists()) {
@@ -116,7 +128,9 @@ export default function LoginPage() {
     }
 
     // 4. Approval Check (Teachers & Students)
-    if (finalRole !== "SuperAdmin" && finalRole !== "InstitutionAdmin") {
+    const normalizedRole = (finalRole || "").toLowerCase().replace(/\s+/g, "");
+    
+    if (normalizedRole !== "superadmin" && normalizedRole !== "institutionadmin" && normalizedRole !== "admin") {
       const isAllowed = ["active", "approved"].includes(userData.status || "");
       if (!isAllowed) {
         const tenantDoc = await getDoc(doc(db, "tenants", userData.tenant_id));
@@ -143,7 +157,6 @@ export default function LoginPage() {
     /** 
      * 5. CRITICAL: Update STATE and REDIRECT IMMEDIATELY
      */
-    const normalizedRole = finalRole.toLowerCase().replace(/\s+/g, "");
     
     // Sync store
     setUser({ ...userData, role: finalRole as any });
