@@ -118,24 +118,38 @@ export default function ProfilePage() {
 
     setPasswordSubmitting(true);
     try {
+      // Use auth.currentUser directly to ensure the most up-to-date user object
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error("ইউজার খুঁজে পাওয়া যায়নি।");
+
+      // Refresh user object to get latest providerData
+      await currentUser.reload();
+      const freshUser = auth.currentUser;
+      if (!freshUser) throw new Error("ইউজার লোড করতে সমস্যা হয়েছে।");
+
+      const userHasPassword = freshUser.providerData.some(p => p.providerId === "password");
+
       // If user already has a password, re-authenticate first
-      if (hasPassword) {
+      if (userHasPassword) {
         if (!currentPassword) {
           throw new Error("বর্তমান পাসওয়ার্ড আবশ্যক।");
         }
-        const credential = EmailAuthProvider.credential(user.email!, currentPassword);
-        await reauthenticateWithCredential(user, credential);
+        const credential = EmailAuthProvider.credential(freshUser.email!, currentPassword);
+        await reauthenticateWithCredential(freshUser, credential);
       }
 
       // Set/Update password
-      if (hasPassword) {
-        await updatePassword(user, newPassword);
+      if (userHasPassword) {
+        await updatePassword(freshUser, newPassword);
       } else {
-        const credential = EmailAuthProvider.credential(user.email!, newPassword);
-        await linkWithCredential(user, credential);
+        const credential = EmailAuthProvider.credential(freshUser.email!, newPassword);
+        await linkWithCredential(freshUser, credential);
       }
 
-      toast.success(hasPassword ? "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।" : "পাসওয়ার্ড সফলভাবে সেট করা হয়েছে।");
+      // Reload again to refresh the local state for the UI
+      await freshUser.reload();
+
+      toast.success(userHasPassword ? "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।" : "পাসওয়ার্ড সফলভাবে সেট করা হয়েছে।");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
