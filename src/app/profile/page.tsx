@@ -99,8 +99,9 @@ export default function ProfilePage() {
       await updateDoc(userRef, updatePayload);
 
       // Also update subcollection if applicable
-      if (userData.tenant_id && (userData.role === "Teacher" || userData.role === "Student")) {
-        const subCollName = userData.role === "Teacher" ? "teachers" : "students";
+      const lowerRole = (userData?.role || "").toLowerCase();
+      if (userData.tenant_id && (lowerRole === "teacher" || lowerRole === "student")) {
+        const subCollName = lowerRole === "teacher" ? "teachers" : "students";
         const subRef = doc(db, "tenants", userData.tenant_id, subCollName, user.uid);
         try {
           await updateDoc(subRef, updatePayload);
@@ -167,8 +168,9 @@ export default function ProfilePage() {
       await updateDoc(userRef, passPayload);
 
       // Also update subcollection if applicable
-      if (userData?.tenant_id && (userData?.role === "Teacher" || userData?.role === "Student")) {
-        const subCollName = userData.role === "Teacher" ? "teachers" : "students";
+      const lowerRole = (userData?.role || "").toLowerCase();
+      if (userData?.tenant_id && (lowerRole === "teacher" || lowerRole === "student")) {
+        const subCollName = lowerRole === "teacher" ? "teachers" : "students";
         const subRef = doc(db, "tenants", userData.tenant_id, subCollName, freshUser.uid);
         try {
           await updateDoc(subRef, passPayload);

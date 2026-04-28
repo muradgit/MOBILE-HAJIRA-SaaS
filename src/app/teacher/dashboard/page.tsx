@@ -27,7 +27,8 @@ export default function TeacherDashboard() {
     );
   }
 
-  const isAuthorized = activeRole === "Teacher" || userData?.role === "SuperAdmin";
+  const lowerRole = (userData?.role || "").toLowerCase();
+  const isAuthorized = activeRole === "Teacher" || lowerRole === "superadmin" || lowerRole === "institutionadmin" || lowerRole === "admin";
   if (!userData || !isAuthorized) {
     return <div className="p-8 text-center text-red-500 font-bold uppercase tracking-widest">Access Denied</div>;
   }

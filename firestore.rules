@@ -48,12 +48,12 @@ service cloud.firestore {
       // Subcollections
       match /teachers/{teacherId} {
         allow read: if isSuperAdmin() || belongsToTenant(tenantId);
-        allow write: if isSuperAdmin() || isInstitutionAdmin(tenantId);
+        allow write: if isSuperAdmin() || isInstitutionAdmin(tenantId) || request.auth.uid == teacherId;
       }
 
       match /students/{studentId} {
         allow read: if isSuperAdmin() || belongsToTenant(tenantId);
-        allow write: if isSuperAdmin() || isInstitutionAdmin(tenantId);
+        allow write: if isSuperAdmin() || isInstitutionAdmin(tenantId) || request.auth.uid == studentId;
       }
     }
 
