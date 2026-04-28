@@ -16,7 +16,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import { collection, query, onSnapshot, doc } from "firebase/firestore";
-import { db } from "@/src/lib/firebase";
+import { db, auth } from "@/src/lib/firebase";
 import { useUserStore } from "@/src/store/useUserStore";
 import { Card } from "@/src/components/ui/Card";
 import { DataTable } from "@/src/components/shared/DataTable";
@@ -70,9 +70,14 @@ export default function TeachersPage() {
     setSubmitting(true);
 
     try {
+      const token = await auth.currentUser?.getIdToken();
+      
       const res = await fetch("/api/admin/users/manage", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           tenant_id: tenantId,
           role: "teacher",
@@ -97,8 +102,12 @@ export default function TeachersPage() {
     if (!confirm(`${teacher.name} কে মুছে ফেলতে চান?`)) return;
 
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch(`/api/admin/users/manage?tenant_id=${tenantId}&user_id=${teacher.user_id}&role=teacher`, {
         method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
       });
 
       if (!res.ok) throw new Error("মুছে ফেলতে ব্যর্থ হয়েছে");
