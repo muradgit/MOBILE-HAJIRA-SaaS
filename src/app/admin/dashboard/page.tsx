@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useUserStore } from "@/src/store/useUserStore";
 import { db } from "@/src/lib/firebase";
@@ -39,6 +40,7 @@ import { cn } from "@/src/lib/utils";
 export default function AdminDashboard() {
   const { userData, loading: authLoading } = useAuth();
   const { tenantId: storeTenantId } = useUserStore();
+  const router = useRouter();
   
   // States
   const [activeTenantId, setActiveTenantId] = useState<string | null>(null);
@@ -97,6 +99,8 @@ export default function AdminDashboard() {
     if (!activeTenantId) return;
 
     let unsubTenant = () => {};
+    let unsubTeachers = () => {};
+    let unsubStudents = () => {};
 
     const startListeners = async () => {
       try {
@@ -105,28 +109,25 @@ export default function AdminDashboard() {
           if (snap.exists()) {
             setTenant(snap.data() as Tenant);
           }
-          // Only stop loading if we haven't hit a critical error yet
           setLoading(false);
         });
 
-        // 4. Fetch Stats with Robust Error Handling for Missing Indexes
-        const usersRef = collection(db, "users");
-        const teacherQ = query(usersRef, where("tenant_id", "==", activeTenantId), where("role", "==", "Teacher"));
-        const studentQ = query(usersRef, where("tenant_id", "==", activeTenantId), where("role", "==", "Student"));
-        
-        try {
-          const [tSnap, sSnap] = await Promise.all([getDocs(teacherQ), getDocs(studentQ)]);
-          setStats({
-            teachers: tSnap.size,
-            students: sSnap.size
-          });
-          setErrorStatus(null);
-        } catch (err: any) {
-          console.error("Firestore Index Error:", err);
-          if (err?.message?.includes("index")) {
-            setErrorStatus("ডাটাবেজ ইনডেক্স তৈরি করা নেই। দয়া করে ক্যাশ/কনসোল চেক করুন।");
-          }
-        }
+        // 4. Real-time Stats listeners
+        const teachersRef = collection(db, "tenants", activeTenantId, "teachers");
+        const studentsRef = collection(db, "tenants", activeTenantId, "students");
+
+        unsubTeachers = onSnapshot(teachersRef, (snap) => {
+          setStats(prev => ({ ...prev, teachers: snap.size }));
+        }, (err) => {
+          console.error("Teachers listener error:", err);
+        });
+
+        unsubStudents = onSnapshot(studentsRef, (snap) => {
+          setStats(prev => ({ ...prev, students: snap.size }));
+        }, (err) => {
+          console.error("Students listener error:", err);
+        });
+
       } catch (err) {
         console.error("Dashboard fetch error:", err);
       } finally {
@@ -135,7 +136,11 @@ export default function AdminDashboard() {
     };
 
     startListeners();
-    return () => unsubTenant();
+    return () => {
+      unsubTenant();
+      unsubTeachers();
+      unsubStudents();
+    };
   }, [activeTenantId]);
 
   // Handle Onboarding Setup
@@ -254,19 +259,12 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Subtle Data Initialization Notice */}
-      {errorStatus && (
-        <div className="bg-purple-50/50 border border-purple-100 p-4 rounded-2xl flex items-center gap-3">
-          <AlertTriangle className="w-5 h-5 text-purple-400" />
-          <p className="text-[10px] font-black text-purple-600 uppercase tracking-widest leading-relaxed">
-            ডাটা ইনিশিয়ালাইজ হচ্ছে... সম্পূর্ণ তথ্যের জন্য কিছুক্ষণ অপেক্ষা করুন।
-          </p>
-        </div>
-      )}
-
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        <Card className="p-6 border-transparent bg-gradient-to-br from-purple-600 to-purple-800 text-white shadow-xl shadow-purple-500/20 relative overflow-hidden group">
+        <Card 
+          onClick={() => router.push("/admin/billing")}
+          className="p-6 border-transparent bg-gradient-to-br from-purple-600 to-purple-800 text-white shadow-xl shadow-purple-500/20 relative overflow-hidden group cursor-pointer hover:scale-[1.02] transition-transform"
+        >
           <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
           <div className="relative z-10 flex flex-col h-full justify-between gap-6">
             <div className="flex items-center justify-between">
@@ -275,33 +273,39 @@ export default function AdminDashboard() {
             </div>
             <div className="flex items-end justify-between gap-4">
               <h3 className="text-4xl font-black">{tenant.credits_left}</h3>
-              <button className="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white border border-white/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+              <div className="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white border border-white/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
                 রিচার্জ করুন
-              </button>
+              </div>
             </div>
           </div>
         </Card>
 
-        <Card className="p-6 hover:border-purple-200 transition-all border-purple-50">
+        <Card 
+          onClick={() => router.push("/admin/teachers")}
+          className="p-6 hover:border-purple-200 transition-all border-purple-50 cursor-pointer group active:scale-[0.98]"
+        >
           <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center group-hover:bg-blue-100 transition-colors">
               <Users className="w-5 h-5 text-blue-600" />
             </div>
-            <ArrowUpRight className="w-4 h-4 text-gray-300" />
+            <ArrowUpRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 transition-colors" />
           </div>
           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">মোট শিক্ষক</p>
-          <h3 className="text-3xl font-black text-gray-900">{stats.teachers}</h3>
+          <h3 className="text-3xl font-black text-gray-900 leading-none">{stats.teachers}</h3>
         </Card>
 
-        <Card className="p-6 hover:border-purple-200 transition-all border-purple-50">
+        <Card 
+          onClick={() => router.push("/admin/students")}
+          className="p-6 hover:border-purple-200 transition-all border-purple-50 cursor-pointer group active:scale-[0.98]"
+        >
           <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center group-hover:bg-orange-100 transition-colors">
               <GraduationCap className="w-5 h-5 text-orange-600" />
             </div>
-            <ArrowUpRight className="w-4 h-4 text-gray-300" />
+            <ArrowUpRight className="w-4 h-4 text-gray-300 group-hover:text-orange-500 transition-colors" />
           </div>
           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">মোট শিক্ষার্থী</p>
-          <h3 className="text-3xl font-black text-gray-900">{stats.students}</h3>
+          <h3 className="text-3xl font-black text-gray-900 leading-none">{stats.students}</h3>
         </Card>
       </div>
 
