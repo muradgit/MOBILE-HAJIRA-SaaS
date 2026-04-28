@@ -209,15 +209,9 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             <div className="flex gap-2 sm:gap-4">
                <button 
                  onClick={() => router.push("/auth/login")}
-                 className="text-xs font-black uppercase text-gray-600 px-4 py-2 hover:bg-gray-50 rounded-xl transition-all flex items-center gap-2"
+                 className="bg-[#6f42c1] text-white text-xs font-black uppercase px-6 py-3 rounded-xl transition-all shadow-lg shadow-purple-500/20 flex items-center gap-2"
                >
                  <LogIn className="w-4 h-4" /> Login
-               </button>
-               <button 
-                 onClick={() => router.push("/auth/register")}
-                 className="bg-[#6f42c1] text-white text-xs font-black uppercase px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-purple-500/20 flex items-center gap-2"
-               >
-                 <UserPlus className="w-4 h-4" /> Registration
                </button>
             </div>
           </>

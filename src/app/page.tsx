@@ -61,15 +61,9 @@ export default function LandingPage() {
             <>
               <Link 
                 href="/auth/register"
-                className="w-full sm:w-auto bg-[#6f42c1] text-white px-10 py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-2xl shadow-purple-500/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2"
+                className="w-full sm:w-auto bg-[#6f42c1] text-white px-12 py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-2xl shadow-purple-500/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2"
               >
                 শুরু করুন <ArrowRight className="w-5 h-5" />
-              </Link>
-              <Link 
-                href="/auth/login"
-                className="w-full sm:w-auto bg-white text-[#6f42c1] border-2 border-purple-100 px-10 py-5 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-purple-50 transition-all flex items-center justify-center gap-2"
-              >
-                লগইন <Play className="w-4 h-4 fill-[#6f42c1]" />
               </Link>
             </>
           )}
