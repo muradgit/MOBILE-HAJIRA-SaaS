@@ -26,7 +26,7 @@ service cloud.firestore {
 
     function isInstitutionAdmin(tenantId) {
       let data = getUserData();
-      return isAuthenticated() && data.tenant_id == tenantId && data.role == "InstitutionAdmin";
+      return isAuthenticated() && data.tenant_id == tenantId && (data.role == "InstitutionAdmin" || data.role == "Admin");
     }
 
     // ===============================================================
@@ -44,6 +44,17 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       allow update: if isSuperAdmin() || isInstitutionAdmin(tenantId);
       allow delete: if isSuperAdmin();
+
+      // Subcollections
+      match /teachers/{teacherId} {
+        allow read: if isSuperAdmin() || belongsToTenant(tenantId);
+        allow write: if isSuperAdmin() || isInstitutionAdmin(tenantId);
+      }
+
+      match /students/{studentId} {
+        allow read: if isSuperAdmin() || belongsToTenant(tenantId);
+        allow write: if isSuperAdmin() || isInstitutionAdmin(tenantId);
+      }
     }
 
     // Users
@@ -52,6 +63,19 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.auth.uid == userId;
       allow update: if isSuperAdmin() || request.auth.uid == userId || isInstitutionAdmin(resource.data.tenant_id);
       allow delete: if isSuperAdmin();
+    }
+
+    // Misc Collections
+    match /sms_history/{id} {
+      allow read, write: if isAuthenticated() && (isSuperAdmin() || isInstitutionAdmin(getUserData().tenant_id));
+    }
+
+    match /session_codes/{id} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /system_logs/{id} {
+      allow read, write: if isSuperAdmin();
     }
 
     // --- Super Admin - Dashboard Modules ---
