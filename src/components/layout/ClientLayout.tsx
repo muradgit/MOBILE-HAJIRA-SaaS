@@ -58,7 +58,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     ],
     InstitutionAdmin: [
       { label: "ড্যাশবোর্ড", href: "/admin/dashboard", icon: LayoutDashboard },
-      { label: "ইউজার ম্যানেজমেন্ট", href: "/admin/users", icon: Users },
+      { label: "শিক্ষক", href: "/admin/teachers", icon: Users },
+      { label: "শিক্ষার্থী", href: "/admin/students", icon: UserPlus },
       { label: "সেটিংস", href: "/admin/settings", icon: Settings },
     ],
     Teacher: [
@@ -97,7 +98,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     ],
     InstitutionAdmin: [
       { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-      { label: "Students", href: "/admin/users", icon: Users },
+      { label: "Teachers", href: "/admin/teachers", icon: Users },
+      { label: "Students", href: "/admin/students", icon: UserPlus },
       { label: "Settings", href: "/admin/settings", icon: Settings },
     ],
     Teacher: [
