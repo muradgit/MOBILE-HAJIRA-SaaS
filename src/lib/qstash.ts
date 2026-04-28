@@ -7,7 +7,11 @@ export const qstashClient = new Client({
 /**
  * Helper function to push sync jobs to the queue
  */
-export async function queueGoogleSheetSync(tenantId: string, data: any, type: "ATTENDANCE" | "PAYMENT") {
+export async function queueGoogleSheetSync(
+  tenantId: string, 
+  data: any, 
+  type: "ATTENDANCE" | "PAYMENT" | "TEACHER" | "STUDENT"
+) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mobile-hajira-saas.vercel.app";
   
   try {

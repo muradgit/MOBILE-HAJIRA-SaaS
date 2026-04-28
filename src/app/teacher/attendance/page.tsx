@@ -59,11 +59,13 @@ export default function TeacherAttendancePage() {
   // Filters
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedDept, setSelectedDept] = useState("");
+  const [selectedSubject, setSelectedSubject] = useState("");
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
   
   // Manual Mode State
   const [students, setStudents] = useState<StudentAttendance[]>([]);
   const [fetchingStudents, setFetchingStudents] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Smart Code State
@@ -137,28 +139,55 @@ export default function TeacherAttendancePage() {
     ));
   };
 
-  // 5. Submit Manual Attendance (Log for now)
+  // 5. Submit Manual Attendance
   const handleSaveManualAttendance = async () => {
+    if (!selectedClass) return toast.error("একটি ক্লাস সিলেক্ট করুন");
+    if (!selectedSubject) return toast.error("একটি বিষয় (Subject) সিলেক্ট করুন");
     if (students.length === 0) return toast.error("শিক্ষার্থী তালিকা খালি");
     
-    const presents = students.filter(s => s.status === "present").length;
-    const absents = students.filter(s => s.status === "absent").length;
+    setIsSubmitting(true);
+    
+    try {
+      const presentStudents = students
+        .filter(s => s.status === "present")
+        .map(s => s.nameBN || s.name);
+        
+      const absentStudents = students
+        .filter(s => s.status === "absent")
+        .map(s => s.nameBN || s.name);
 
-    console.log("Saving Attendance Batch:", {
-      tenant_id: activeTenantId,
-      teacher_id: userData?.user_id,
-      class: selectedClass,
-      dept: selectedDept,
-      date: attendanceDate,
-      total_students: students.length,
-      present_count: presents,
-      absent_count: absents,
-      records: students
-    });
+      const payload = {
+        tenant_id: activeTenantId,
+        classId: selectedClass,
+        section: selectedDept || "All",
+        subject: selectedSubject,
+        teacherName: userData?.name || "Unknown Teacher",
+        totalPresent: presentStudents.length,
+        totalAbsent: absentStudents.length,
+        presentStudents,
+        absentStudents
+      };
 
-    toast.success(`সাফল্যজনকভাবে ${students.length} জন শিক্ষার্থীর হাজিরা রেকর্ড করা হয়েছে।`, {
-      description: `উপস্থিত: ${presents}, অনুপস্থিত: ${absents}`
-    });
+      const res = await fetch("/api/attendance/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) throw new Error(result.error || "হাজিরা সেভ করতে সমস্যা হয়েছে");
+
+      toast.success("সাফল্যজনকভাবে হাজিরা সাবমিট করা হয়েছে।", {
+        description: `উপস্থিত: ${presentStudents.length}, অনুপস্থিত: ${absentStudents.length}. এটি শীঘ্রই শিটে যুক্ত হবে।`
+      });
+
+    } catch (err: any) {
+      console.error("Submission Error:", err);
+      toast.error(err.message || "হাজিরা সেভ করতে ব্যর্থ হয়েছে");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // 6. Generate Smart Session Code
@@ -259,7 +288,7 @@ export default function TeacherAttendancePage() {
 
       {/* Common Filters Container */}
       <Card className="p-6 border-transparent shadow-xl shadow-purple-500/5 rounded-[2rem]">
-         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-1">
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
                 <Users className="w-3 h-3" /> ক্লাস
@@ -286,6 +315,19 @@ export default function TeacherAttendancePage() {
                 <option value="">সকল বিভাগ</option>
                 {tenant?.departments?.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                <ClipboardList className="w-3 h-3" /> বিষয় (Subject)
+              </label>
+              <input 
+                type="text"
+                placeholder="বিষয় লিখুন..."
+                value={selectedSubject}
+                onChange={(e) => setSelectedSubject(e.target.value)}
+                className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-purple-600 transition-all font-bengali text-sm font-bold"
+              />
             </div>
 
             <div className="space-y-1">
@@ -370,10 +412,12 @@ export default function TeacherAttendancePage() {
                     {/* Bottom Action Bar */}
                     <div className="fixed bottom-20 left-0 right-0 p-4 max-w-4xl mx-auto z-40 bg-transparent pointer-events-none">
                        <button 
+                         disabled={isSubmitting}
                          onClick={handleSaveManualAttendance}
-                         className="pointer-events-auto w-full bg-purple-600 text-white py-4 rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-purple-600/40 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all font-bengali"
+                         className="pointer-events-auto w-full bg-purple-600 disabled:bg-purple-300 text-white py-4 rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-purple-600/40 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all font-bengali"
                        >
-                         <Check className="w-5 h-5" /> হাজিরা সেভ করুন
+                         {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
+                         হাজিরা সেভ করুন
                        </button>
                     </div>
                   </div>

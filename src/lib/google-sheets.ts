@@ -200,10 +200,10 @@ export async function createInstitutionSheet(
   try {
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: "Attendance Log!A1:F1",
+      range: "Attendance Log!A1:J1",
       valueInputOption: "USER_ENTERED",
       requestBody: {
-        values: [["Date", "Teacher ID", "Student ID", "Student Name", "Class", "Status"]],
+        values: [["Date", "Time", "Class ID", "Section", "Subject", "Teacher Name", "Total Present", "Total Absent", "Present Students", "Absent Students"]],
       },
     });
     console.log("[Sheets] Headers added to Attendance Log");
@@ -218,13 +218,106 @@ export async function createInstitutionSheet(
  * Appends attendance records to the institution's Google Sheet
  * Called by QStash worker in the background
  */
-export async function appendAttendanceToSheet(tenantId: string, data: any) {
-  // 1. Fetch googleSheetId from Firestore (READ ONLY)
+/**
+ * Syncs a teacher record to the "Teachers" tab
+ */
+export async function syncTeacherToSheet(tenantId: string, teacherData: any) {
+  const { adminDb } = await import("@/src/lib/firebase-admin");
+  const tenantDoc = await adminDb.collection("tenants").doc(tenantId).get();
+  
+  if (!tenantDoc.exists) throw new Error(`Institution not found: ${tenantId}`);
+  
+  const spreadsheetId = tenantDoc.data()?.googleSheetId;
+  const adminEmail = tenantDoc.data()?.adminEmail || "hello@muradkhank31.com";
+  if (!spreadsheetId) throw new Error("Google Sheet ID not configured");
+
+  const auth = await getSheetsAuth();
+  const sheets = google.sheets({ version: "v4", auth, params: { quotaUser: adminEmail } });
+
+  // Columns: ID, Name, Email, Role, Status, JoinedDate
+  const values = [[
+    teacherData.user_id || "N/A",
+    teacherData.name || "N/A",
+    teacherData.email || "N/A",
+    teacherData.role || "teacher",
+    teacherData.status || "approved",
+    teacherData.created_at || new Date().toISOString()
+  ]];
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: "'Teachers'!A:F",
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values },
+  });
+}
+
+/**
+ * Syncs a student record to the "Students" tab
+ */
+export async function syncStudentToSheet(tenantId: string, studentData: any) {
+  const { adminDb } = await import("@/src/lib/firebase-admin");
+  const tenantDoc = await adminDb.collection("tenants").doc(tenantId).get();
+  
+  if (!tenantDoc.exists) throw new Error(`Institution not found: ${tenantId}`);
+  
+  const spreadsheetId = tenantDoc.data()?.googleSheetId;
+  const adminEmail = tenantDoc.data()?.adminEmail || "hello@muradkhank31.com";
+  if (!spreadsheetId) throw new Error("Google Sheet ID not configured");
+
+  const auth = await getSheetsAuth();
+  const sheets = google.sheets({ version: "v4", auth, params: { quotaUser: adminEmail } });
+
+  // Columns: StudentID, Name, Email, Class, Section, Phone, Status
+  const values = [[
+    studentData.student_id || studentData.user_id || "N/A",
+    studentData.name || "N/A",
+    studentData.email || "N/A",
+    studentData.class || "N/A",
+    studentData.section || "N/A",
+    studentData.phone || "N/A",
+    studentData.status || "approved"
+  ]];
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: "'Students'!A:G",
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values },
+  });
+}
+
+/**
+ * Shared Auth Helper
+ */
+async function getSheetsAuth() {
+  const credentialsRaw = process.env.GOOGLE_CREDENTIALS_JSON;
+  let clientEmail: string;
+  let privateKey: string;
+
+  if (credentialsRaw) {
+    const credentials = JSON.parse(credentialsRaw);
+    clientEmail = credentials.client_email;
+    privateKey = credentials.private_key.replace(/\\n/g, "\n");
+  } else {
+    clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "";
+    privateKey = (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n");
+  }
+
+  return new google.auth.JWT({
+    email: clientEmail,
+    key: privateKey,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+  });
+}
+
+export async function appendAttendanceToSheet(tenantId: string, attendanceData: any) {
+  // 1. Fetch the spreadsheetId for this tenant from Firebase
   const { adminDb } = await import("@/src/lib/firebase-admin");
   const tenantDoc = await adminDb.collection("tenants").doc(tenantId).get();
   
   if (!tenantDoc.exists) {
-    throw new Error(`Institution with ID ${tenantId} not found`);
+    throw new Error(`Institution with ID ${tenantId} not found in 'tenants' collection`);
   }
   
   const tenantData = tenantDoc.data();
@@ -241,12 +334,19 @@ export async function appendAttendanceToSheet(tenantId: string, data: any) {
   let privateKey: string;
 
   if (credentialsRaw) {
-    const credentials = JSON.parse(credentialsRaw);
-    clientEmail = credentials.client_email;
-    privateKey = credentials.private_key.replace(/\\n/g, "\n");
+    try {
+      const credentials = JSON.parse(credentialsRaw);
+      clientEmail = credentials.client_email;
+      privateKey = credentials.private_key
+        .replace(/\\\\n/g, "\n")
+        .replace(/\\n/g, "\n")
+        .trim();
+    } catch (e) {
+      throw new Error("Failed to parse GOOGLE_CREDENTIALS_JSON");
+    }
   } else {
     clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "";
-    privateKey = (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n");
+    privateKey = (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n").trim();
   }
 
   const auth = new google.auth.JWT({
@@ -261,25 +361,32 @@ export async function appendAttendanceToSheet(tenantId: string, data: any) {
     params: { quotaUser: adminEmail }
   });
 
-  // 3. Append row
-  // Data format expected: { date, teacher_id, student_id, student_name, class_name, status }
-  const { date, teacher_id, student_id, student_name, class_name, status } = data;
+  // 3. Format the row data
+  const date = new Date().toLocaleDateString('en-GB');
+  const time = new Date().toLocaleTimeString('en-GB');
+  
+  const values = [
+    [
+      date,
+      time,
+      attendanceData.classId || "N/A",
+      attendanceData.section || "N/A",
+      attendanceData.subject || "N/A",
+      attendanceData.teacherName || "N/A",
+      attendanceData.totalPresent || 0,
+      attendanceData.totalAbsent || 0,
+      Array.isArray(attendanceData.presentStudents) ? JSON.stringify(attendanceData.presentStudents) : (attendanceData.presentStudents || "[]"),
+      Array.isArray(attendanceData.absentStudents) ? JSON.stringify(attendanceData.absentStudents) : (attendanceData.absentStudents || "[]")
+    ]
+  ];
 
+  // 4. Append to "Attendance Log" tab
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: "Attendance Log!A:F",
+    range: "'Attendance Log'!A:J",
     valueInputOption: "USER_ENTERED",
-    requestBody: {
-      values: [[
-        date, 
-        teacher_id, 
-        student_id, 
-        student_name || "N/A", 
-        class_name || "N/A", 
-        status
-      ]],
-    },
+    requestBody: { values },
   });
 
-  console.log(`[Sheets] Appended attendance for tenant: ${tenantId}`);
+  console.log(`[Sheets] Appended summary attendance for tenant: ${tenantId}`);
 }

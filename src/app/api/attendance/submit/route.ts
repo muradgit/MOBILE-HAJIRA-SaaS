@@ -14,14 +14,25 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { tenant_id, teacher_id, student_id, student_name, class_name, date, status } = body;
+    // New Summary Fields: classId, section, subject, teacherName, totalPresent, totalAbsent, presentStudents, absentStudents
+    const { 
+      tenant_id, 
+      classId, 
+      section, 
+      subject, 
+      teacherName, 
+      totalPresent, 
+      totalAbsent, 
+      presentStudents, 
+      absentStudents 
+    } = body;
 
-    // Validate required fields
-    if (!tenant_id || !teacher_id || !student_id || !date || !status) {
-      return errorResponse("Missing required fields: tenant_id, teacher_id, student_id, date, status");
+    // Validate required fields (at minimum tenant_id and some summary info)
+    if (!tenant_id || !classId || totalPresent === undefined) {
+      return errorResponse("Missing required fields: tenant_id, classId, totalPresent");
     }
 
-    // 2. Fetch googleSheetId from Firestore (READ ONLY)
+    // 2. Fetch tenant data and check credits
     const tenantDoc = await adminDb.collection("tenants").doc(tenant_id).get();
     if (!tenantDoc.exists) {
       return errorResponse("Institution not found", 404);
@@ -29,29 +40,40 @@ export async function POST(req: NextRequest) {
     
     const tenantData = tenantDoc.data();
     const googleSheetId = tenantData?.googleSheetId;
+    const creditsLeft = tenantData?.credits_left ?? 0;
 
     if (!googleSheetId) {
       return errorResponse("Google Sheet ID is not configured for this institution", 400);
     }
 
-    // 3. Queue the background sync job to QStash
-    // We send a more complete payload for the worker
+    if (creditsLeft <= 0) {
+      return errorResponse("আপনার প্রতিষ্ঠানের ক্রেডিট শেষ হয়ে গেছে। দয়া করে ক্রেডিট টপ-আপ করুন।", 403);
+    }
+
+    // 3. Deduct credit (Atomic update)
+    await adminDb.collection("tenants").doc(tenant_id).update({
+      credits_left: creditsLeft - 1
+    });
+
+    // 4. Queue the background sync job to QStash
     const attendanceData = {
-      date,
-      teacher_id,
-      student_id,
-      student_name: student_name || "N/A",
-      class_name: class_name || "N/A",
-      status
+      classId,
+      section,
+      subject,
+      teacherName,
+      totalPresent,
+      totalAbsent,
+      presentStudents,
+      absentStudents
     };
 
-    console.log(`[Attendance] Queuing sync for tenant: ${tenant_id}`);
+    console.log(`[Attendance] Queuing summary sync for tenant: ${tenant_id}`);
     await queueGoogleSheetSync(tenant_id, attendanceData, "ATTENDANCE");
 
     // Success response - Job is now in the queue
     return successResponse({ 
       success: true, 
-      message: "Attendance submission queued successfully. It will appear in Google Sheets shortly." 
+      message: "হাজিরা সফলভাবে সাবমিট হয়েছে এবং শিটে সেভ হচ্ছে।" 
     });
 
   } catch (error: any) {
