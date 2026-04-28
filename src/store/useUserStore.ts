@@ -28,12 +28,16 @@ export const useUserStore = create<UserStoreState>((set) => ({
   creditBalance: 0,
   isInitialized: false,
 
-  setUser: (user) => set({ 
-    user, 
-    userRole: user?.role || null, 
-    activeRole: user?.role || null,
-    tenantId: user?.tenant_id || null,
-    isInitialized: true 
+  setUser: (user) => set((state) => {
+    const isSameUser = state.user?.user_id === user?.user_id;
+    return { 
+      user, 
+      userRole: user?.role || null, 
+      // Only set activeRole from user.role if it's a new user login or was null
+      activeRole: isSameUser ? (state.activeRole || user?.role || null) : (user?.role || null),
+      tenantId: user?.tenant_id || null,
+      isInitialized: true 
+    };
   }),
 
   setRole: (role) => set({ userRole: role }),

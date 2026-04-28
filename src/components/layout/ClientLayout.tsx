@@ -198,7 +198,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     <div className="h-screen w-full flex flex-col overflow-hidden bg-[#F8F9FA]">
       
       {/* 1. TOP HEADER (Professional Overlay) */}
-      <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-6 sm:px-10 z-50 shrink-0">
+      <header className="sticky top-0 h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-6 sm:px-10 z-[100] shrink-0">
         {!userData ? (
           /* LOGGED OUT HEADER */
           <>
@@ -390,8 +390,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* --- MAIN CONTENT (Self-Scrolling Area) --- */}
-      <main className="flex-1 overflow-hidden relative">
-         <div className="main-content w-full h-full bg-[#f8f9fa] pb-24 lg:pb-12">
+      <main className="flex-1 overflow-y-auto relative no-scrollbar">
+         <div className="main-content w-full min-h-full bg-[#f8f9fa] pb-24 lg:pb-12">
             <div className="max-w-7xl mx-auto px-4 sm:px-10 py-8">
                {children}
             </div>

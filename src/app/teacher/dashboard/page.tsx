@@ -3,6 +3,7 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/hooks/useAuth";
+import { useUserStore } from "@/src/store/useUserStore";
 import { 
   QrCode, 
   FileText, 
@@ -15,6 +16,7 @@ import { Card } from "@/src/components/ui/Card";
 
 export default function TeacherDashboard() {
   const { userData, loading: authLoading } = useAuth();
+  const { activeRole } = useUserStore();
   const router = useRouter();
 
   if (authLoading) {
@@ -25,7 +27,8 @@ export default function TeacherDashboard() {
     );
   }
 
-  if (!userData || userData.role !== "Teacher") {
+  const isAuthorized = activeRole === "Teacher" || userData?.role === "SuperAdmin";
+  if (!userData || !isAuthorized) {
     return <div className="p-8 text-center text-red-500 font-bold uppercase tracking-widest">Access Denied</div>;
   }
 

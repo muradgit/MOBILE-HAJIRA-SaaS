@@ -39,7 +39,7 @@ import { cn } from "@/src/lib/utils";
  */
 export default function AdminDashboard() {
   const { userData, loading: authLoading } = useAuth();
-  const { tenantId: storeTenantId } = useUserStore();
+  const { tenantId: storeTenantId, activeRole } = useUserStore();
   const router = useRouter();
   
   // States
@@ -190,8 +190,8 @@ export default function AdminDashboard() {
     </div>
   );
 
-  const isAuthorized = userData?.role === "InstitutionAdmin" || userData?.role === "SuperAdmin";
-  if (!isAuthorized) return (
+  const isAuthorized = (activeRole === "InstitutionAdmin" || activeRole === "SuperAdmin" || activeRole === "Admin");
+  if (!userData || !isAuthorized) return (
     <div className="flex flex-col items-center justify-center p-12 text-center space-y-4">
       <ShieldAlert className="w-16 h-16 text-red-500" />
       <h2 className="text-2xl font-black text-gray-900 font-bengali">অ্যাক্সেস ডিনাইড</h2>
