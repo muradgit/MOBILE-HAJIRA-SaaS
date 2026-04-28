@@ -74,6 +74,8 @@ export interface UserData {
   created_at?: string;
   status?: "pending" | "approved" | "suspended" | string;
   is_also_teacher?: boolean;
+  department?: string;
+  institutionName?: string;
 }
 
 export interface Course {

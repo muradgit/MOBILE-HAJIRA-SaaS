@@ -202,8 +202,11 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
         {!userData ? (
           /* LOGGED OUT HEADER */
           <>
-            <div className="flex flex-col">
-               <h1 className="text-xl sm:text-2xl font-black text-[#6f42c1] leading-none tracking-tighter">MOBILE-HAJIRA</h1>
+            <div 
+              onClick={() => router.push("/")}
+              className="flex flex-col cursor-pointer hover:opacity-80 transition-opacity"
+            >
+               <h1 className="text-xl sm:text-2xl font-black text-[#6f42c1] leading-none tracking-tighter">Mobile Hajira</h1>
                <p className="text-[10px] sm:text-xs text-gray-400 font-bold mt-1 font-bengali">হাজিরা নেয়ার সেরা সিস্টেম</p>
             </div>
             <div className="flex gap-2 sm:gap-4">
@@ -218,38 +221,46 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
         ) : (
           /* LOGGED IN HEADER */
           <>
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4 sm:gap-6">
                <button 
                  onClick={() => setIsSidebarOpen(true)}
-                 className="flex items-center gap-2 text-gray-600 hover:text-[#6f42c1] transition-all group"
+                 className="flex items-center gap-2 text-gray-600 hover:text-[#6f42c1] transition-all group shrink-0"
                >
                  <div className="p-2.5 bg-gray-50 rounded-xl group-hover:bg-purple-100 transition-colors">
-                   <Menu className="w-6 h-6" />
+                   <Menu className="w-5 h-5 sm:w-6 h-6" />
                  </div>
-                 <span className="text-sm font-black font-bengali hidden sm:block">মেন্যু</span>
                </button>
-               {isLandingPage && (
-                 <button 
-                  onClick={() => {
-                    const target = getDashboardRoute(userData?.role);
-                    if (target !== "/") router.push(target);
-                  }}
-                  className="bg-purple-50 text-[#6f42c1] text-xs font-black uppercase px-4 py-2.5 rounded-xl hover:bg-purple-100 transition-all flex items-center gap-2"
-                 >
-                   <LayoutDashboard className="w-4 h-4" /> Go to Dashboard
-                 </button>
-               )}
-               <div className="hidden sm:flex flex-col">
-                  <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest leading-none mb-1">
-                    {userData.role === "SuperAdmin" ? "System HQ" : (tenant?.name || "Member Panel")}
-                  </span>
-                  <h2 className="text-sm font-black text-gray-900 truncate max-w-[200px]">
-                    {userData.nameBN || userData.name}
-                  </h2>
+
+               <div 
+                  onClick={() => router.push(getDashboardRoute(activeRole))}
+                  className="flex flex-col cursor-pointer group"
+               >
+                  <h1 className="text-sm sm:text-base font-black text-[#6f42c1] leading-tight tracking-tight group-hover:text-purple-700 transition-colors">
+                    Mobile Hajira System
+                  </h1>
+                  <div className="flex flex-col -mt-0.5">
+                    <p className="text-[9px] sm:text-[10px] font-bold text-gray-500 truncate max-w-[120px] sm:max-w-[200px]">
+                      {userData.role === "SuperAdmin" ? "System Administration" : (tenant?.name || "Institution Panel")}
+                    </p>
+                    {userData.department && (
+                      <p className="text-[8px] sm:text-[9px] font-medium text-gray-400 truncate max-w-[120px] sm:max-w-[180px]">
+                        {userData.department}
+                      </p>
+                    )}
+                  </div>
                </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <div className="hidden sm:flex flex-col text-right">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">
+                  নমস্কার
+                </span>
+                <h2 className="text-sm font-black text-gray-900 truncate">
+                  {userData.nameBN || userData.name}
+                </h2>
+              </div>
+              
               <div className="p-2.5 bg-gray-50 rounded-full text-gray-400 hover:text-[#6f42c1] cursor-pointer relative hidden sm:block">
                  <Bell className="w-5 h-5" />
                  <div className="absolute top-2 right-2 w-2 h-2 bg-[#6f42c1] rounded-full" />
