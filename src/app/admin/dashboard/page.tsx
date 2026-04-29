@@ -27,7 +27,8 @@ import {
   Share2, 
   CheckCircle2,
   AlertTriangle,
-  ArrowUpRight
+  ArrowUpRight,
+  Database
 } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
 import { Tenant, UserData } from "@/src/lib/types";
@@ -217,31 +218,38 @@ export default function AdminDashboard() {
   // Onboarding Phase
   if (!tenant?.googleSheetId && lowerRole === "institutionadmin") {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center p-4">
-        <Card className="max-w-md w-full p-8 text-center space-y-6 border-purple-100 shadow-2xl shadow-purple-500/10">
-          <div className="w-20 h-20 bg-purple-100 rounded-3xl flex items-center justify-center mx-auto animate-bounce">
-            <Zap className="w-10 h-10 text-[#6f42c1]" />
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-black text-gray-900 font-bengali">সাগরিকা স্বাগতম!</h2>
-            <p className="text-sm text-gray-500 leading-relaxed font-medium">
-              আপনার প্রতিষ্ঠানের হাজিরা সিস্টেম চালু করতে এবং ডাটা ব্যাকআপের জন্য আমাদের একটি গুগল শীট তৈরি করতে হবে।
-            </p>
+      <div className="fixed inset-0 z-[200] bg-white flex items-center justify-center p-6">
+        <div className="max-w-xl w-full text-center space-y-8 animate-in fade-in zoom-in duration-500">
+          <div className="flex justify-center">
+            <div className="w-24 h-24 bg-purple-100 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-purple-500/10">
+              <Zap className="w-12 h-12 text-[#6f42c1]" />
+            </div>
           </div>
           
+          <div className="space-y-4">
+            <h1 className="text-3xl sm:text-4xl font-black text-gray-900 font-bengali tracking-tight">
+              হ্যালো "{userData?.nameBN || userData?.name}", স্বাগতম।
+            </h1>
+            <p className="text-lg sm:text-xl text-gray-600 leading-relaxed font-bengali font-medium">
+              এটেনডেন্স সিস্টেম সেটআপ শুরু করার জন্য নিন্মের বাটনে ক্লিক করুন। এতে নতুন একটি গুগল শীট তৈরি হবে যাতে সকল তথ্য ব্যাকআপ হিসেবে থাকবে। এই শীটটি আপনার ড্রাইভে শেয়ার করা থাকবে।
+            </p>
+          </div>
+
           <button 
             onClick={handleSetupSystem}
             disabled={onboarding}
-            className="w-full bg-[#6f42c1] text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-purple-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            className="w-full sm:w-auto bg-[#6f42c1] text-white px-12 py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-2xl shadow-purple-500/30 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 mx-auto disabled:opacity-50"
           >
-            {onboarding ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-            সিস্টেম সেটআপ করুন
+            {onboarding ? (
+              <Loader2 className="w-6 h-6 animate-spin" />
+            ) : (
+              <div className="flex items-center gap-3">
+                <Database className="w-6 h-6" />
+                <span>Create Backup Sheet</span>
+              </div>
+            )}
           </button>
-          
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-            * এটি অটোমেটিক আপনার ইমেইলে শেয়ার করা হবে
-          </p>
-        </Card>
+        </div>
       </div>
     );
   }
