@@ -5,18 +5,19 @@ import { auth, db } from "@/src/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { UserData, Tenant } from "@/src/lib/types";
+import { useUserStore } from "@/src/store/useUserStore";
 
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [user, setUserAuth] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const { user: userData, setUser, setTenant } = useUserStore();
+  const [localTenant, setLocalTenant] = useState<Tenant | null>(null);
 
   useEffect(() => {
     let unsubUser: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
+      setUserAuth(firebaseUser);
       
       // Clean up previous user listener if any
       if (unsubUser) {
@@ -26,65 +27,51 @@ export function useAuth() {
 
       if (firebaseUser) {
         const userDocRef = doc(db, "users", firebaseUser.uid);
-        const userDoc = await getDoc(userDocRef);
+        
+        // Initial check for existence (handling race with registration)
+        try {
+          const userDoc = await getDoc(userDocRef);
+          if (!userDoc.exists()) {
+             // Handle automatic creation if missing
+             const pendingDataStr = typeof window !== "undefined" ? localStorage.getItem("pendingRegistration") : null;
+             const pendingData = pendingDataStr ? JSON.parse(pendingDataStr) : {};
+             const role = pendingData.role || "Student";
+             const tenant_id = role === "InstitutionAdmin" ? `tenant_${firebaseUser.uid}` : (pendingData.tenant_id || null);
 
-        if (!userDoc.exists()) {
-          // Check for pending registration data
-          const pendingDataStr = localStorage.getItem("pendingRegistration");
-          const pendingData = pendingDataStr ? JSON.parse(pendingDataStr) : {};
-
-          // Create the user document with default values
-          const newUserId = firebaseUser.uid;
-          const tenant_id = pendingData.role === "InstitutionAdmin" ? `tenant_${newUserId}` : (pendingData.tenant_id || null);
-
-          await setDoc(userDocRef, {
-            user_id: newUserId,
-            email: firebaseUser.email,
-            name: pendingData.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || "New User",
-            nameBN: pendingData.nameBN || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || "নতুন ইউজার",
-            profile_image: firebaseUser.photoURL,
-            role: pendingData.role || "Student",
-            tenant_id: tenant_id,
-            status: (pendingData.role === "InstitutionAdmin" || pendingData.role === "SuperAdmin") ? "approved" : "pending",
-            created_at: new Date().toISOString(),
-            credits_left: 100, // Grant 100 free credits
-          });
-
-          // If InstitutionAdmin, create the tenant record as well
-          if (pendingData.role === "InstitutionAdmin") {
-            const tenantDocRef = doc(db, "tenants", tenant_id);
-            await setDoc(tenantDocRef, {
-              tenant_id: tenant_id,
-              name: pendingData.institutionNameEN || pendingData.institutionName || "My Institution",
-              nameBN: pendingData.institutionNameBN || "আমার প্রতিষ্ঠান",
-              eiin: pendingData.eiin || "",
-              credits_left: 100, // Grant 100 free credits to the tenant
-              status: "active",
-              owner_email: firebaseUser.email,
-              admin_name: pendingData.name || firebaseUser.displayName || "",
-              created_at: new Date().toISOString(),
-              plan: "Free Tier"
-            });
+             await setDoc(userDocRef, {
+                user_id: firebaseUser.uid,
+                email: firebaseUser.email,
+                name: pendingData.name || firebaseUser.displayName || "New User",
+                nameBN: pendingData.nameBN || "নতুন ইউজার",
+                role,
+                tenant_id,
+                status: (role === "InstitutionAdmin" || role === "SuperAdmin") ? "approved" : "pending",
+                created_at: new Date().toISOString()
+             });
           }
-
-          // Clear pending registration
-          localStorage.removeItem("pendingRegistration");
+        } catch (e) {
+          console.error("Auth check error:", e);
         }
 
-        // Setup snapshot listener for user data
+        // Setup snapshot listener for real-time sync
         unsubUser = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data() as UserData;
-            setUserData(data);
+            setUser(data);
             
             if (data.tenant_id) {
+              setTenant(data.tenant_id);
               const tenantDocRef = doc(db, "tenants", data.tenant_id);
               getDoc(tenantDocRef).then((tenantSnap) => {
                 if (tenantSnap.exists()) {
-                  setTenant(tenantSnap.data() as Tenant);
+                  setLocalTenant(tenantSnap.data() as Tenant);
                 }
               });
             }
+          } else {
+            setUser(null);
+            setTenant(null);
+            setLocalTenant(null);
           }
           setLoading(false);
         }, (error) => {
@@ -92,8 +79,10 @@ export function useAuth() {
           setLoading(false);
         });
       } else {
-        setUserData(null);
+        setUserAuth(null);
+        setUser(null);
         setTenant(null);
+        setLocalTenant(null);
         setLoading(false);
       }
     });
@@ -102,7 +91,7 @@ export function useAuth() {
       unsubscribeAuth();
       if (unsubUser) unsubUser();
     };
-  }, []);
+  }, [setUser, setTenant]);
 
-  return { user, userData, tenant, loading };
+  return { user, userData, tenant: localTenant, loading };
 }

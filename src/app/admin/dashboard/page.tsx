@@ -181,12 +181,14 @@ export default function AdminDashboard() {
   };
 
   // Access Denied Screen (Authorization Check First)
-  const isAuthorized = (activeRole === "InstitutionAdmin" || activeRole === "SuperAdmin" || activeRole === "Admin");
-  if (!authLoading && (!userData || !isAuthorized)) return (
-    <div className="flex flex-col items-center justify-center p-12 text-center space-y-4">
+  const lowerRole = (userData?.role || "").toLowerCase().replace(/\s+/g, "");
+  const isAuthorized = ["institutionadmin", "admin", "superadmin"].includes(lowerRole);
+  
+  if (!authLoading && !isAuthorized) return (
+    <div className="flex flex-col items-center justify-center p-12 text-center space-y-4 min-h-[60vh]">
       <ShieldAlert className="w-16 h-16 text-red-500" />
       <h2 className="text-2xl font-black text-gray-900 font-bengali">অ্যাক্সেস ডিনাইড</h2>
-      <p className="text-gray-500">এই ড্যাশবোর্ডটি দেখার অনুমতি আপনার নেই।</p>
+      <p className="text-gray-500">এই ড্যাশবোর্ডটি দেখার অনুমতি আপনার নেই। (আপনার রোল: {userData?.role})</p>
       <button 
         onClick={() => window.location.href = "/"}
         className="mt-4 bg-[#6f42c1] text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest"
@@ -198,7 +200,7 @@ export default function AdminDashboard() {
 
   // Auth & Loading Overlay
   if (authLoading || (loading && !activeTenantId)) return (
-    <div className="h-[80vh] flex items-center justify-center bg-white/50 backdrop-blur-sm">
+    <div className="h-[80vh] flex items-center justify-center bg-white">
       <div className="flex flex-col items-center gap-4">
         <Loader2 className="w-10 h-10 text-[#6f42c1] animate-spin" />
         <p className="text-xs font-black text-gray-400 uppercase tracking-widest animate-pulse">লোড হচ্ছে...</p>

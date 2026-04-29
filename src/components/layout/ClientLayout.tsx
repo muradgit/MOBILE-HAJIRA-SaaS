@@ -38,15 +38,9 @@ import { useUserStore } from "@/src/store/useUserStore";
  */
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const { userData, tenant, loading } = useAuth();
-  const { activeRole, setActiveRole, setUser, user: storeUser } = useUserStore();
+  const { activeRole, setActiveRole, user: storeUser } = useUserStore();
   const router = useRouter();
   const pathname = usePathname();
-
-  useEffect(() => {
-    if (userData && (!storeUser || storeUser.user_id !== userData.user_id)) {
-      setUser(userData);
-    }
-  }, [userData, storeUser, setUser]);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -220,7 +214,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     <div className="h-screen w-full flex flex-col overflow-hidden bg-[#F8F9FA]">
       
       {/* 1. TOP HEADER (Professional Overlay) */}
-      <header className="sticky top-0 h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-6 sm:px-10 z-[100] shrink-0">
+      <header className="sticky top-0 h-20 bg-white border-b border-gray-100 flex items-center justify-between px-6 sm:px-10 z-[100] shrink-0">
         {!userData ? (
           /* LOGGED OUT HEADER */
           <>

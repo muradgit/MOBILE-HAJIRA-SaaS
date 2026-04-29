@@ -77,8 +77,8 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const isGoogleUser = user?.providerData.some(p => p.providerId === "google.com");
-  const hasPassword = user?.providerData.some(p => p.providerId === "password");
+  const isGoogleUser = user?.providerData.some((p: any) => p.providerId === "google.com");
+  const hasPassword = user?.providerData.some((p: any) => p.providerId === "password");
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,7 +140,7 @@ export default function ProfilePage() {
       const freshUser = auth.currentUser;
       if (!freshUser) throw new Error("ইউজার লোড করতে সমস্যা হয়েছে।");
 
-      const userHasPassword = freshUser.providerData.some(p => p.providerId === "password");
+      const userHasPassword = freshUser.providerData.some((p: any) => p.providerId === "password");
 
       // If user already has a password, re-authenticate first
       if (userHasPassword) {
