@@ -75,10 +75,10 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const isDashboardArea = pathname.startsWith("/admin") || pathname.startsWith("/super-admin");
   const isOnboarding = (normalizedRole === "institutionadmin" || normalizedRole === "superadmin") && isDashboardArea && !tenant?.googleSheetId && !!userData?.tenant_id;
 
-  // 3. Layout visibility logic
-  const hideLayout = isAuthPage || isOnboarding;
-
-  // 1. Role-Based Menu Definitions
+    // 3. Layout visibility logic
+    const hideLayout = isOnboarding;
+  
+    // 1. Role-Based Menu Definitions
   const menuItems: Record<string, any[]> = {
     SuperAdmin: [
       { label: "ড্যাশবোর্ড", href: "/super-admin/dashboard", icon: LayoutDashboard },
@@ -157,14 +157,19 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     if (!roleToUse) return "/";
     const normalizedRole = roleToUse.toLowerCase().replace(/\s+/g, "");
     
-    // Check for SuperAdmin via email or role string
-    if (auth.currentUser?.email === superAdminEmail || normalizedRole === "superadmin") {
+    // Check for SuperAdmin via explicitly assigned role first
+    if (normalizedRole === "superadmin") {
       return "/super-admin/dashboard";
     }
 
     // Explicitly mapping all Admin variations to /admin/dashboard
     if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
       return "/admin/dashboard";
+    }
+
+    // Role-based fallback for SuperAdmin email if NO role is assigned yet or it's unknown
+    if (auth.currentUser?.email === superAdminEmail) {
+      return "/super-admin/dashboard";
     }
     
     if (normalizedRole === "teacher") {
