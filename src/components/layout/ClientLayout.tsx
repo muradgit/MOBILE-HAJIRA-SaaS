@@ -72,11 +72,10 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
   // Check if onboarding is needed
   const normalizedRole = (userData?.role || "").toLowerCase().replace(/\s+/g, "");
-  const isDashboardArea = pathname.startsWith("/admin") || pathname.startsWith("/super-admin");
-  const isOnboarding = (normalizedRole === "institutionadmin" || normalizedRole === "superadmin") && isDashboardArea && !tenant?.googleSheetId && !!userData?.tenant_id;
+  const isOnboarding = normalizedRole === "institutionadmin" && pathname.startsWith("/admin") && !tenant?.googleSheetId && !!userData?.tenant_id;
 
-    // 3. Layout visibility logic
-    const hideLayout = isOnboarding;
+  // 3. Layout visibility logic
+  const hideLayout = isOnboarding;
   
     // 1. Role-Based Menu Definitions
   const menuItems: Record<string, any[]> = {
