@@ -43,9 +43,10 @@ export async function POST(req: NextRequest) {
       name,
       email,
       role,
+      has_password: !!password,
       status: "approved",
       created_at: new Date().toISOString(),
-      ...extra_data, // e.g. class, section for students
+      ...extra_data,
     };
 
     // TOP-LEVEL USERS COLLECTION (Required for generic login/auth hooks)
@@ -78,17 +79,34 @@ export async function PUT(req: NextRequest) {
       return errorResponse("Missing required fields", 400);
     }
 
+    // 1. Handle Password Update in Firebase Auth if provided
+    if (updates.password) {
+      await adminAuth.updateUser(user_id, {
+        password: updates.password,
+      });
+      // Mark has_password in Firestore
+      updates.has_password = true;
+      // We don't want to store plain text password in Firestore
+      delete updates.password;
+    }
+
     const collectionName = role === "teacher" ? "teachers" : "students";
-    const userRef = adminDb.collection("tenants").doc(tenant_id).collection(collectionName).doc(user_id);
+    const subRef = adminDb.collection("tenants").doc(tenant_id).collection(collectionName).doc(user_id);
+    const globalRef = adminDb.collection("users").doc(user_id);
     
-    // Update Firestore
-    await userRef.update({
+    const finalUpdates = {
       ...updates,
       updated_at: new Date().toISOString(),
-    });
+    };
 
-    // Get fresh data for sync
-    const updatedDoc = await userRef.get();
+    // 2. Update Both Firestore Locations
+    await Promise.all([
+      subRef.update(finalUpdates),
+      globalRef.update(finalUpdates).catch(() => console.warn("Global user doc missing for", user_id))
+    ]);
+
+    // 3. Get fresh data for sync
+    const updatedDoc = await subRef.get();
     const fullData = updatedDoc.data();
 
     // Queue Sync to Google Sheets

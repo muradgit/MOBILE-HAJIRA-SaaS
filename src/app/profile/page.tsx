@@ -4,11 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@/src/hooks/useAuth";
 import { auth, db } from "@/src/lib/firebase";
 import { 
-  updatePassword, 
-  updateProfile, 
-  EmailAuthProvider, 
-  reauthenticateWithCredential,
-  linkWithCredential
+  updateProfile
 } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import { 
@@ -131,70 +127,35 @@ export default function ProfilePage() {
 
     setPasswordSubmitting(true);
     try {
-      // Use auth.currentUser directly to ensure the most up-to-date user object
-      const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error("ইউজার খুঁজে পাওয়া যায়নি।");
+      // 1. Get Firebase ID Token for Authentication
+      const token = await auth.currentUser?.getIdToken(true);
+      if (!token) throw new Error("Authentication token not found.");
 
-      // Refresh user object to get latest providerData
-      await currentUser.reload();
-      const freshUser = auth.currentUser;
-      if (!freshUser) throw new Error("ইউজার লোড করতে সমস্যা হয়েছে।");
+      // 2. Call the Set Password API (Uses Admin SDK)
+      const response = await fetch("/api/auth/set-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ password: newPassword })
+      });
 
-      const userHasPassword = freshUser.providerData.some((p: any) => p.providerId === "password");
-
-      // If user already has a password, re-authenticate first
-      if (userHasPassword) {
-        if (!currentPassword) {
-          throw new Error("বর্তমান পাসওয়ার্ড আবশ্যক।");
-        }
-        const credential = EmailAuthProvider.credential(freshUser.email!, currentPassword);
-        await reauthenticateWithCredential(freshUser, credential);
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || "পাসওয়ার্ড আপডেট করতে সমস্যা হয়েছে।");
       }
 
-      // Set/Update password
-      if (userHasPassword) {
-        await updatePassword(freshUser, newPassword);
-      } else {
-        const credential = EmailAuthProvider.credential(freshUser.email!, newPassword);
-        await linkWithCredential(freshUser, credential);
-      }
-
-      // Update Firestore to mark that the user has a password set (Both top-level and subcollection)
-      const userRef = doc(db, "users", freshUser.uid);
-      const passPayload = {
-        has_password: true,
-        updated_at: new Date().toISOString()
-      };
-      await updateDoc(userRef, passPayload);
-
-      // Also update subcollection if applicable
-      const lowerRole = (userData?.role || "").toLowerCase();
-      if (userData?.tenant_id && (lowerRole === "teacher" || lowerRole === "student")) {
-        const subCollName = lowerRole === "teacher" ? "teachers" : "students";
-        const subRef = doc(db, "tenants", userData.tenant_id, subCollName, freshUser.uid);
-        try {
-          await updateDoc(subRef, passPayload);
-        } catch (e) {
-             console.warn("Subcollection password update skipped:", e);
-        }
-      }
-
-      // Reload again to refresh the local state for the UI
-      await freshUser.reload();
-
-      toast.success(userHasPassword ? "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।" : "পাসওয়ার্ড সফলভাবে সেট করা হয়েছে।");
+      // 3. Reload session/user record
+      await auth.currentUser?.reload();
+      
+      toast.success(hasPassword ? "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।" : "পাসওয়ার্ড সফলভাবে সেট করা হয়েছে।");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err: any) {
       console.error(err);
-      if (err.code === "auth/wrong-password") {
-        toast.error("বর্তমান পাসওয়ার্ডটি সঠিক নয়।");
-      } else if (err.code === "auth/requires-recent-login") {
-        toast.error("নিরাপত্তার স্বার্থে পুনরায় লগইন করে চেষ্টা করুন।");
-      } else {
-        toast.error(err.message || "পাসওয়ার্ড পরিবর্তন করা সম্ভব হয়নি।");
-      }
+      toast.error(err.message || "পাসওয়ার্ড পরিবর্তন করা সম্ভব হয়নি।");
     } finally {
       setPasswordSubmitting(false);
     }
