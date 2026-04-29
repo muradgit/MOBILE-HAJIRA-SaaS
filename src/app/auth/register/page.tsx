@@ -177,7 +177,7 @@ export default function RegisterPage() {
         nameBN: data.nameBN,
         phone: data.phone,
         role: isSuperAdminEmail ? "SuperAdmin" : activeRole,
-        tenant_id: isSuperAdminEmail ? "SUPER_ADMIN" : finalTenantId,
+        tenant_id: finalTenantId,
         status: (activeRole === "InstitutionAdmin" || isSuperAdminEmail) ? "approved" : "pending",
         profile_image: user.photoURL,
         created_at: serverTimestamp(),

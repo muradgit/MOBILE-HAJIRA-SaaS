@@ -185,12 +185,6 @@ export default function AdminDashboard() {
   const lowerRole = (userData?.role || "").toLowerCase().replace(/\s+/g, "");
   const isAuthorized = ["institutionadmin", "admin", "superadmin"].includes(lowerRole);
   
-  useEffect(() => {
-    if (!authLoading && lowerRole === "superadmin") {
-      router.replace("/super-admin/dashboard");
-    }
-  }, [authLoading, lowerRole, router]);
-
   if (!authLoading && !isAuthorized) return (
     <div className="flex flex-col items-center justify-center p-12 text-center space-y-4 min-h-[60vh]">
       <ShieldAlert className="w-16 h-16 text-red-500" />
@@ -216,7 +210,8 @@ export default function AdminDashboard() {
   );
 
   // Onboarding Phase
-  if (!tenant?.googleSheetId && lowerRole === "institutionadmin") {
+  const needsOnboarding = !tenant?.googleSheetId && ["institutionadmin", "superadmin"].includes(lowerRole);
+  if (needsOnboarding && activeTenantId) {
     return (
       <div className="fixed inset-0 z-[200] bg-white flex items-center justify-center p-6">
         <div className="max-w-xl w-full text-center space-y-8 animate-in fade-in zoom-in duration-500">
