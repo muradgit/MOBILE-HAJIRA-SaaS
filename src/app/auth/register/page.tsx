@@ -216,7 +216,7 @@ export default function RegisterPage() {
       if (normalizedRole === "superadmin") {
         target = "/super-admin/dashboard";
       } else if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
-        target = "/admin/dashboard";
+        target = "/admin/onboarding";
       } else if (normalizedRole === "teacher") {
         target = "/teacher/dashboard";
       } else if (normalizedRole === "student") {

@@ -72,12 +72,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
   // Check if onboarding is needed
   const normalizedRole = (userData?.role || "").toLowerCase().replace(/\s+/g, "");
-  const isOnboarding = normalizedRole === "institutionadmin" && pathname.startsWith("/admin") && !tenant?.googleSheetId && !!userData?.tenant_id;
-
-  // 3. Layout visibility logic
-  const hideLayout = isOnboarding;
   
-    // 1. Role-Based Menu Definitions
+  // 1. Role-Based Menu Definitions
   const menuItems: Record<string, any[]> = {
     SuperAdmin: [
       { label: "ড্যাশবোর্ড", href: "/super-admin/dashboard", icon: LayoutDashboard },
@@ -224,12 +220,16 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // Centered blank layout ONLY for onboarding
+  if (pathname === "/admin/onboarding") {
+    return <main className="flex min-h-screen items-center justify-center bg-gray-50">{children}</main>;
+  }
+
   return (
     <div className="h-screen w-full flex flex-col overflow-hidden bg-[#F8F9FA]">
       
       {/* 1. TOP HEADER (Professional Overlay) */}
-      {!hideLayout && (
-        <header className="sticky top-0 h-20 bg-white border-b border-gray-100 flex items-center justify-between px-6 sm:px-10 z-[100] shrink-0">
+      <header className="sticky top-0 h-20 bg-white border-b border-gray-100 flex items-center justify-between px-6 sm:px-10 z-[100] shrink-0">
           {!userData ? (
             /* LOGGED OUT HEADER */
             <>
@@ -347,10 +347,9 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             </>
           )}
         </header>
-      )}
 
       {/* --- SIDEBAR (Slide-over with close) --- */}
-      {!hideLayout && isSidebarOpen && userData && (
+      {isSidebarOpen && userData && (
         <div className="fixed inset-0 z-[100]">
           <div 
             onClick={() => setIsSidebarOpen(false)} 
@@ -444,7 +443,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* --- MOBILE BOTTOM NAV --- */}
-      {!hideLayout && userData && (
+      {userData && (
         <nav className="fixed bottom-0 left-0 right-0 h-20 bg-white border-t border-gray-100 px-6 flex items-center justify-between lg:hidden z-50">
            {mobileNavItems.map((item) => {
              const isActive = pathname === item.href;
