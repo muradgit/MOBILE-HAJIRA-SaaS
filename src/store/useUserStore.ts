@@ -50,6 +50,7 @@ export const useUserStore = create<UserStoreState>((set) => ({
   logout: () => set({ 
     user: null, 
     userRole: null, 
+    activeRole: null, 
     tenantId: null, 
     creditBalance: 0, 
     isInitialized: false 

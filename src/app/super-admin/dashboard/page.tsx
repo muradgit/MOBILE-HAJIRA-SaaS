@@ -146,25 +146,31 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  // Auth Protection & Loading Screen
-  if (authLoading || (userData && loading && !error)) {
-    return (
-      <div className="flex h-screen items-center justify-center p-6 bg-white">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 text-purple-600 animate-spin" />
-          <p className="text-xs font-black text-gray-400 uppercase tracking-widest animate-pulse">ড্যাশবোর্ড লোড হচ্ছে...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Access Denied Screen
-  if (!userData || userData.role !== "SuperAdmin") {
+  // Access Denied Screen (Authorization Check First)
+  if (!authLoading && (!userData || userData.role !== "SuperAdmin")) {
     return (
       <div className="p-8 text-center flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Database className="w-16 h-16 text-red-200" />
         <h2 className="text-2xl font-black text-red-500 font-bengali">অ্যাক্সেস ডিনাইড</h2>
         <p className="text-gray-500 max-w-xs">এই পৃষ্ঠাটি দেখার জন্য উপযুক্ত পারমিশন আপনার নেই।</p>
+        <button 
+          onClick={() => window.location.href = "/"}
+          className="mt-4 bg-[#6f42c1] text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest"
+        >
+          আমার ড্যাশবোর্ডে ফিরে যান
+        </button>
+      </div>
+    );
+  }
+
+  // Auth Protection & Loading Screen
+  if (authLoading || (loading && !error)) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center p-6 bg-white/50 backdrop-blur-sm">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 text-purple-600 animate-spin" />
+          <p className="text-xs font-black text-gray-400 uppercase tracking-widest animate-pulse">ড্যাশবোর্ড লোড হচ্ছে...</p>
+        </div>
       </div>
     );
   }
@@ -183,7 +189,7 @@ export default function SuperAdminDashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-2xl sm:text-3xl font-black text-gray-900 font-bengali">
-            স্বাগতম, {userData.nameBN || userData.name} 👋
+            স্বাগতম, {userData?.nameBN || userData?.name} 👋
           </h1>
           <p className="text-sm text-gray-500 font-medium tracking-tight">Super Admin Dashboard • System Control Center</p>
         </div>

@@ -18,7 +18,7 @@ export default function StudentDashboard() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="h-[80vh] flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-[#6f42c1]" />
       </div>
     );

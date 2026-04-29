@@ -51,6 +51,26 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
+  // Close menus when route changes
+  useEffect(() => {
+    setIsSidebarOpen(false);
+    setIsProfileOpen(false);
+  }, [pathname]);
+
+  // Click outside to close profile
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isProfileOpen) {
+        const target = event.target as HTMLElement;
+        if (!target.closest(".profile-menu-container")) {
+          setIsProfileOpen(false);
+        }
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isProfileOpen]);
+
   // Skip sidebar for landing page and auth pages
   const isLandingPage = pathname === "/";
   const isAuthPage = pathname.startsWith("/auth");
@@ -98,7 +118,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     return role; // Fallback
   };
 
-  const menuKey = getNormalizedMenuKey(activeRole);
+  const effectiveRole = activeRole || userData?.role;
+  const menuKey = getNormalizedMenuKey(effectiveRole);
   const currentMenu = (userData && menuItems[menuKey]) || [];
 
   // 2. Mobile Bottom Navigation Config
@@ -130,8 +151,9 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
   // Helper for robust role-based redirection
   const getDashboardRoute = (role: string | undefined | null): string => {
-    if (!role) return "/";
-    const normalizedRole = role.toLowerCase().replace(/\s+/g, "");
+    const roleToUse = role || userData?.role;
+    if (!roleToUse) return "/";
+    const normalizedRole = roleToUse.toLowerCase().replace(/\s+/g, "");
     
     // Check for SuperAdmin via email or role string
     if (auth.currentUser?.email === superAdminEmail || normalizedRole === "superadmin") {
@@ -265,7 +287,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                  <Bell className="w-5 h-5" />
                  <div className="absolute top-2 right-2 w-2 h-2 bg-[#6f42c1] rounded-full" />
               </div>
-              <div className="relative">
+              <div className="relative profile-menu-container">
                 <button 
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
                   className="flex items-center gap-2"
