@@ -117,7 +117,8 @@ export default function LoginPage() {
     }
 
     // 2. Resolve Role
-    const finalRole = currentEmail === superAdminEmail ? "SuperAdmin" : userData.role;
+    // Prioritize stored role, fallback to SuperAdmin if email matches and no role exists
+    const finalRole = userData.role || (currentEmail === superAdminEmail ? "SuperAdmin" : "");
 
     // 3. Set session cookie (Safe background task)
     try {

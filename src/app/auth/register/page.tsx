@@ -125,6 +125,18 @@ export default function RegisterPage() {
     const toastId = toast.loading("রেজিস্ট্রেশন প্রসেস হচ্ছে...");
 
     try {
+      // Standardize role for Firestore
+      const firestoreRole = activeRole === "InstitutionAdmin" ? "admin" : activeRole;
+
+      // Save pending data to handle race conditions with onAuthStateChanged
+      localStorage.setItem("pendingRegistration", JSON.stringify({
+        role: firestoreRole,
+        name: data.name,
+        nameBN: data.nameBN,
+        phone: data.phone,
+        activeRole // Keep original for dashboard mapping
+      }));
+
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
@@ -141,8 +153,6 @@ export default function RegisterPage() {
           router.push("/auth/login");
           return;
         }
-        // If doc exists but is incomplete/corrupted, we might want to overwrite or fix it, 
-        // but the user specifically asked to fix the "Account already exists" error to allow proceeding.
       }
 
       // 1. Create/Update Tenant (if InstitutionAdmin)
@@ -176,7 +186,7 @@ export default function RegisterPage() {
         name: data.name,
         nameBN: data.nameBN,
         phone: data.phone,
-        role: isSuperAdminEmail ? "SuperAdmin" : activeRole,
+        role: isSuperAdminEmail ? "SuperAdmin" : firestoreRole,
         tenant_id: finalTenantId,
         status: (activeRole === "InstitutionAdmin" || isSuperAdminEmail) ? "approved" : "pending",
         profile_image: user.photoURL,
@@ -201,13 +211,19 @@ export default function RegisterPage() {
       // 3. Clear pending if any and redirect
       localStorage.removeItem("pendingRegistration");
 
-      const dashboardMap: Record<string, string> = {
-        InstitutionAdmin: "/admin/dashboard",
-        Teacher: "/teacher/dashboard",
-        Student: "/student/dashboard",
-      };
+      const normalizedRole = userData.role.toLowerCase().replace(/\s+/g, "");
+      let target = "/";
+      if (normalizedRole === "superadmin") {
+        target = "/super-admin/dashboard";
+      } else if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
+        target = "/admin/dashboard";
+      } else if (normalizedRole === "teacher") {
+        target = "/teacher/dashboard";
+      } else if (normalizedRole === "student") {
+        target = "/student/dashboard";
+      }
       
-      router.push(dashboardMap[activeRole] || "/");
+      router.push(target);
 
     } catch (error: any) {
       toast.error("রেজিস্ট্রেশন ব্যর্থ: " + (error.message || "Unknown error"), { id: toastId });

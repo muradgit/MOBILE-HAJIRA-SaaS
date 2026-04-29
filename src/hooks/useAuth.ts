@@ -35,8 +35,11 @@ export function useAuth() {
              // Handle automatic creation if missing
              const pendingDataStr = typeof window !== "undefined" ? localStorage.getItem("pendingRegistration") : null;
              const pendingData = pendingDataStr ? JSON.parse(pendingDataStr) : {};
+             
+             // If we have pending registration data, use that role. Otherwise default.
              const role = pendingData.role || "Student";
-             const tenant_id = role === "InstitutionAdmin" ? `tenant_${firebaseUser.uid}` : (pendingData.tenant_id || null);
+             const isInstituteAdmin = ["institutionadmin", "admin"].includes(role.toLowerCase());
+             const tenant_id = isInstituteAdmin ? `tenant_${firebaseUser.uid}` : (pendingData.tenant_id || null);
 
              await setDoc(userDocRef, {
                 user_id: firebaseUser.uid,
@@ -45,9 +48,9 @@ export function useAuth() {
                 nameBN: pendingData.nameBN || "নতুন ইউজার",
                 role,
                 tenant_id,
-                status: (role === "InstitutionAdmin" || role === "SuperAdmin") ? "approved" : "pending",
+                status: (isInstituteAdmin || role === "SuperAdmin") ? "approved" : "pending",
                 created_at: new Date().toISOString()
-             });
+             }, { merge: true });
           }
         } catch (e) {
           console.error("Auth check error:", e);
@@ -58,9 +61,9 @@ export function useAuth() {
           if (docSnap.exists()) {
             const data = docSnap.data() as UserData;
             
-            // CRITICAL: Master Email Check for Super Admin
+            // CRITICAL: Resolve Role - Prioritize stored role, fallback to SuperAdmin if email matches
             const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
-            const finalRole = firebaseUser.email === superAdminEmail ? "SuperAdmin" : data.role;
+            const finalRole = data.role || (firebaseUser.email === superAdminEmail ? "SuperAdmin" : "");
             
             const resolvedUserData = { ...data, role: finalRole as any };
             setUser(resolvedUserData);

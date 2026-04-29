@@ -153,10 +153,17 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   // Helper for robust role-based redirection
   const getDashboardRoute = (role: string | undefined | null): string => {
     const roleToUse = role || userData?.role;
-    if (!roleToUse) return "/";
+    if (!roleToUse) {
+      // If NO role is assigned yet, check for SuperAdmin email as a fallback
+      if (auth.currentUser?.email === superAdminEmail) {
+        return "/super-admin/dashboard";
+      }
+      return "/";
+    }
+
     const normalizedRole = roleToUse.toLowerCase().replace(/\s+/g, "");
     
-    // Check for SuperAdmin via explicitly assigned role first
+    // Check for SuperAdmin explicitly
     if (normalizedRole === "superadmin") {
       return "/super-admin/dashboard";
     }
@@ -164,11 +171,6 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     // Explicitly mapping all Admin variations to /admin/dashboard
     if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
       return "/admin/dashboard";
-    }
-
-    // Role-based fallback for SuperAdmin email if NO role is assigned yet or it's unknown
-    if (auth.currentUser?.email === superAdminEmail) {
-      return "/super-admin/dashboard";
     }
     
     if (normalizedRole === "teacher") {
