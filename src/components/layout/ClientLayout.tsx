@@ -76,7 +76,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const isOnboarding = (normalizedRole === "institutionadmin" || normalizedRole === "superadmin") && isDashboardArea && !tenant?.googleSheetId && !!userData?.tenant_id;
 
   // 3. Layout visibility logic
-  const hideLayout = isLandingPage || isAuthPage || isOnboarding;
+  const hideLayout = isAuthPage || isOnboarding;
 
   // 1. Role-Based Menu Definitions
   const menuItems: Record<string, any[]> = {
