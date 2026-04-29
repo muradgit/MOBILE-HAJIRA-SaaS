@@ -167,15 +167,18 @@ export default function RegisterPage() {
       }
 
       // 2. Create User Profile 
+      const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
+      const isSuperAdminEmail = user.email === superAdminEmail;
+      
       const userData = {
         user_id: user.uid,
         email: user.email,
         name: data.name,
         nameBN: data.nameBN,
         phone: data.phone,
-        role: activeRole,
-        tenant_id: finalTenantId,
-        status: activeRole === "InstitutionAdmin" ? "approved" : "pending",
+        role: isSuperAdminEmail ? "SuperAdmin" : activeRole,
+        tenant_id: isSuperAdminEmail ? "SUPER_ADMIN" : finalTenantId,
+        status: (activeRole === "InstitutionAdmin" || isSuperAdminEmail) ? "approved" : "pending",
         profile_image: user.photoURL,
         created_at: serverTimestamp(),
       };

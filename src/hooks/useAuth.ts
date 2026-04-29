@@ -57,7 +57,13 @@ export function useAuth() {
         unsubUser = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data() as UserData;
-            setUser(data);
+            
+            // CRITICAL: Master Email Check for Super Admin
+            const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
+            const finalRole = firebaseUser.email === superAdminEmail ? "SuperAdmin" : data.role;
+            
+            const resolvedUserData = { ...data, role: finalRole as any };
+            setUser(resolvedUserData);
             
             if (data.tenant_id) {
               setTenant(data.tenant_id);

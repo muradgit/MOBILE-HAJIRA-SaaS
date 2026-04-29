@@ -184,6 +184,12 @@ export default function AdminDashboard() {
   const lowerRole = (userData?.role || "").toLowerCase().replace(/\s+/g, "");
   const isAuthorized = ["institutionadmin", "admin", "superadmin"].includes(lowerRole);
   
+  useEffect(() => {
+    if (!authLoading && lowerRole === "superadmin") {
+      router.replace("/super-admin/dashboard");
+    }
+  }, [authLoading, lowerRole, router]);
+
   if (!authLoading && !isAuthorized) return (
     <div className="flex flex-col items-center justify-center p-12 text-center space-y-4 min-h-[60vh]">
       <ShieldAlert className="w-16 h-16 text-red-500" />
@@ -209,7 +215,7 @@ export default function AdminDashboard() {
   );
 
   // Onboarding Phase
-  if (!tenant?.googleSheetId) {
+  if (!tenant?.googleSheetId && lowerRole === "institutionadmin") {
     return (
       <div className="min-h-[80vh] flex items-center justify-center p-4">
         <Card className="max-w-md w-full p-8 text-center space-y-6 border-purple-100 shadow-2xl shadow-purple-500/10">
@@ -250,14 +256,14 @@ export default function AdminDashboard() {
             <LayoutDashboard className="w-7 h-7 text-[#6f42c1]" />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-gray-900 font-bengali tracking-tight">{tenant.nameBN || tenant.name}</h1>
+            <h1 className="text-2xl font-black text-gray-900 font-bengali tracking-tight">{tenant?.nameBN || tenant?.name}</h1>
             <p className="text-sm text-gray-500 font-medium">ইনস্টিটিউট অ্যাডমিন ড্যাশবোর্ড</p>
           </div>
         </div>
 
         <div className="flex gap-2">
            <a 
-            href={`https://docs.google.com/spreadsheets/d/${tenant.googleSheetId}`}
+            href={`https://docs.google.com/spreadsheets/d/${tenant?.googleSheetId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 bg-white border border-gray-100 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest text-emerald-600 shadow-sm hover:bg-emerald-50 transition-all group"
@@ -281,7 +287,7 @@ export default function AdminDashboard() {
               <Zap className="w-5 h-5 opacity-60" />
             </div>
             <div className="flex items-end justify-between gap-4">
-              <h3 className="text-4xl font-black">{tenant.credits_left}</h3>
+              <h3 className="text-4xl font-black">{tenant?.credits_left}</h3>
               <div className="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white border border-white/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
                 রিচার্জ করুন
               </div>
@@ -346,7 +352,7 @@ export default function AdminDashboard() {
       </Card>
       
       {/* Alert if low balance */}
-      {tenant.credits_left < 20 && (
+      {tenant && tenant.credits_left < 20 && (
         <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3">
           <AlertTriangle className="w-5 h-5 text-red-500" />
           <p className="text-xs font-bold text-red-600 uppercase tracking-widest">
