@@ -4,7 +4,10 @@ import { useState } from "react";
 import { useAuth } from "@/src/hooks/useAuth";
 import { auth, db } from "@/src/lib/firebase";
 import { 
-  updateProfile
+  updateProfile,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword
 } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import { 
@@ -127,51 +130,40 @@ export default function ProfilePage() {
 
     setPasswordSubmitting(true);
     try {
-      // 1. If user already has a password, re-authenticate first (Client Side)
+      // 1. Re-authenticate the user with their CURRENT password
       if (hasPassword) {
         if (!currentPassword) throw new Error("বর্তমান পাসওয়ার্ড আবশ্যক।");
         
-        const { EmailAuthProvider, reauthenticateWithCredential } = await import("firebase/auth");
-        const credential = EmailAuthProvider.credential(user.email!, currentPassword);
-        
         try {
+          const credential = EmailAuthProvider.credential(user.email!, currentPassword);
           await reauthenticateWithCredential(user, credential);
         } catch (authErr: any) {
+          console.error("Re-authentication failed:", authErr);
           if (authErr.code === "auth/wrong-password") {
             throw new Error("বর্তমান পাসওয়ার্ডটি সঠিক নয়।");
+          }
+          if (authErr.code === "auth/too-many-requests") {
+            throw new Error("অতিরিক্ত ভুল চেষ্টার কারণে একাউন্টটি সাময়িকভাবে বন্ধ করা হয়েছে। পরে চেষ্টা করুন।");
           }
           throw authErr;
         }
       }
 
-      // 2. Get Firebase ID Token for Authentication
-      const token = await auth.currentUser?.getIdToken(true);
-      if (!token) throw new Error("Authentication token not found.");
+      // 2. Update the password using Client SDK (this DOES NOT log the user out)
+      await updatePassword(user, newPassword);
 
-      // 3. Call the Set Password API (Uses Admin SDK)
-      const response = await fetch("/api/auth/set-password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ password: newPassword })
-      });
-
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || "পাসওয়ার্ড আপডেট করতে সমস্যা হয়েছে।");
+      // 3. Update Firestore metadata if needed (optional, but keep it consistent)
+      if (!hasPassword) {
+        const userRef = doc(db, "users", user.uid);
+        await updateDoc(userRef, { has_password: true });
       }
 
-      // 4. Reload session/user record
-      await auth.currentUser?.reload();
-      
       toast.success(hasPassword ? "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।" : "পাসওয়ার্ড সফলভাবে সেট করা হয়েছে।");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err: any) {
-      console.error(err);
+      console.error("Password update error:", err);
       toast.error(err.message || "পাসওয়ার্ড পরিবর্তন করা সম্ভব হয়নি।");
     } finally {
       setPasswordSubmitting(false);
