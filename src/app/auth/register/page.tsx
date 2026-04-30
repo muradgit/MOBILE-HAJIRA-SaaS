@@ -211,6 +211,9 @@ export default function RegisterPage() {
       // 3. Clear pending if any and redirect
       localStorage.removeItem("pendingRegistration");
 
+      // Force Next.js to invalidate layout cache and re-render the layout tree with the newly updated status
+      router.refresh();
+
       const normalizedRole = userData.role.toLowerCase().replace(/\s+/g, "");
       let target = "/";
       if (normalizedRole === "superadmin") {

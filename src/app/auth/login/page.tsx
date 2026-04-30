@@ -174,22 +174,22 @@ export default function LoginPage() {
     // Sync store
     setUser({ ...userData, role: finalRole as any });
 
-    // 100ms delay for Zustand store to settle
-    setTimeout(() => {
-      // Handle redirection map
-      let target = "/";
-      if (normalizedRole === "superadmin") {
-        target = "/super-admin/dashboard";
-      } else if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
-        target = "/admin/dashboard";
-      } else if (normalizedRole === "teacher") {
-        target = "/teacher/dashboard";
-      } else if (normalizedRole === "student") {
-        target = "/student/dashboard";
-      }
+    // Force Next.js to invalidate layout cache and re-render the layout tree with the newly updated Zustan status
+    router.refresh();
 
-      router.push(target);
-    }, 100);
+    // Handle redirection map
+    let target = "/";
+    if (normalizedRole === "superadmin") {
+      target = "/super-admin/dashboard";
+    } else if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
+      target = "/admin/dashboard";
+    } else if (normalizedRole === "teacher") {
+      target = "/teacher/dashboard";
+    } else if (normalizedRole === "student") {
+      target = "/student/dashboard";
+    }
+
+    router.push(target);
   };
 
   return (

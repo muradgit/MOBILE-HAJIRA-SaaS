@@ -44,6 +44,12 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Strict hydration check
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Close menus when route changes
   useEffect(() => {
@@ -210,6 +216,18 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     router.push(getDashboardRoute(nextRole));
     setIsProfileOpen(false);
   };
+
+  // Prevent hydration flicker
+  if (!isMounted) {
+    return (
+      <div className="h-screen w-full flex flex-col bg-[#F8F9FA]">
+        <div className="h-20 bg-white border-b border-gray-100 animate-pulse" />
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-[#6f42c1] animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
