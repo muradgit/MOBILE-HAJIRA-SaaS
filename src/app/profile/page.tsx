@@ -74,7 +74,7 @@ export default function ProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const isGoogleUser = user?.providerData.some((p: any) => p.providerId === "google.com");
-  const hasPassword = user?.providerData.some((p: any) => p.providerId === "password");
+  const hasPassword = !!userData?.has_password;
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,7 +117,7 @@ export default function ProfilePage() {
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !userData) return;
     if (newPassword !== confirmPassword) {
       return toast.error("নতুন পাসওয়ার্ড দুটি মিলছে না।");
     }
@@ -127,11 +127,28 @@ export default function ProfilePage() {
 
     setPasswordSubmitting(true);
     try {
-      // 1. Get Firebase ID Token for Authentication
+      // 1. If user already has a password, re-authenticate first (Client Side)
+      if (hasPassword) {
+        if (!currentPassword) throw new Error("বর্তমান পাসওয়ার্ড আবশ্যক।");
+        
+        const { EmailAuthProvider, reauthenticateWithCredential } = await import("firebase/auth");
+        const credential = EmailAuthProvider.credential(user.email!, currentPassword);
+        
+        try {
+          await reauthenticateWithCredential(user, credential);
+        } catch (authErr: any) {
+          if (authErr.code === "auth/wrong-password") {
+            throw new Error("বর্তমান পাসওয়ার্ডটি সঠিক নয়।");
+          }
+          throw authErr;
+        }
+      }
+
+      // 2. Get Firebase ID Token for Authentication
       const token = await auth.currentUser?.getIdToken(true);
       if (!token) throw new Error("Authentication token not found.");
 
-      // 2. Call the Set Password API (Uses Admin SDK)
+      // 3. Call the Set Password API (Uses Admin SDK)
       const response = await fetch("/api/auth/set-password", {
         method: "POST",
         headers: {
@@ -146,7 +163,7 @@ export default function ProfilePage() {
         throw new Error(result.error || "পাসওয়ার্ড আপডেট করতে সমস্যা হয়েছে।");
       }
 
-      // 3. Reload session/user record
+      // 4. Reload session/user record
       await auth.currentUser?.reload();
       
       toast.success(hasPassword ? "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।" : "পাসওয়ার্ড সফলভাবে সেট করা হয়েছে।");

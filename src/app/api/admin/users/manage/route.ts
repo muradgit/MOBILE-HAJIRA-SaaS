@@ -37,16 +37,20 @@ export async function POST(req: NextRequest) {
     });
 
     // 3. Save to Firestore (Both top-level and subcollection)
+    // CRITICAL: Ensure password string never leaks to Firestore
+    const sanitizedExtraData = { ...extra_data };
+    if (sanitizedExtraData.password) delete sanitizedExtraData.password;
+
     const profileData = {
       user_id: userRecord.uid,
       tenant_id,
       name,
       email,
       role,
-      has_password: !!password,
+      has_password: true, // Known to be true because registration requires it or admin set it
       status: "approved",
       created_at: new Date().toISOString(),
-      ...extra_data,
+      ...sanitizedExtraData,
     };
 
     // TOP-LEVEL USERS COLLECTION (Required for generic login/auth hooks)
