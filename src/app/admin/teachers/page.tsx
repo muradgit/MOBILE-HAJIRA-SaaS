@@ -22,6 +22,7 @@ import { Card } from "@/src/components/ui/Card";
 import { DataTable } from "@/src/components/shared/DataTable";
 import { SlideOverForm } from "@/src/components/shared/SlideOverForm";
 import { toast } from "sonner";
+import { cn } from "@/src/lib/utils";
 import Image from "next/image";
 
 interface Teacher {
@@ -45,7 +46,8 @@ export default function TeachersPage() {
   // Form State
   const [formData, setFormData] = useState({
     name: "",
-    email: "",
+    identifier: "",
+    identifierType: "email" as "email" | "username",
     password: "",
   });
 
@@ -80,8 +82,11 @@ export default function TeachersPage() {
         },
         body: JSON.stringify({
           tenant_id: tenantId,
-          role: "teacher",
-          ...formData
+          role: "Teacher",
+          name: formData.name,
+          identifier: formData.identifier,
+          identifierType: formData.identifierType,
+          password: formData.password
         }),
       });
 
@@ -90,7 +95,7 @@ export default function TeachersPage() {
 
       toast.success("শিক্ষককে প্রোফাইল সফলভাবে তৈরি করা হয়েছে।");
       setIsAdding(false);
-      setFormData({ name: "", email: "", password: "" });
+      setFormData({ name: "", identifier: "", identifierType: "email", password: "" });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -265,19 +270,50 @@ export default function TeachersPage() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">কিভাবে যুক্ত করবেন?</label>
+              <div className="grid grid-cols-2 gap-2 bg-gray-100 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, identifierType: "email", identifier: "" })}
+                  className={cn(
+                    "py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                    formData.identifierType === "email" ? "bg-white text-purple-600 shadow-sm" : "text-gray-400"
+                  )}
+                >
+                  ইমেইল দিয়ে
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, identifierType: "username", identifier: "" })}
+                  className={cn(
+                    "py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                    formData.identifierType === "username" ? "bg-white text-purple-600 shadow-sm" : "text-gray-400"
+                  )}
+                >
+                  ইউজার আইডি দিয়ে
+                </button>
+              </div>
+            </div>
+
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ইমেইল অ্যাড্রেস</label>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                {formData.identifierType === "email" ? "ইমেইল অ্যাড্রেস" : "ইউনিক ইউজার আইডি (Username)"}
+              </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                 <input 
                   required
-                  type="email" 
-                  value={formData.email}
-                  onChange={e => setFormData({...formData, email: e.target.value})}
+                  type={formData.identifierType === "email" ? "email" : "text"} 
+                  value={formData.identifier}
+                  onChange={e => setFormData({...formData, identifier: e.target.value})}
                   className="w-full bg-gray-50 rounded-xl px-10 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-purple-600 transition-all"
-                  placeholder="name@institute.com"
+                  placeholder={formData.identifierType === "email" ? "name@institute.com" : "যেমন: rahim_admin"}
                 />
               </div>
+              {formData.identifierType === "username" && (
+                <p className="text-[9px] text-gray-400 mt-1 pl-1">ID হিসেবে শুধুমাত্র ইংরেজি অক্ষর, সংখ্যা এবং আন্ডারস্কোর (_) ব্যবহার করুন।</p>
+              )}
             </div>
 
             <div className="space-y-1">

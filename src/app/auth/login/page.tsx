@@ -32,7 +32,30 @@ export default function LoginPage() {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
+      let finalEmail = email;
+
+      // Hybrid Login Logic: If identifier doesn't contain '@', it's a username
+      if (!email.includes("@")) {
+        const { collection, query, where, getDocs, limit } = await import("firebase/firestore");
+        const q = query(collection(db, "users"), where("username", "==", email), limit(1));
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+          throw new Error("এই ইউজার আইডিটি খুঁজে পাওয়া যায়নি।");
+        }
+        
+        const userData = querySnapshot.docs[0].data() as UserData;
+        finalEmail = userData.email || `${email}_${userData.tenant_id}@internal.com`.toLowerCase();
+      }
+
+      const result = await signInWithEmailAndPassword(auth, finalEmail, password);
+      
+      // Email Verification Check
+      if (result.user.email && !result.user.emailVerified && !result.user.email.endsWith("@internal.com")) {
+        await signOut(auth);
+        throw new Error("আপনার ইমেইল ভেরিফাই করুন। আমরা আপনার ইমেইলে একটি ভেরিফিকেশন লিংক পাঠিয়েছি।");
+      }
+
       await processLogin(result.user.uid, result.user.email);
     } catch (error: any) {
       console.error("Login attempt failed:", error);
@@ -280,15 +303,15 @@ export default function LoginPage() {
 
               <form onSubmit={handleEmailLogin} className="space-y-4 text-left">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Email or User ID</label>
                   <div className="relative">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                     <input 
                       required
-                      type="email"
+                      type="text"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name@institution.com"
+                      placeholder="name@institution.com or unique ID"
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl px-12 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm"
                     />
                   </div>

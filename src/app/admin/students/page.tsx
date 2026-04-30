@@ -22,6 +22,7 @@ import { Card } from "@/src/components/ui/Card";
 import { DataTable } from "@/src/components/shared/DataTable";
 import { SlideOverForm } from "@/src/components/shared/SlideOverForm";
 import { toast } from "sonner";
+import { cn } from "@/src/lib/utils";
 import Image from "next/image";
 
 interface Student {
@@ -45,10 +46,11 @@ export default function StudentsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [filterClass, setFilterClass] = useState("all");
 
-  // Form State
+// Form State
   const [formData, setFormData] = useState({
     name: "",
-    email: "",
+    identifier: "",
+    identifierType: "email" as "email" | "username",
     password: "Password123", // Default for bulk creation or easy setup
     class: "",
     section: "",
@@ -87,9 +89,10 @@ export default function StudentsPage() {
         },
         body: JSON.stringify({
           tenant_id: tenantId,
-          role: "student",
+          role: "Student",
           name: formData.name,
-          email: formData.email,
+          identifier: formData.identifier,
+          identifierType: formData.identifierType,
           password: formData.password,
           extra_data: {
             class: formData.class,
@@ -105,7 +108,7 @@ export default function StudentsPage() {
 
       toast.success("শিক্ষার্থীর প্রোফাইল সফলভাবে তৈরি করা হয়েছে।");
       setIsAdding(false);
-      setFormData({ name: "", email: "", password: "Password123", class: "", section: "", phone: "", student_id: "" });
+      setFormData({ name: "", identifier: "", identifierType: "email", password: "Password123", class: "", section: "", phone: "", student_id: "" });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -308,14 +311,42 @@ export default function StudentsPage() {
               </div>
 
               <div className="space-y-1 col-span-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ইমেইল (অটো-জেনারেটেড হতে পারে)</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">কিভাবে যুক্ত করবেন?</label>
+                <div className="grid grid-cols-2 gap-2 bg-gray-100 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, identifierType: "email", identifier: "" })}
+                    className={cn(
+                      "py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                      formData.identifierType === "email" ? "bg-white text-blue-600 shadow-sm" : "text-gray-400"
+                    )}
+                  >
+                    ইমেইল দিয়ে
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, identifierType: "username", identifier: "" })}
+                    className={cn(
+                      "py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                      formData.identifierType === "username" ? "bg-white text-blue-600 shadow-sm" : "text-gray-400"
+                    )}
+                  >
+                    ইউজার আইডি দিয়ে
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1 col-span-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                  {formData.identifierType === "email" ? "ইমেইল অ্যাড্রেস" : "ইউনিক ইউজার আইডি (Username)"}
+                </label>
                 <input 
                   required
-                  type="email" 
-                  value={formData.email}
-                  onChange={e => setFormData({...formData, email: e.target.value})}
+                  type={formData.identifierType === "email" ? "email" : "text"} 
+                  value={formData.identifier}
+                  onChange={e => setFormData({...formData, identifier: e.target.value})}
                   className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all"
-                  placeholder="student@institute.com"
+                  placeholder={formData.identifierType === "email" ? "student@institute.com" : "যেমন: student_001"}
                 />
               </div>
            </div>

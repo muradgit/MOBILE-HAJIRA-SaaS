@@ -78,6 +78,8 @@ export interface UserData {
   institutionName?: string;
   has_password?: boolean;
   googleSheetId?: string;
+  username?: string;
+  identifierType?: "email" | "username";
 }
 
 export interface Course {
