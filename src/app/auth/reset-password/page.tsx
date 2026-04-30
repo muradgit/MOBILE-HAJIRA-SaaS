@@ -14,10 +14,19 @@ function ResetPasswordForm() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [firebaseError, setFirebaseError] = useState<string | null>(null);
+  const [oobCode, setOobCode] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
   
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const oobCode = searchParams.get("oobCode");
+
+  React.useEffect(() => {
+    // Fallback URL parsing: Absolute source of truth
+    const code = new URLSearchParams(window.location.search).get('oobCode');
+    console.log("oobCode detected:", code);
+    setOobCode(code);
+    setIsInitializing(false);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +45,7 @@ function ResetPasswordForm() {
 
     setLoading(true);
     setErrorMsg(null);
+    setFirebaseError(null);
     try {
       // Lazy verification: calls confirmPasswordReset directly which also validates the oobCode
       await confirmPasswordReset(auth, oobCode, newPassword);
@@ -46,6 +56,10 @@ function ResetPasswordForm() {
       }, 3000);
     } catch (error: any) {
       console.error("Password reset failed:", error);
+      // Exact Firebase Error Exposure
+      const exactError = `${error.code}: ${error.message}`;
+      setFirebaseError(exactError);
+      
       // Now we show the error if the link was invalid or already used
       setErrorMsg("লিঙ্কটি অবৈধ বা আগে ব্যবহার করা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
       toast.error("লিঙ্কটি অবৈধ বা আগে ব্যবহার করা হয়েছে।");
@@ -53,6 +67,17 @@ function ResetPasswordForm() {
       setLoading(false);
     }
   };
+
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA] p-6">
+        <div className="flex flex-col items-center gap-4 text-[#6f42c1]">
+          <Loader2 className="w-10 h-10 animate-spin" />
+          <p className="font-bold text-sm tracking-widest uppercase">যাচাই করা হচ্ছে...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!oobCode) {
     return (
@@ -86,6 +111,12 @@ function ResetPasswordForm() {
         </div>
 
         <Card className="p-8 border-none shadow-2xl shadow-purple-500/5 bg-white/80 backdrop-blur-xl rounded-3xl">
+          {/* Debug Box (only shown when oobCode exists for testing) */}
+          {oobCode && (
+            <div className="mb-4 p-2 bg-gray-100 rounded text-[9px] font-mono text-gray-500 text-left break-all">
+              <strong>DEBUG oobCode:</strong> {oobCode}
+            </div>
+          )}
           {errorMsg ? (
             <div className="space-y-6 py-4">
               <div className="flex justify-center">
@@ -96,6 +127,11 @@ function ResetPasswordForm() {
               <div className="space-y-2">
                 <h2 className="text-xl font-bold text-gray-900">ভুল হয়েছে!</h2>
                 <p className="text-sm text-gray-500 font-bengali">{errorMsg}</p>
+                {firebaseError && (
+                  <div className="mt-2 p-2 bg-red-50 border border-red-100 rounded text-[10px] font-mono text-red-600 text-left break-all">
+                    <strong>Firebase Debug:</strong> {firebaseError}
+                  </div>
+                )}
               </div>
               <button 
                 onClick={() => {
