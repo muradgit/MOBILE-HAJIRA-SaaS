@@ -169,7 +169,7 @@ export default function AdminDashboard() {
   );
 
   // Auth & Loading Overlay
-  if (authLoading || (loading && !activeTenantId)) return (
+  if (authLoading || (loading && !activeTenantId) || !userData || !activeRole) return (
     <div className="h-[80vh] flex items-center justify-center bg-white">
       <div className="flex flex-col items-center gap-4">
         <Loader2 className="w-10 h-10 text-[#6f42c1] animate-spin" />
@@ -178,8 +178,26 @@ export default function AdminDashboard() {
     </div>
   );
 
+  // 5. Handle missing Sheet ID gracefully (Onboarding safety)
+  if (!loading && !tenant?.googleSheetId) {
+    return (
+      <div className="h-[80vh] flex items-center justify-center bg-white p-12 text-center">
+        <div className="flex flex-col items-center gap-6 max-w-sm">
+          <div className="w-20 h-20 bg-purple-50 rounded-3xl flex items-center justify-center animate-bounce">
+            <Database className="w-10 h-10 text-[#6f42c1]" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-gray-900 font-bengali">সেটআপ সম্পূর্ণ হচ্ছে</h2>
+            <p className="text-sm text-gray-500 font-bengali">আপনার ইনস্টিটিউট সেটআপ সম্পূর্ণ হচ্ছে, দয়া করে অপেক্ষা করুন...</p>
+          </div>
+          <Loader2 className="w-6 h-6 text-[#6f42c1] animate-spin mt-4" />
+        </div>
+      </div>
+    );
+  }
+
   // Onboarding Phase - Redirect to dedicated page if needed
-  const needsOnboarding = !tenant?.googleSheetId && ["institutionadmin", "superadmin"].includes(lowerRole);
+  const needsOnboarding = !tenant?.googleSheetId && ["institutionadmin", "admin", "superadmin"].includes(lowerRole);
   useEffect(() => {
     if (!loading && !authLoading && needsOnboarding) {
       router.replace("/admin/onboarding");

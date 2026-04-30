@@ -77,6 +77,7 @@ export interface UserData {
   department?: string;
   institutionName?: string;
   has_password?: boolean;
+  googleSheetId?: string;
 }
 
 export interface Course {

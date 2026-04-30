@@ -13,12 +13,15 @@ import {
 } from "lucide-react";
 import { Tenant } from "@/src/lib/types";
 
+import { useUserStore } from "@/src/store/useUserStore";
+
 /**
  * Institute Admin Onboarding Page
  * Specifically for setting up the Google Sheet backup.
  */
 export default function OnboardingPage() {
   const { userData, loading: authLoading, tenant } = useAuth();
+  const { user, setUser } = useUserStore();
   const router = useRouter();
   const [onboarding, setOnboarding] = useState(false);
 
@@ -48,8 +51,20 @@ export default function OnboardingPage() {
       const result = await response.json();
       
       if (response.ok) {
+        // Manually update store to prevent hydration/stale data issues in dashboard
+        if (user) {
+          setUser({ ...user, googleSheetId: result.googleSheetId });
+        }
+        
         toast.success("অভিনন্দন! আপনার সিস্টেম এখন প্রস্তুত।", { id: toastId });
-        router.push("/admin/dashboard");
+        
+        // Force refresh server components cache
+        router.refresh();
+        
+        // Use a slight delay to ensure store and cache are synced
+        setTimeout(() => {
+          router.push("/admin/dashboard");
+        }, 100);
       } else {
         throw new Error(result.error || "সেটআপ ব্যর্থ হয়েছে");
       }
