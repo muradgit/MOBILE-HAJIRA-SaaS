@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, Suspense, useRef } from "react";
+import React, { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { auth } from "@/src/lib/firebase";
-import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
+import { confirmPasswordReset } from "firebase/auth";
 import { toast } from "sonner";
 import { ShieldCheck, Loader2, Lock, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
@@ -12,49 +12,21 @@ function ResetPasswordForm() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [verifying, setVerifying] = useState(true);
-  const [email, setEmail] = useState<string | null>(null);
-  const [isCodeValid, setIsCodeValid] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
   const router = useRouter();
   const searchParams = useSearchParams();
   const oobCode = searchParams.get("oobCode");
-  const verificationStarted = useRef(false);
-
-  useEffect(() => {
-    if (!oobCode) {
-      setErrorMsg("রিসেট কোড পাওয়া যায়নি। অনুগ্রহ করে আবার ইমেইল পাঠান।");
-      setVerifying(false);
-      return;
-    }
-
-    if (verificationStarted.current) return;
-    verificationStarted.current = true;
-
-    // Verify the code and get the user's email
-    const verifyCode = async () => {
-      try {
-        const userEmail = await verifyPasswordResetCode(auth, oobCode);
-        setEmail(userEmail);
-        setIsCodeValid(true);
-      } catch (error: any) {
-        console.error("Invalid reset code:", error);
-        setErrorMsg("লিঙ্কটি অবৈধ বা আগে ব্যবহার করা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
-        setIsCodeValid(false);
-      } finally {
-        setVerifying(false);
-      }
-    };
-
-    verifyCode();
-  }, [oobCode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!oobCode || !isCodeValid) return;
+    if (!oobCode) {
+      setErrorMsg("কোনো সিকিউরিটি কোড পাওয়া যায়নি। অনুগ্রহ করে আবার ইমেইল পাঠান।");
+      return;
+    }
+
     if (newPassword.length < 6) {
       return toast.error("পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।");
     }
@@ -63,7 +35,9 @@ function ResetPasswordForm() {
     }
 
     setLoading(true);
+    setErrorMsg(null);
     try {
+      // Lazy verification: calls confirmPasswordReset directly which also validates the oobCode
       await confirmPasswordReset(auth, oobCode, newPassword);
       setSuccess(true);
       toast.success("পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।");
@@ -72,18 +46,26 @@ function ResetPasswordForm() {
       }, 3000);
     } catch (error: any) {
       console.error("Password reset failed:", error);
-      toast.error(error.message || "পাসওয়ার্ড রিসেট করতে সমস্যা হয়েছে।");
+      // Now we show the error if the link was invalid or already used
+      setErrorMsg("লিঙ্কটি অবৈধ বা আগে ব্যবহার করা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
+      toast.error("লিঙ্কটি অবৈধ বা আগে ব্যবহার করা হয়েছে।");
     } finally {
       setLoading(false);
     }
   };
 
-  if (verifying) {
+  if (!oobCode) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA] p-6">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 text-[#6f42c1] animate-spin" />
-          <p className="text-gray-500 font-bold">লিংক যাচাই করা হচ্ছে...</p>
+        <div className="w-full max-w-md space-y-8 text-center text-red-500 font-bold bg-white p-12 rounded-3xl shadow-xl">
+          <AlertCircle className="w-12 h-12 mx-auto mb-4" />
+          <p>কোনো সিকিউরিটি কোড পাওয়া যায়নি।</p>
+          <button 
+            onClick={() => router.push("/auth/login")}
+            className="mt-6 flex items-center justify-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors w-full font-bold"
+          >
+            <ArrowLeft className="w-4 h-4" /> ফিরে যান
+          </button>
         </div>
       </div>
     );
@@ -116,7 +98,10 @@ function ResetPasswordForm() {
                 <p className="text-sm text-gray-500 font-bengali">{errorMsg}</p>
               </div>
               <button 
-                onClick={() => router.push("/auth/login")}
+                onClick={() => {
+                  setErrorMsg(null);
+                  router.push("/auth/login");
+                }}
                 className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-[#59359a] transition-all shadow-lg"
               >
                 লগইন পেজে ফিরে যান
@@ -137,14 +122,14 @@ function ResetPasswordForm() {
                 onClick={() => router.push("/auth/login")}
                 className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-[#59359a] transition-all shadow-lg"
               >
-                সরাসরি লগইন করুন
+                লগইন করুন
               </button>
             </div>
           ) : (
             <>
               <div className="space-y-2 mb-8">
                 <p className="text-sm text-gray-500 font-bengali">
-                  নতুন পাসওয়ার্ড সেট করুন <span className="font-mono text-[#6f42c1] font-bold">({email})</span>
+                  আপনার একাউন্টের জন্য নতুন পাসওয়ার্ড সেট করুন।
                 </p>
               </div>
 
