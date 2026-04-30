@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { auth } from "@/src/lib/firebase";
 import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
 import { toast } from "sonner";
-import { ShieldCheck, Loader2, Lock, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, Loader2, Lock, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
 
 function ResetPasswordForm() {
@@ -14,40 +14,47 @@ function ResetPasswordForm() {
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
+  const [isCodeValid, setIsCodeValid] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   
   const router = useRouter();
   const searchParams = useSearchParams();
   const oobCode = searchParams.get("oobCode");
+  const verificationStarted = useRef(false);
 
   useEffect(() => {
     if (!oobCode) {
-      toast.error("রিসেট কোড পাওয়া যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।");
-      router.push("/auth/login");
+      setErrorMsg("রিসেট কোড পাওয়া যায়নি। অনুগ্রহ করে আবার ইমেইল পাঠান।");
+      setVerifying(false);
       return;
     }
+
+    if (verificationStarted.current) return;
+    verificationStarted.current = true;
 
     // Verify the code and get the user's email
     const verifyCode = async () => {
       try {
         const userEmail = await verifyPasswordResetCode(auth, oobCode);
         setEmail(userEmail);
+        setIsCodeValid(true);
       } catch (error: any) {
         console.error("Invalid reset code:", error);
-        toast.error("রিসেট লিংকটি সঠিক নয় অথবা এর মেয়াদ শেষ হয়ে গেছে।");
-        router.push("/auth/login");
+        setErrorMsg("লিঙ্কটি অবৈধ বা আগে ব্যবহার করা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
+        setIsCodeValid(false);
       } finally {
         setVerifying(false);
       }
     };
 
     verifyCode();
-  }, [oobCode, router]);
+  }, [oobCode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!oobCode) return;
+    if (!oobCode || !isCodeValid) return;
     if (newPassword.length < 6) {
       return toast.error("পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।");
     }
@@ -97,7 +104,25 @@ function ResetPasswordForm() {
         </div>
 
         <Card className="p-8 border-none shadow-2xl shadow-purple-500/5 bg-white/80 backdrop-blur-xl rounded-3xl">
-          {success ? (
+          {errorMsg ? (
+            <div className="space-y-6 py-4">
+              <div className="flex justify-center">
+                <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center">
+                  <AlertCircle className="w-10 h-10 text-red-500" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold text-gray-900">ভুল হয়েছে!</h2>
+                <p className="text-sm text-gray-500 font-bengali">{errorMsg}</p>
+              </div>
+              <button 
+                onClick={() => router.push("/auth/login")}
+                className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-[#59359a] transition-all shadow-lg"
+              >
+                লগইন পেজে ফিরে যান
+              </button>
+            </div>
+          ) : success ? (
             <div className="space-y-6 py-4">
               <div className="flex justify-center">
                 <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center">
