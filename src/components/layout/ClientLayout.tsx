@@ -205,6 +205,11 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   // Logout Handler
   const handleLogout = async () => {
     await signOut(auth);
+    try {
+      await fetch("/api/auth/session", { method: "DELETE" });
+    } catch (e) {
+      console.error("Logout session clear failed:", e);
+    }
     router.push("/auth/login");
   };
 

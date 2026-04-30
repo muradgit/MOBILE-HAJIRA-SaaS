@@ -211,6 +211,17 @@ export default function RegisterPage() {
       // 3. Clear pending if any and redirect
       localStorage.removeItem("pendingRegistration");
 
+      // Set user-role cookie via session API to prevent middleware issues
+      try {
+        await fetch("/api/auth/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: userData.role, userId: user.uid }),
+        });
+      } catch (err) {
+        console.error("Session creation failed", err);
+      }
+
       // Force Next.js to invalidate layout cache and re-render the layout tree with the newly updated status
       router.refresh();
 

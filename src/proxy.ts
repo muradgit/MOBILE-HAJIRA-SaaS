@@ -10,6 +10,7 @@ export function proxy(request: NextRequest) {
     const dashboardMap: Record<string, string> = {
       SuperAdmin: "/super-admin/dashboard",
       InstitutionAdmin: "/admin/dashboard",
+      admin: "/admin/dashboard",
       Teacher: "/teacher/dashboard",
       Student: "/student/dashboard",
     };
@@ -22,7 +23,7 @@ export function proxy(request: NextRequest) {
   // Define protected routes and their allowed roles
   const protectedRoutes = [
     { path: "/super-admin", roles: ["SuperAdmin"] },
-    { path: "/admin", roles: ["InstitutionAdmin"] },
+    { path: "/admin", roles: ["InstitutionAdmin", "admin"] },
     { path: "/teacher", roles: ["Teacher"] },
     { path: "/student", roles: ["Student"] },
   ];
@@ -46,6 +47,7 @@ export function proxy(request: NextRequest) {
       const dashboardMap: Record<string, string> = {
         SuperAdmin: "/super-admin/dashboard",
         InstitutionAdmin: "/admin/dashboard",
+        admin: "/admin/dashboard",
         Teacher: "/teacher/dashboard",
         Student: "/student/dashboard",
       };
