@@ -9,11 +9,12 @@ import {
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut,
-  signInWithEmailAndPassword 
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail 
 } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { toast } from "sonner";
-import { ShieldCheck, AlertCircle, Loader2, Mail, Lock } from "lucide-react";
+import { ShieldCheck, AlertCircle, Loader2, Mail, Lock, ArrowLeft } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
 import { UserData, Tenant } from "@/src/lib/types";
 
@@ -22,6 +23,7 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState<React.ReactNode | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [forgotMode, setForgotMode] = useState(false);
   const router = useRouter();
   const setUser = useUserStore((state) => state.setUser);
 
@@ -39,6 +41,22 @@ export default function LoginPage() {
       } else {
         toast.error("Login failed: " + (error.message || "Unknown error"));
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return toast.error("অনুগ্রহ করে আপনার ইমেইল এড্রেসটি দিন।");
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      toast.success("পাসওয়ার্ড রিসেট লিংক আপনার ইমেইলে পাঠানো হয়েছে।");
+      setForgotMode(false);
+    } catch (error: any) {
+      console.error("Password reset failed:", error);
+      toast.error(error.message || "Failed to send reset link.");
     } finally {
       setLoading(false);
     }
@@ -215,6 +233,44 @@ export default function LoginPage() {
                 আবার চেষ্টা করুন
               </button>
             </div>
+          ) : forgotMode ? (
+            <>
+              <div className="space-y-2">
+                <button 
+                  onClick={() => setForgotMode(false)}
+                  className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors font-bold mb-4"
+                >
+                  <ArrowLeft className="w-4 h-4" /> ফিরে যান
+                </button>
+                <h2 className="text-2xl font-bold text-gray-900">পাসওয়ার্ড রিসেট</h2>
+                <p className="text-sm text-gray-500 font-bengali">আপনার ইমেইল দিন, আমরা একটি রিসেট লিংক পাঠাবো।</p>
+              </div>
+
+              <form onSubmit={handleForgotPassword} className="space-y-4 text-left">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input 
+                      required
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="name@institution.com"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-12 py-3.5 outline-none focus:ring-2 focus:ring-[#6f42c1] transition-all text-sm"
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-[#6f42c1] text-white py-4 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-[#59359a] transition-all shadow-lg shadow-purple-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "লিংক পাঠান"}
+                </button>
+              </form>
+            </>
           ) : (
             <>
               <div className="space-y-2">
@@ -239,7 +295,16 @@ export default function LoginPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Password</label>
+                  <div className="flex items-center justify-between mx-1">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Password</label>
+                    <button 
+                      type="button"
+                      onClick={() => setForgotMode(true)}
+                      className="text-[10px] font-bold text-[#6f42c1] hover:underline uppercase tracking-wider"
+                    >
+                      পাসওয়ার্ড ভুলে গেছেন?
+                    </button>
+                  </div>
                   <div className="relative">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                     <input 

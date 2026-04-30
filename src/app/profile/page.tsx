@@ -365,9 +365,14 @@ export default function ProfilePage() {
 
                 {hasPassword && (
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                      <KeyRound className="w-3 h-3" /> বর্তমান পাসওয়ার্ড
-                    </label>
+                    <div className="flex items-center justify-between mx-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                        <KeyRound className="w-3 h-3" /> বর্তমান পাসওয়ার্ড
+                      </label>
+                      <p className="text-[9px] text-gray-400 font-bold italic">
+                        পাসওয়ার্ড ভুলে গেলে লগআউট করে 'Forgot Password' অপশন ব্যবহার করুন।
+                      </p>
+                    </div>
                     <input 
                       required
                       type="password" 
