@@ -54,8 +54,8 @@ export default function BillingPage() {
 
   // 2. Fetch Billing Data
   useEffect(() => {
-    if (!activeTenantId || userData?.role !== "InstitutionAdmin") {
-      if (!authLoading && userData && userData.role !== "InstitutionAdmin" && userData.role !== "SuperAdmin") {
+    if (!activeTenantId || (userData?.role !== "institute_admin" && userData?.role !== "super_admin")) {
+      if (!authLoading && userData && userData.role !== "institute_admin" && userData.role !== "super_admin") {
           setLoading(false);
       }
       return;
@@ -104,7 +104,7 @@ export default function BillingPage() {
     );
   }
 
-  const isAuthorized = userData?.role === "InstitutionAdmin" || userData?.role === "SuperAdmin";
+  const isAuthorized = userData?.role === "institute_admin" || userData?.role === "super_admin";
   if (!isAuthorized) {
     return (
       <div className="p-8 text-center flex flex-col items-center justify-center min-h-[60vh] gap-4">

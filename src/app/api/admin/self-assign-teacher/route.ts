@@ -10,8 +10,8 @@ export async function POST(req: NextRequest) {
   const authUser = await authenticate(req);
   if (!authUser) return errorResponse("Unauthorized", 401);
   
-  const role = (authUser.role as string)?.toLowerCase();
-  if (role !== "institutionadmin" && role !== "admin" && role !== "superadmin") {
+  const role = (authUser.role as string)?.toLowerCase().replace(/[\s-]/g, "_");
+  if (role !== "institute_admin" && role !== "institutionadmin" && role !== "admin" && role !== "super_admin" && role !== "superadmin") {
     return errorResponse("Forbidden: Only Admins can self-assign", 403);
   }
 

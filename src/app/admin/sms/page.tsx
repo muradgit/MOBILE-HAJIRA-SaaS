@@ -205,7 +205,7 @@ export default function SMSManagementPage() {
   };
 
   // Auth/Role Protection
-  const isAuthorized = userData?.role === "InstitutionAdmin" || userData?.role === "SuperAdmin";
+  const isAuthorized = userData?.role === "institute_admin" || userData?.role === "super_admin";
 
   if (authLoading || (loading && !credits && activeTenantId)) {
     return (
