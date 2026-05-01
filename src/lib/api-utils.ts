@@ -21,13 +21,13 @@ export async function authenticate(req: NextRequest) {
         (decodedToken as any).tenant_id = userData?.tenant_id;
         
         // Super Admin Bypass by email
-        const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
-        if (decodedToken.email === superAdminEmail && !decodedToken.role) {
+        const SUPER_ADMIN_EMAILS = ["hello@muradkhank31.com", "muradkhan31@gmail.com"];
+        if (SUPER_ADMIN_EMAILS.includes(decodedToken.email?.toLowerCase() || "") && !decodedToken.role) {
           (decodedToken as any).role = "super_admin";
         }
         
         // Optionally update claims for next time (Fire and forget-ish)
-        if (userData?.role || decodedToken.email === superAdminEmail) {
+        if (userData?.role || SUPER_ADMIN_EMAILS.includes(decodedToken.email?.toLowerCase() || "")) {
           adminAuth.setCustomUserClaims(decodedToken.uid, {
              role: (decodedToken as any).role,
              tenant_id: (decodedToken as any).tenant_id
@@ -35,8 +35,8 @@ export async function authenticate(req: NextRequest) {
         }
       } else {
          // Special case for initial super admin if no doc exists yet
-         const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
-         if (decodedToken.email === superAdminEmail) {
+         const SUPER_ADMIN_EMAILS = ["hello@muradkhank31.com", "muradkhan31@gmail.com"];
+         if (SUPER_ADMIN_EMAILS.includes(decodedToken.email?.toLowerCase() || "")) {
            (decodedToken as any).role = "super_admin";
          }
       }

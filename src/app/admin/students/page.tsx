@@ -15,7 +15,7 @@ import {
   Filter,
   UserPlus
 } from "lucide-react";
-import { collection, query, onSnapshot } from "firebase/firestore";
+import { collection, query, onSnapshot, where } from "firebase/firestore";
 import { db, auth } from "@/src/lib/firebase";
 import { useUserStore } from "@/src/store/useUserStore";
 import { Card } from "@/src/components/ui/Card";
@@ -62,7 +62,9 @@ export default function StudentsPage() {
     if (!tenantId) return;
 
     const q = query(
-      collection(db, "tenants", tenantId, "students")
+      collection(db, "users"),
+      where("tenant_id", "==", tenantId),
+      where("role", "in", ["Student", "student"])
     );
 
     const unsub = onSnapshot(q, (snap) => {

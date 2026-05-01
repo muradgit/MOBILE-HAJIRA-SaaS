@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/src/lib/firebase-admin";
 import { createInstitutionSheet } from "@/src/lib/google-sheets";
+import { authenticate } from "@/src/lib/api-utils";
 
 export async function POST(req: NextRequest) {
   try {
+    const decodedToken = await authenticate(req);
+    if (!decodedToken) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const callerRole = (decodedToken.role as string)?.toLowerCase().replace(/[\s-]/g, "_");
+    if (callerRole !== "institute_admin" && callerRole !== "admin" && callerRole !== "institutionadmin" && callerRole !== "super_admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { tenantId, adminEmail } = await req.json();
 
     if (!tenantId || !adminEmail) {

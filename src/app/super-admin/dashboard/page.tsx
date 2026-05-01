@@ -148,7 +148,7 @@ export default function SuperAdminDashboard() {
 
   // Access Denied Screen (Authorization Check First)
   const normalizedRole = (userData?.role || "").toLowerCase().replace(/\s+/g, "");
-  const isSuperAdmin = normalizedRole === "superadmin";
+  const isSuperAdmin = normalizedRole === "superadmin" || normalizedRole === "super_admin";
   
   if (!authLoading && !isSuperAdmin) {
     return (

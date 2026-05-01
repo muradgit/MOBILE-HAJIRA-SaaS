@@ -298,10 +298,16 @@ async function getSheetsAuth() {
   if (credentialsRaw) {
     const credentials = JSON.parse(credentialsRaw);
     clientEmail = credentials.client_email;
-    privateKey = credentials.private_key.replace(/\\n/g, "\n");
+    privateKey = credentials.private_key
+      .replace(/\\\\n/g, "\n")
+      .replace(/\\n/g, "\n")
+      .trim();
   } else {
     clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "";
-    privateKey = (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n");
+    privateKey = (process.env.GOOGLE_PRIVATE_KEY || "")
+      .replace(/\\\\n/g, "\n")
+      .replace(/\\n/g, "\n")
+      .trim();
   }
 
   return new google.auth.JWT({
@@ -346,7 +352,10 @@ export async function appendAttendanceToSheet(tenantId: string, attendanceData: 
     }
   } else {
     clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "";
-    privateKey = (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n").trim();
+    privateKey = (process.env.GOOGLE_PRIVATE_KEY || "")
+      .replace(/\\\\n/g, "\n")
+      .replace(/\\n/g, "\n")
+      .trim();
   }
 
   const auth = new google.auth.JWT({

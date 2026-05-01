@@ -177,8 +177,8 @@ export default function RegisterPage() {
       }
 
       // 2. Create User Profile 
-      const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
-      const isSuperAdminEmail = user.email === superAdminEmail;
+      const SUPER_ADMIN_EMAILS = ["hello@muradkhank31.com", "muradkhan31@gmail.com"];
+      const isSuperAdminEmail = SUPER_ADMIN_EMAILS.includes(user.email?.toLowerCase() || "");
       
       const userData = {
         user_id: user.uid,

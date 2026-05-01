@@ -15,7 +15,7 @@ import {
   Clock,
   ExternalLink
 } from "lucide-react";
-import { collection, query, onSnapshot, doc } from "firebase/firestore";
+import { collection, query, onSnapshot, doc, where } from "firebase/firestore";
 import { db, auth } from "@/src/lib/firebase";
 import { useUserStore } from "@/src/store/useUserStore";
 import { Card } from "@/src/components/ui/Card";
@@ -55,7 +55,9 @@ export default function TeachersPage() {
     if (!tenantId) return;
 
     const q = query(
-      collection(db, "tenants", tenantId, "teachers")
+      collection(db, "users"),
+      where("tenant_id", "==", tenantId),
+      where("role", "in", ["Teacher", "teacher"])
     );
 
     const unsub = onSnapshot(q, (snap) => {

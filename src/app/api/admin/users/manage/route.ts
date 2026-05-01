@@ -10,9 +10,9 @@ export async function POST(req: NextRequest) {
   const auth = await authenticate(req);
   if (!auth) return errorResponse("Unauthorized", 401);
   const role = auth.role as string;
-  const normalizedRole = role?.toLowerCase().replace(/\s+/g, "");
+  const normalizedRole = role?.toLowerCase().replace(/[\s-]/g, "_");
   
-  if (!["admin", "institutionadmin", "superadmin", "super_admin", "instituteadmin", "institute_admin", "teacher"].includes(normalizedRole)) {
+  if (!["admin", "institutionadmin", "super_admin", "institute_admin", "teacher"].includes(normalizedRole)) {
     return errorResponse("Forbidden", 403);
   }
 
@@ -25,16 +25,16 @@ export async function POST(req: NextRequest) {
     }
 
     // 0. Hierarchy Rules Enforcement
-    const creatorRole = (auth.role as string).toLowerCase().replace(/\s+/g, "");
-    let normalizedTargetRole = targetRole.toLowerCase().replace(/\s+/g, "");
+    const creatorRole = (auth.role as string).toLowerCase().replace(/[\s-]/g, "_");
+    let normalizedTargetRole = targetRole.toLowerCase().replace(/[\s-]/g, "_");
     
     // Auto-migrate target role if it's 'admin'
     if (normalizedTargetRole === "admin" || normalizedTargetRole === "institutionadmin") {
       normalizedTargetRole = "institute_admin";
     }
 
-    const isSuperAdmin = ["superadmin", "super_admin"].includes(creatorRole);
-    const isInstitutionAdmin = ["institutionadmin", "instituteadmin", "institute_admin"].includes(creatorRole);
+    const isSuperAdmin = creatorRole === "super_admin" || creatorRole === "superadmin";
+    const isInstitutionAdmin = creatorRole === "institute_admin" || creatorRole === "institutionadmin" || creatorRole === "instituteadmin";
     const isTeacher = creatorRole === "teacher";
 
     let isAuthorized = false;
@@ -152,8 +152,8 @@ export async function PUT(req: NextRequest) {
     }
 
     // Hierarchy Check
-    const creatorRole = (auth.role as string).toLowerCase().replace(/\s+/g, "");
-    let normalizedTargetRole = role.toLowerCase().replace(/\s+/g, "");
+    const creatorRole = (auth.role as string).toLowerCase().replace(/[\s-]/g, "_");
+    let normalizedTargetRole = role.toLowerCase().replace(/[\s-]/g, "_");
     
     // Auto-migrate
     if (normalizedTargetRole === "admin" || normalizedTargetRole === "institutionadmin") {
@@ -161,8 +161,8 @@ export async function PUT(req: NextRequest) {
     }
 
     const isAuthorized = 
-      ["superadmin", "super_admin"].includes(creatorRole) || 
-      (["institutionadmin", "instituteadmin", "institute_admin"].includes(creatorRole) && ["teacher", "student"].includes(normalizedTargetRole)) ||
+      creatorRole === "super_admin" || creatorRole === "superadmin" || 
+      ((creatorRole === "institute_admin" || creatorRole === "institutionadmin" || creatorRole === "instituteadmin") && ["teacher", "student"].includes(normalizedTargetRole)) ||
       (creatorRole === "teacher" && normalizedTargetRole === "student");
 
     if (!isAuthorized) return errorResponse("উক্ত পরিবর্তন করার অনুমতি আপনার নেই।", 403);
@@ -228,8 +228,8 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Hierarchy Check
-    const creatorRole = (auth.role as string).toLowerCase().replace(/\s+/g, "");
-    let normalizedTargetRole = role.toLowerCase().replace(/\s+/g, "");
+    const creatorRole = (auth.role as string).toLowerCase().replace(/[\s-]/g, "_");
+    let normalizedTargetRole = role.toLowerCase().replace(/[\s-]/g, "_");
 
     // Auto-migrate
     if (normalizedTargetRole === "admin" || normalizedTargetRole === "institutionadmin") {
@@ -237,8 +237,8 @@ export async function DELETE(req: NextRequest) {
     }
 
     const isAuthorized = 
-      ["superadmin", "super_admin"].includes(creatorRole) || 
-      (["institutionadmin", "instituteadmin", "institute_admin"].includes(creatorRole) && ["teacher", "student"].includes(normalizedTargetRole)) ||
+      creatorRole === "super_admin" || creatorRole === "superadmin" || 
+      ((creatorRole === "institute_admin" || creatorRole === "institutionadmin" || creatorRole === "instituteadmin") && ["teacher", "student"].includes(normalizedTargetRole)) ||
       (creatorRole === "teacher" && normalizedTargetRole === "student");
 
     if (!isAuthorized) return errorResponse("উক্ত ইউজারকে ডিলিট করার অনুমতি আপনার নেই।", 403);
