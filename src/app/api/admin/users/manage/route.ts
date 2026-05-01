@@ -56,7 +56,10 @@ export async function POST(req: NextRequest) {
     let finalEmail = identifier;
     let emailVerified = false;
 
-    if (identifierType === "username") {
+    const isExplicitUsername = identifierType === "username";
+    const isImplicitUsername = !identifierType && !identifier.includes("@");
+
+    if (isExplicitUsername || isImplicitUsername) {
       // Shadow Email Pattern
       finalEmail = `${identifier}_${tenant_id}@internal.com`.toLowerCase();
       emailVerified = true; // Auto-verify shadow emails

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/src/hooks/useAuth";
-import { db } from "@/src/lib/firebase";
+import { auth, db } from "@/src/lib/firebase";
 import { 
   collection, 
   onSnapshot, 
@@ -60,7 +60,8 @@ export default function UserManagement() {
   const [createData, setCreateData] = useState({
     name: "",
     nameBN: "",
-    email: "",
+    identifier: "",
+    password: "",
     role: "Teacher" as any,
     tenant_id: "",
     status: "approved" as any,
@@ -154,19 +155,42 @@ export default function UserManagement() {
     e.preventDefault();
     const toastId = toast.loading("ইউজার তৈরি হচ্ছে...");
     try {
-      // This is a manual entry; user_id will be generated or use email hash.
-      // Better to use a random ID if not using Auth yet.
-      const userId = `manual_${Date.now()}`;
-      await setDoc(doc(db, "users", userId), {
-        user_id: userId,
-        ...createData,
-        created_at: serverTimestamp(),
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch("/api/admin/users/manage", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          tenant_id: createData.tenant_id,
+          role: createData.role,
+          name: createData.name,
+          identifier: createData.identifier,
+          password: createData.password,
+          extra_data: {
+            nameBN: createData.nameBN,
+            status: createData.status
+          }
+        }),
       });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "ইউজার তৈরি ব্যর্থ");
+
       toast.success("নতুন ইউজার তৈরি সফল হয়েছে", { id: toastId });
       setIsCreateDrawerOpen(false);
-      setCreateData({ name: "", nameBN: "", email: "", role: "Teacher", tenant_id: "", status: "approved" });
+      setCreateData({ 
+        name: "", 
+        nameBN: "", 
+        identifier: "", 
+        password: "",
+        role: "Teacher", 
+        tenant_id: "", 
+        status: "approved" 
+      });
     } catch (error: any) {
-      toast.error("ইউজার তৈরি ব্যর্থ: " + error.message, { id: toastId });
+      toast.error(error.message, { id: toastId });
     }
   };
 
@@ -225,9 +249,12 @@ export default function UserManagement() {
           </div>
           <div className="flex flex-col">
             <span className="font-bold text-gray-900 leading-none">{item.name}</span>
-            <span className="text-[10px] text-gray-400 mt-1 flex items-center gap-1 font-medium lowercase">
-              <Mail className="w-3 h-3" /> {item.email}
-            </span>
+            <div className="text-[10px] text-gray-400 mt-1 flex flex-col gap-0.5 font-medium lowercase">
+              <span className="flex items-center gap-1"><Mail className="w-2.5 h-2.5" /> {item.email}</span>
+              {item.username && (
+                <span className="text-purple-500 font-bold">@{item.username}</span>
+              )}
+            </div>
           </div>
         </div>
       )
@@ -349,8 +376,12 @@ export default function UserManagement() {
                 <input required value={createData.nameBN} onChange={e => setCreateData({...createData, nameBN: e.target.value})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3.5 text-sm font-bengali font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all" placeholder="নাম উল্লেখ করুন" />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
-                <input required type="email" value={createData.email} onChange={e => setCreateData({...createData, email: e.target.value})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3.5 text-sm font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all" placeholder="user@domain.com" />
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email or User ID</label>
+                <input required value={createData.identifier} onChange={e => setCreateData({...createData, identifier: e.target.value})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3.5 text-sm font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all" placeholder="user@domain.com or unique_id" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Password</label>
+                <input required type="password" value={createData.password} onChange={e => setCreateData({...createData, password: e.target.value})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3.5 text-sm font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all" placeholder="••••••••" />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Role</label>
