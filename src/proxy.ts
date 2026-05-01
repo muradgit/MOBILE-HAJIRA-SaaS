@@ -1,22 +1,15 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { normalizeRole, verifySuperAdmin } from "@/src/lib/auth-utils";
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  let userRole = request.cookies.get("user-role")?.value?.toLowerCase().replace(/[\s-]/g, "_");
+  const roleCookie = request.cookies.get("user-role")?.value;
+  const userRole = normalizeRole(roleCookie);
   const userEmail = request.cookies.get("user-email")?.value; 
 
-  // Aggressive Normalization for Stale Cookies
-  if (userRole === "admin" || userRole === "institutionadmin" || userRole === "instituteadmin") {
-    userRole = "institute_admin";
-  } else if (userRole === "superadmin") {
-    userRole = "super_admin";
-  }
-
-  const SUPER_ADMIN_EMAILS = ["hello@muradkhank31.com", "muradkhan31@gmail.com"];
-
   // Task 1: Redirect from root (/) to dashboard if role exists
-  if (pathname === "/" && userRole) {
+  if (pathname === "/" && roleCookie) {
     const dashboardMap: Record<string, string> = {
       super_admin: "/super-admin/dashboard",
       institute_admin: "/admin/dashboard",
@@ -52,9 +45,8 @@ export function proxy(request: NextRequest) {
 
     // STRICT Super Admin Security: Even if role matches, check email
     if (pathname.startsWith("/super-admin")) {
-      const normalizedEmail = userEmail?.toLowerCase() || "";
-      if (!normalizedEmail || !SUPER_ADMIN_EMAILS.includes(normalizedEmail)) {
-        console.warn(`Unauthorized Super Admin attempt by ${normalizedEmail}`);
+      if (!verifySuperAdmin(userEmail)) {
+        console.warn(`Unauthorized Super Admin attempt by ${userEmail}`);
         return NextResponse.redirect(new URL("/auth/login", request.url));
       }
     }

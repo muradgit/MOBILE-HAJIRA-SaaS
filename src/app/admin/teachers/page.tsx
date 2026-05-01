@@ -57,7 +57,7 @@ export default function TeachersPage() {
     const q = query(
       collection(db, "users"),
       where("tenant_id", "==", tenantId),
-      where("role", "in", ["Teacher", "teacher"])
+      where("role", "==", "teacher") // SSOT Role
     );
 
     const unsub = onSnapshot(q, (snap) => {

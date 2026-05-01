@@ -51,7 +51,7 @@ export default function StudentsPage() {
     name: "",
     identifier: "",
     identifierType: "email" as "email" | "username",
-    password: "Password123", // Default for bulk creation or easy setup
+    password: "", // Security: No hardcoded passwords
     class: "",
     section: "",
     phone: "",
@@ -64,7 +64,7 @@ export default function StudentsPage() {
     const q = query(
       collection(db, "users"),
       where("tenant_id", "==", tenantId),
-      where("role", "in", ["Student", "student"])
+      where("role", "==", "student") // SSOT Role
     );
 
     const unsub = onSnapshot(q, (snap) => {
@@ -110,7 +110,7 @@ export default function StudentsPage() {
 
       toast.success("শিক্ষার্থীর প্রোফাইল সফলভাবে তৈরি করা হয়েছে।");
       setIsAdding(false);
-      setFormData({ name: "", identifier: "", identifierType: "email", password: "Password123", class: "", section: "", phone: "", student_id: "" });
+      setFormData({ name: "", identifier: "", identifierType: "email", password: "", class: "", section: "", phone: "", student_id: "" });
     } catch (err: any) {
       toast.error(err.message);
     } finally {

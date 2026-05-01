@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { Tenant, Transaction, UserData, Broadcast } from "@/src/lib/types";
 import { Card } from "@/src/components/ui/Card";
+import { normalizeRole } from "@/src/lib/auth-utils";
 import { 
   Database, 
   Users, 
@@ -53,13 +54,13 @@ export default function SuperAdminDashboard() {
     title: "",
     message: "",
     video_url: "",
-    target_role: "All" as "All" | "InstitutionAdmin" | "Teacher" | "Student"
+    target_role: "All" as "All" | "institute_admin" | "teacher" | "student"
   });
   const [submitting, setSubmitting] = useState(false);
 
   // Load Dashboard Data
   useEffect(() => {
-    if (!userData || userData.role !== "SuperAdmin") return;
+    if (!userData || normalizeRole(userData.role) !== "super_admin") return;
     
     setLoading(true);
     setError(null);
@@ -147,8 +148,7 @@ export default function SuperAdminDashboard() {
   };
 
   // Access Denied Screen (Authorization Check First)
-  const normalizedRole = (userData?.role || "").toLowerCase().replace(/\s+/g, "");
-  const isSuperAdmin = normalizedRole === "superadmin" || normalizedRole === "super_admin";
+  const isSuperAdmin = normalizeRole(userData?.role) === "super_admin";
   
   if (!authLoading && !isSuperAdmin) {
     return (
@@ -181,8 +181,8 @@ export default function SuperAdminDashboard() {
   // Calculations
   const activeTenants = tenants.filter(t => t.status === "active").length;
   const suspendedTenants = tenants.length - activeTenants;
-  const teachersCount = allUsers.filter(u => u.role === "Teacher").length;
-  const studentsCount = allUsers.filter(u => u.role === "Student").length;
+  const teachersCount = allUsers.filter(u => u.role === "teacher").length;
+  const studentsCount = allUsers.filter(u => u.role === "student").length;
   const totalRevenue = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
 
   return (
@@ -282,9 +282,9 @@ export default function SuperAdminDashboard() {
                     className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
                   >
                     <option value="All">All Users</option>
-                    <option value="InstitutionAdmin">Admins Only</option>
-                    <option value="Teacher">Teachers Only</option>
-                    <option value="Student">Students Only</option>
+                    <option value="institute_admin">Admins Only</option>
+                    <option value="teacher">Teachers Only</option>
+                    <option value="student">Students Only</option>
                   </select>
                 </div>
                 <div className="space-y-1">

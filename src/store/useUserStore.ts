@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { UserData } from "@/src/lib/types";
+import { normalizeRole } from "@/src/lib/auth-utils";
 
 interface UserStoreState {
   user: UserData | null;
@@ -30,18 +31,19 @@ export const useUserStore = create<UserStoreState>((set) => ({
 
   setUser: (user) => set((state) => {
     const isSameUser = state.user?.user_id === user?.user_id;
+    const normalizedRole = normalizeRole(user?.role);
     return { 
-      user, 
-      userRole: user?.role || null, 
+      user: user ? { ...user, role: normalizedRole } : null, 
+      userRole: normalizedRole, 
       // Only set activeRole from user.role if it's a new user login or was null
-      activeRole: isSameUser ? (state.activeRole || user?.role || null) : (user?.role || null),
+      activeRole: isSameUser ? (state.activeRole || normalizedRole) : normalizedRole,
       tenantId: user?.tenant_id || null,
       isInitialized: true 
     };
   }),
 
-  setRole: (role) => set({ userRole: role }),
-  setActiveRole: (activeRole) => set({ activeRole }),
+  setRole: (role) => set({ userRole: normalizeRole(role) }),
+  setActiveRole: (activeRole) => set({ activeRole: normalizeRole(activeRole) }),
 
   setTenant: (tenantId) => set({ tenantId }),
 

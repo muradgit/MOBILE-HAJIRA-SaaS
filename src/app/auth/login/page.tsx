@@ -16,7 +16,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { toast } from "sonner";
 import { ShieldCheck, AlertCircle, Loader2, Mail, Lock, ArrowLeft } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
-import { UserData, Tenant } from "@/src/lib/types";
+import { UserData, UserRole, Tenant } from "@/src/lib/types";
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
@@ -179,7 +179,7 @@ export default function LoginPage() {
 
       // Auto-Migration: If userData.role !== normalizedRole, update FirestoreDoc
       if (userData.role !== normalizedRole) {
-        userData.role = normalizedRole;
+        userData.role = normalizedRole as UserRole;
         const { updateDoc } = await import("firebase/firestore");
         await updateDoc(doc(db, "users", uid), { role: normalizedRole });
       }

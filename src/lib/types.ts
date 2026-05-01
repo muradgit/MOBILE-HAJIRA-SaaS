@@ -57,10 +57,14 @@ export interface Tenant {
   shifts?: string[];
 }
 
+import { UserRole } from "./auth-utils";
+
+export { type UserRole };
+
 export interface UserData {
   user_id: string;
   tenant_id: string;
-  role: "super_admin" | "institute_admin" | "teacher" | "student" | string;
+  role: UserRole;
   name: string;
   nameBN?: string;
   email?: string;

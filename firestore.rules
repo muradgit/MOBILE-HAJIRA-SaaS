@@ -11,8 +11,8 @@ service cloud.firestore {
 
     function isSuperAdmin() {
       return isAuthenticated() && (
-        request.auth.token.email == "hello@muradkhank31.com" ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "super_admin"
+        request.auth.token.email.lower() in ["hello@muradkhank31.com", "muradkhan31@gmail.com"] ||
+        request.auth.token.role == "super_admin"
       );
     }
 
@@ -26,7 +26,7 @@ service cloud.firestore {
 
     function isInstitutionAdmin(tenantId) {
       let data = getUserData();
-      return isAuthenticated() && data.tenant_id == tenantId && (data.role == "institute_admin" || data.role == "InstitutionAdmin" || data.role == "Admin");
+      return isAuthenticated() && data.tenant_id == tenantId && data.role == "institute_admin";
     }
 
     // ===============================================================

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/src/lib/firebase-admin";
 import { authenticate, errorResponse, successResponse } from "@/src/lib/api-utils";
 import { queueGoogleSheetSync } from "@/src/lib/qstash";
+import { normalizeRole } from "@/src/lib/auth-utils";
 
 /**
  * Manage Teachers and Students (Admin Only)
@@ -9,10 +10,9 @@ import { queueGoogleSheetSync } from "@/src/lib/qstash";
 export async function POST(req: NextRequest) {
   const auth = await authenticate(req);
   if (!auth) return errorResponse("Unauthorized", 401);
-  const role = auth.role as string;
-  const normalizedRole = role?.toLowerCase().replace(/[\s-]/g, "_");
+  const normalizedRole = normalizeRole(auth.role as string);
   
-  if (!["admin", "institutionadmin", "super_admin", "institute_admin", "teacher"].includes(normalizedRole)) {
+  if (!["super_admin", "institute_admin", "teacher"].includes(normalizedRole)) {
     return errorResponse("Forbidden", 403);
   }
 
@@ -20,21 +20,21 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { tenant_id, role: targetRole, name, identifier, identifierType, password, extra_data } = body;
 
+    // Tenant Isolation Check
+    if (normalizedRole === "institute_admin" && tenant_id !== auth.tenant_id) {
+       return errorResponse("একই ইনস্টিটিউটের বাইরে ইউজার তৈরি করার অনুমতি আপনার নেই।", 403);
+    }
+
     if (!tenant_id || !targetRole || !name || !identifier || !password) {
       return errorResponse("Missing required fields", 400);
     }
 
     // 0. Hierarchy Rules Enforcement
-    const creatorRole = (auth.role as string).toLowerCase().replace(/[\s-]/g, "_");
-    let normalizedTargetRole = targetRole.toLowerCase().replace(/[\s-]/g, "_");
+    const creatorRole = normalizedRole;
+    let normalizedTargetRole = normalizeRole(targetRole);
     
-    // Auto-migrate target role if it's 'admin'
-    if (normalizedTargetRole === "admin" || normalizedTargetRole === "institutionadmin") {
-      normalizedTargetRole = "institute_admin";
-    }
-
-    const isSuperAdmin = creatorRole === "super_admin" || creatorRole === "superadmin";
-    const isInstitutionAdmin = creatorRole === "institute_admin" || creatorRole === "institutionadmin" || creatorRole === "instituteadmin";
+    const isSuperAdmin = creatorRole === "super_admin";
+    const isInstitutionAdmin = creatorRole === "institute_admin";
     const isTeacher = creatorRole === "teacher";
 
     let isAuthorized = false;
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     const isImplicitUsername = !identifierType && !identifier.includes("@");
 
     if (isExplicitUsername || isImplicitUsername) {
-      // Shadow Email Pattern
+      // Shadow Email Pattern: identifier_tenantId@internal.com
       finalEmail = `${identifier}_${tenant_id}@internal.com`.toLowerCase();
       emailVerified = true; // Auto-verify shadow emails
     }
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
       has_password: true,
       status: "approved",
       created_at: new Date().toISOString(),
-      ...extra_data,
+      extra_data: extra_data || {}, // Keep extra_data structured
     };
     
     delete (profileData as any).password;
@@ -152,17 +152,17 @@ export async function PUT(req: NextRequest) {
     }
 
     // Hierarchy Check
-    const creatorRole = (auth.role as string).toLowerCase().replace(/[\s-]/g, "_");
-    let normalizedTargetRole = role.toLowerCase().replace(/[\s-]/g, "_");
+    const creatorRole = normalizeRole(auth.role as string);
+    let normalizedTargetRole = normalizeRole(role);
     
-    // Auto-migrate
-    if (normalizedTargetRole === "admin" || normalizedTargetRole === "institutionadmin") {
-      normalizedTargetRole = "institute_admin";
+    // Tenant Isolation
+    if (creatorRole === "institute_admin" && tenant_id !== auth.tenant_id) {
+       return errorResponse("একই ইনস্টিটিউটের বাইরে ইউজার পরিবর্তন করার অনুমতি আপনার নেই।", 403);
     }
 
     const isAuthorized = 
-      creatorRole === "super_admin" || creatorRole === "superadmin" || 
-      ((creatorRole === "institute_admin" || creatorRole === "institutionadmin" || creatorRole === "instituteadmin") && ["teacher", "student"].includes(normalizedTargetRole)) ||
+      creatorRole === "super_admin" || 
+      (creatorRole === "institute_admin" && ["teacher", "student"].includes(normalizedTargetRole)) ||
       (creatorRole === "teacher" && normalizedTargetRole === "student");
 
     if (!isAuthorized) return errorResponse("উক্ত পরিবর্তন করার অনুমতি আপনার নেই।", 403);
@@ -228,17 +228,17 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Hierarchy Check
-    const creatorRole = (auth.role as string).toLowerCase().replace(/[\s-]/g, "_");
-    let normalizedTargetRole = role.toLowerCase().replace(/[\s-]/g, "_");
+    const creatorRole = normalizeRole(auth.role as string);
+    let normalizedTargetRole = normalizeRole(role);
 
-    // Auto-migrate
-    if (normalizedTargetRole === "admin" || normalizedTargetRole === "institutionadmin") {
-      normalizedTargetRole = "institute_admin";
+    // Tenant Isolation
+    if (creatorRole === "institute_admin" && tenant_id !== auth.tenant_id) {
+       return errorResponse("একই ইনস্টিটিউটের বাইরে ইউজার ডিলিট করার অনুমতি আপনার নেই।", 403);
     }
 
     const isAuthorized = 
-      creatorRole === "super_admin" || creatorRole === "superadmin" || 
-      ((creatorRole === "institute_admin" || creatorRole === "institutionadmin" || creatorRole === "instituteadmin") && ["teacher", "student"].includes(normalizedTargetRole)) ||
+      creatorRole === "super_admin" || 
+      (creatorRole === "institute_admin" && ["teacher", "student"].includes(normalizedTargetRole)) ||
       (creatorRole === "teacher" && normalizedTargetRole === "student");
 
     if (!isAuthorized) return errorResponse("উক্ত ইউজারকে ডিলিট করার অনুমতি আপনার নেই।", 403);
