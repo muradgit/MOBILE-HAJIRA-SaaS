@@ -52,8 +52,9 @@ export function proxy(request: NextRequest) {
 
     // STRICT Super Admin Security: Even if role matches, check email
     if (pathname.startsWith("/super-admin")) {
-      if (!userEmail || !SUPER_ADMIN_EMAILS.includes(userEmail)) {
-        console.warn(`Unauthorized Super Admin attempt by ${userEmail}`);
+      const normalizedEmail = userEmail?.toLowerCase() || "";
+      if (!normalizedEmail || !SUPER_ADMIN_EMAILS.includes(normalizedEmail)) {
+        console.warn(`Unauthorized Super Admin attempt by ${normalizedEmail}`);
         return NextResponse.redirect(new URL("/auth/login", request.url));
       }
     }

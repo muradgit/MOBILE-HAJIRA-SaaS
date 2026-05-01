@@ -103,7 +103,7 @@ export default function LoginPage() {
 
   const processLogin = async (uid: string, userEmail: string | null) => {
     const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
-    const currentEmail = userEmail;
+    const currentEmail = (userEmail || "").toLowerCase();
     
     // 1. Fetch user data from Firestore
     let userDoc;
@@ -119,17 +119,18 @@ export default function LoginPage() {
     
     let userData: UserData;
     const SUPER_ADMIN_EMAILS = ["hello@muradkhank31.com", "muradkhan31@gmail.com"];
+    const normalizedCurrentEmail = currentEmail;
 
     if (!userDoc.exists()) {
       // If user doesn't exist, check if they should be super_admin based on email
-      if (SUPER_ADMIN_EMAILS.includes(currentEmail || "")) {
+      if (SUPER_ADMIN_EMAILS.includes(normalizedCurrentEmail)) {
         userData = {
           user_id: uid,
           tenant_id: "SUPER_ADMIN",
           role: "super_admin",
           name: auth.currentUser?.displayName || "Super Admin",
           nameBN: "সুপার এডমিন",
-          email: currentEmail || "",
+          email: normalizedCurrentEmail,
           status: "approved",
           created_at: new Date().toISOString()
         };
@@ -169,7 +170,7 @@ export default function LoginPage() {
 
       // STRICT Super Admin Security Verification
       if (normalizedRole === "super_admin") {
-        if (!currentEmail || !SUPER_ADMIN_EMAILS.includes(currentEmail)) {
+        if (!normalizedCurrentEmail || !SUPER_ADMIN_EMAILS.includes(normalizedCurrentEmail)) {
           await signOut(auth);
           toast.error("আপনার সুপার এডমিন প্যানেলে প্রবেশের অনুমতি নেই। (Unauthorized Email)");
           return;

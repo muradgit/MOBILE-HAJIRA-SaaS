@@ -150,13 +150,14 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   };
 
   const mobileNavItems = (userData && mobileNavMapping[menuKey]) || [];
-  const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
+  const SUPER_ADMIN_EMAILS = ["hello@muradkhank31.com", "muradkhan31@gmail.com"];
 
   // Helper for robust role-based redirection
   const getDashboardRoute = (role: string | undefined | null): string => {
     const roleToUse = role || userData?.role;
     if (!roleToUse) {
-      if (auth.currentUser?.email === superAdminEmail) {
+      const currentEmail = auth.currentUser?.email?.toLowerCase() || "";
+      if (SUPER_ADMIN_EMAILS.includes(currentEmail)) {
         return "/super-admin/dashboard";
       }
       return "/";
