@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { ShieldCheck, AlertCircle, Loader2, Mail, Lock, ArrowLeft } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
 import { UserData, UserRole, Tenant } from "@/src/lib/types";
+import { normalizeRole, verifySuperAdmin, SUPER_ADMIN_EMAILS } from "@/src/lib/auth-utils";
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
@@ -79,7 +80,7 @@ export default function LoginPage() {
       setForgotMode(false);
     } catch (error: any) {
       console.error("Password reset failed:", error);
-      toast.error(error.message || "Failed to send reset link.");
+      toast.error("পাসওয়ার্ড রিসেট লিংক পাঠানো সম্ভব হয়নি। অনুগ্রহ করে পরে চেষ্টা করুন।");
     } finally {
       setLoading(false);
     }
@@ -118,12 +119,11 @@ export default function LoginPage() {
     }
     
     let userData: UserData;
-    const SUPER_ADMIN_EMAILS = ["hello@muradkhank31.com", "muradkhan31@gmail.com"];
     const normalizedCurrentEmail = currentEmail;
 
     if (!userDoc.exists()) {
       // If user doesn't exist, check if they should be super_admin based on email
-      if (SUPER_ADMIN_EMAILS.includes(normalizedCurrentEmail)) {
+      if (verifySuperAdmin(normalizedCurrentEmail)) {
         userData = {
           user_id: uid,
           tenant_id: "SUPER_ADMIN",
@@ -159,18 +159,11 @@ export default function LoginPage() {
       userData = userDoc.data() as UserData;
       
       // ROLE NORMALIZATION & AUTO-MIGRATION
-      let rawRole = (userData.role || "").toLowerCase().replace(/[\s-]/g, "_");
-      let normalizedRole = rawRole;
-
-      if (rawRole === "admin" || rawRole === "institutionadmin" || rawRole === "institute_admin" || rawRole === "instituteadmin") {
-        normalizedRole = "institute_admin";
-      } else if (rawRole === "super_admin" || rawRole === "superadmin") {
-        normalizedRole = "super_admin";
-      }
+      let normalizedRole = normalizeRole(userData.role);
 
       // STRICT Super Admin Security Verification
       if (normalizedRole === "super_admin") {
-        if (!normalizedCurrentEmail || !SUPER_ADMIN_EMAILS.includes(normalizedCurrentEmail)) {
+        if (!verifySuperAdmin(normalizedCurrentEmail)) {
           await signOut(auth);
           toast.error("আপনার সুপার এডমিন প্যানেলে প্রবেশের অনুমতি নেই। (Unauthorized Email)");
           return;

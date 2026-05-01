@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/src/lib/firebase-admin";
 import { authenticate, errorResponse, successResponse } from "@/src/lib/api-utils";
 import { queueGoogleSheetSync } from "@/src/lib/qstash";
+import { normalizeRole } from "@/src/lib/auth-utils";
 
 /**
  * Institution Admin Self-Assigns as Teacher
@@ -10,8 +11,8 @@ export async function POST(req: NextRequest) {
   const authUser = await authenticate(req);
   if (!authUser) return errorResponse("Unauthorized", 401);
   
-  const role = (authUser.role as string)?.toLowerCase().replace(/[\s-]/g, "_");
-  if (role !== "institute_admin" && role !== "institutionadmin" && role !== "admin" && role !== "super_admin" && role !== "superadmin") {
+  const role = normalizeRole(authUser.role as string);
+  if (role !== "institute_admin" && role !== "super_admin") {
     return errorResponse("Forbidden: Only Admins can self-assign", 403);
   }
 

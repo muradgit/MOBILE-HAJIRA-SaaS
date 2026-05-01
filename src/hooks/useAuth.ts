@@ -6,6 +6,7 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { UserData, Tenant } from "@/src/lib/types";
 import { useUserStore } from "@/src/store/useUserStore";
+import { normalizeRole, verifySuperAdmin } from "@/src/lib/auth-utils";
 
 export function useAuth() {
   const [user, setUserAuth] = useState<User | null>(null);
@@ -37,8 +38,8 @@ export function useAuth() {
              const pendingData = pendingDataStr ? JSON.parse(pendingDataStr) : {};
              
              // If we have pending registration data, use that role. Otherwise default.
-             const role = (pendingData.role || "student").toLowerCase().replace(/\s+/g, "_");
-             const isInstituteAdmin = ["institute_admin", "institutionadmin", "admin"].includes(role);
+             const role = normalizeRole(pendingData.role || "student");
+             const isInstituteAdmin = role === "institute_admin";
              const tenant_id = isInstituteAdmin ? `tenant_${firebaseUser.uid}` : (pendingData.tenant_id || null);
 
              await setDoc(userDocRef, {
@@ -62,15 +63,9 @@ export function useAuth() {
             const data = docSnap.data() as UserData;
             
             // CRITICAL: Resolve Role - Prioritize stored role, fallback to super_admin if email matches
-            const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
-            let finalRole = data.role || (firebaseUser.email === superAdminEmail ? "super_admin" : "");
+            const normalizedRole = normalizeRole(data.role || (verifySuperAdmin(firebaseUser.email) ? "super_admin" : ""));
             
-            // Auto-migration/Normalization
-            const normalizedRole = finalRole.toLowerCase().replace(/[\s-]/g, "_");
-            if (normalizedRole === "superadmin") finalRole = "super_admin";
-            if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) finalRole = "institute_admin";
-            
-            const resolvedUserData = { ...data, role: finalRole as any };
+            const resolvedUserData = { ...data, role: normalizedRole };
             setUser(resolvedUserData);
             
             if (data.tenant_id) {

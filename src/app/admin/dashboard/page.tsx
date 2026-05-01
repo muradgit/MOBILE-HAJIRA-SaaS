@@ -33,10 +33,10 @@ import {
 import { Card } from "@/src/components/ui/Card";
 import { Tenant, UserData } from "@/src/lib/types";
 import { cn } from "@/src/lib/utils";
+import { normalizeRole } from "@/src/lib/auth-utils";
 
 /**
  * Institute Admin Dashboard & Onboarding
- * Fixed version with robust error-handling, fallback tenant lookup, and hydration safety.
  */
 export default function AdminDashboard() {
   const { userData, loading: authLoading } = useAuth();
@@ -151,7 +151,8 @@ export default function AdminDashboard() {
   };
 
   // Access Denied Screen (Authorization Check First)
-  const isAuthorized = userData?.role === "institute_admin" || userData?.role === "super_admin";
+  const normalizedRole = normalizeRole(userData?.role);
+  const isAuthorized = normalizedRole === "institute_admin" || normalizedRole === "super_admin";
   
   if (!authLoading && !isAuthorized) return (
     <div className="flex flex-col items-center justify-center p-12 text-center space-y-4 min-h-[60vh]">

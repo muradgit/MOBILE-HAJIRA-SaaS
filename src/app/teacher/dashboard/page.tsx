@@ -13,6 +13,7 @@ import {
   Loader2
 } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
+import { normalizeRole } from "@/src/lib/auth-utils";
 
 export default function TeacherDashboard() {
   const { userData, loading: authLoading } = useAuth();
@@ -27,7 +28,9 @@ export default function TeacherDashboard() {
     );
   }
 
-  const isAuthorized = activeRole === "teacher" || userData?.role === "super_admin" || userData?.role === "institute_admin";
+  const nActiveRole = normalizeRole(activeRole);
+  const nUserRole = normalizeRole(userData?.role);
+  const isAuthorized = nActiveRole === "teacher" || nUserRole === "super_admin" || nUserRole === "institute_admin";
   if (!userData || !isAuthorized) {
     return <div className="p-8 text-center text-red-500 font-bold uppercase tracking-widest">Access Denied</div>;
   }

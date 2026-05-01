@@ -1,79 +1,53 @@
 {
   "entities": {
-    "Institution": {
-      "title": "Institution",
-      "description": "Represents a school, college, or coaching center (tenant).",
+    "Tenant": {
+      "title": "Tenant",
+      "description": "Information about an educational institution",
       "type": "object",
       "properties": {
-        "tenant_id": { "type": "string", "description": "Unique identifier for the institution." },
-        "name": { "type": "string", "description": "Name of the institution (English)." },
-        "nameBN": { "type": "string", "description": "Name of the institution (Bengali)." },
-        "eiin": { "type": "string", "description": "EIIN or Registration Number." },
-        "institutionType": { "type": "string", "enum": ["University", "College", "School", "School and College", "Madrasha", "Coaching Center", "Training Institute", "Polytechnic"] },
-        "academicLevels": { "type": "array", "items": { "type": "string" } },
-        "department": { "type": "string", "description": "Specific department if admin is for a dept." },
-        "credits_left": { "type": "number", "description": "Remaining credits for attendance." },
-        "status": { "type": "string", "enum": ["active", "suspended", "deactivated"] },
-        "admin_name": { "type": "string" },
-        "admin_nameBN": { "type": "string" },
-        "admin_mobile": { "type": "string" },
+        "tenant_id": { "type": "string" },
+        "name": { "type": "string" },
+        "nameBN": { "type": "string" },
+        "eiin": { "type": "string" },
+        "googleSheetId": { "type": "string" },
         "owner_email": { "type": "string" },
-        "googleSheetId": { "type": "string", "description": "The Master Google Sheet ID for this institution where attendance goes." },
-        "classes": { "type": "array", "items": { "type": "string" } },
-        "departments": { "type": "array", "items": { "type": "string" } },
-        "sessions": { "type": "array", "items": { "type": "string" } },
-        "shifts": { "type": "array", "items": { "type": "string" } },
-        "created_at": { "type": "string", "format": "date-time" }
+        "status": { "type": "string", "enum": ["active", "suspended", "pending"] },
+        "credits_left": { "type": "number" },
+        "academicLevels": { "type": "array" }
       },
-      "required": ["tenant_id", "name", "eiin", "credits_left"]
+      "required": ["tenant_id", "name", "owner_email"]
     },
     "User": {
       "title": "User",
-      "description": "Represents any user in the system (SuperAdmin, Admin, Teacher, Student).",
+      "description": "User profile information",
       "type": "object",
       "properties": {
-        "user_id": { "type": "string", "description": "Firebase Auth UID." },
-        "tenant_id": { "type": "string", "description": "The institution this user belongs to." },
-        "role": { "type": "string", "enum": ["SuperAdmin", "InstitutionAdmin", "Teacher", "Student"] },
+        "user_id": { "type": "string" },
+        "email": { "type": "string" },
         "name": { "type": "string" },
-        "nameBN": { "type": "string" },
-        "email": { "type": "string", "format": "email" },
-        "phone": { "type": "string" },
-        "status": { "type": "string", "enum": ["pending", "approved", "suspended"] },
-        "department": { "type": "string" },
-        "class": { "type": "string" },
-        "session": { "type": "string" },
-        "student_id": { "type": "string" },
-        "teacher_id": { "type": "string" }
-      },
-      "required": ["user_id", "tenant_id", "role", "name", "status"]
-    },
-    "SessionCode": {
-      "title": "SessionCode",
-      "description": "Temporary codes for attendance sessions or verification.",
-      "type": "object",
-      "properties": {
-        "code": { "type": "string" },
+        "role": { "type": "string", "enum": ["super_admin", "institute_admin", "teacher", "student"] },
         "tenant_id": { "type": "string" },
-        "teacher_id": { "type": "string" },
-        "subject": { "type": "string" },
-        "expires_at": { "type": "string", "format": "date-time" }
+        "status": { "type": "string", "enum": ["approved", "pending", "blocked"] }
       },
-      "required": ["code", "tenant_id", "expires_at"]
+      "required": ["user_id", "email", "role"]
     }
   },
   "firestore": {
     "/tenants/{tenantId}": {
-      "schema": "Institution",
-      "description": "Collection of institutions."
+      "schema": "Tenant",
+      "description": "Collection of all tenants (institutes)"
     },
     "/users/{userId}": {
       "schema": "User",
-      "description": "Collection of all users."
+      "description": "Global collection of all users"
     },
-    "/session_codes/{codeId}": {
-      "schema": "SessionCode",
-      "description": "Collection of active session codes."
+    "/tenants/{tenantId}/teachers/{teacherId}": {
+      "schema": "User",
+      "description": "Subcollection for teacher quick lookup"
+    },
+    "/tenants/{tenantId}/students/{studentId}": {
+      "schema": "User",
+      "description": "Subcollection for student quick lookup"
     }
   }
 }

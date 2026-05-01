@@ -11,6 +11,7 @@ import {
   Loader2
 } from "lucide-react";
 import { Card } from "@/src/components/ui/Card";
+import { normalizeRole } from "@/src/lib/auth-utils";
 
 export default function StudentDashboard() {
   const { userData, loading: authLoading } = useAuth();
@@ -24,7 +25,7 @@ export default function StudentDashboard() {
     );
   }
 
-  if (!userData || userData.role !== "student") {
+  if (!userData || normalizeRole(userData.role) !== "student") {
     return <div className="p-8 text-center text-red-500 font-bold uppercase tracking-widest">Access Denied</div>;
   }
 

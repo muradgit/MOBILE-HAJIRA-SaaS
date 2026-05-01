@@ -29,6 +29,7 @@ import { Card } from "@/src/components/ui/Card";
 import { toast } from "sonner";
 import Image from "next/image";
 import { useUserStore } from "@/src/store/useUserStore";
+import { normalizeRole } from "@/src/lib/auth-utils";
 
 export default function ProfilePage() {
   const { userData, user, loading } = useAuth();
@@ -41,7 +42,8 @@ export default function ProfilePage() {
   const [name, setName] = useState(userData?.name || "");
   const [nameBN, setNameBN] = useState(userData?.nameBN || "");
 
-  const canBeTeacher = userData?.role === "institute_admin";
+  const normalizedRole = normalizeRole(userData?.role);
+  const canBeTeacher = normalizedRole === "institute_admin";
   const isAlreadyTeacher = userData?.is_also_teacher;
 
   const handleAssignAsTeacher = async () => {
@@ -98,9 +100,9 @@ export default function ProfilePage() {
       await updateDoc(userRef, updatePayload);
 
       // Also update subcollection if applicable
-      const lowerRole = (userData?.role || "").toLowerCase();
-      if (userData.tenant_id && (lowerRole === "teacher" || lowerRole === "student")) {
-        const subCollName = lowerRole === "teacher" ? "teachers" : "students";
+      const nRole = normalizeRole(userData?.role);
+      if (userData.tenant_id && (nRole === "teacher" || nRole === "student")) {
+        const subCollName = nRole === "teacher" ? "teachers" : "students";
         const subRef = doc(db, "tenants", userData.tenant_id, subCollName, user.uid);
         try {
           await updateDoc(subRef, updatePayload);

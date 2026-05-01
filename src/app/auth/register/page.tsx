@@ -20,6 +20,7 @@ import {
 import { Card } from "@/src/components/ui/Card";
 import { cn } from "@/src/lib/utils";
 import { useUserStore } from "@/src/store/useUserStore";
+import { normalizeRole, verifySuperAdmin } from "@/src/lib/auth-utils";
 
 type Role = "institute_admin" | "teacher" | "student";
 
@@ -177,8 +178,7 @@ export default function RegisterPage() {
       }
 
       // 2. Create User Profile 
-      const SUPER_ADMIN_EMAILS = ["hello@muradkhank31.com", "muradkhan31@gmail.com"];
-      const isSuperAdminEmail = SUPER_ADMIN_EMAILS.includes(user.email?.toLowerCase() || "");
+      const isSuperAdminEmail = verifySuperAdmin(user.email);
       
       const userData = {
         user_id: user.uid,
@@ -186,7 +186,7 @@ export default function RegisterPage() {
         name: data.name,
         nameBN: data.nameBN,
         phone: data.phone,
-        role: isSuperAdminEmail ? "super_admin" : firestoreRole,
+        role: isSuperAdminEmail ? "super_admin" : normalizeRole(firestoreRole),
         tenant_id: finalTenantId,
         status: (activeRole === "institute_admin" || isSuperAdminEmail) ? "approved" : "pending",
         profile_image: user.photoURL,
@@ -225,11 +225,11 @@ export default function RegisterPage() {
       // Force Next.js to invalidate layout cache and re-render the layout tree with the newly updated status
       router.refresh();
 
-      const normalizedRole = userData.role.toLowerCase().replace(/\s+/g, "_");
+      const normalizedRole = normalizeRole(userData.role);
       let target = "/";
-      if (normalizedRole === "super_admin" || normalizedRole === "superadmin") {
+      if (normalizedRole === "super_admin") {
         target = "/super-admin/dashboard";
-      } else if (["institute_admin", "institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
+      } else if (normalizedRole === "institute_admin") {
         target = "/admin/onboarding";
       } else if (normalizedRole === "teacher") {
         target = "/teacher/dashboard";

@@ -19,10 +19,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tenant } from "@/src/lib/types";
+import { normalizeRole } from "@/src/lib/auth-utils";
 
 /**
  * Institute Admin Settings Page
- * Step 4.2: Settings & Setup (Classes, Departments, Sessions, Shifts)
  */
 export default function AdminSettingsPage() {
   const { userData, loading: authLoading } = useAuth();
@@ -173,7 +173,8 @@ export default function AdminSettingsPage() {
   );
 
   // Authentication & Access Check
-  const isAuthorized = userData?.role === "institute_admin" || userData?.role === "super_admin";
+  const normalizedRole = normalizeRole(userData?.role);
+  const isAuthorized = normalizedRole === "institute_admin" || normalizedRole === "super_admin";
   
   if (authLoading || (loading && !tenant)) {
     return (

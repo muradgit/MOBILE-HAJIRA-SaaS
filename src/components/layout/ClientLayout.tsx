@@ -31,6 +31,7 @@ import {
 import { cn } from "@/src/lib/utils";
 
 import { useUserStore } from "@/src/store/useUserStore";
+import { normalizeRole, verifySuperAdmin } from "@/src/lib/auth-utils";
 
 /**
  * Professional Overlay UI for MOBILE-HAJIRA-SaaS
@@ -77,7 +78,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const isDashboardPage = !isLandingPage && !isAuthPage;
 
   // Check if onboarding is needed
-  const normalizedRole = (userData?.role || "").toLowerCase().replace(/\s+/g, "");
+  const normalizedRole = normalizeRole(userData?.role);
   
   // 1. Role-Based Menu Definitions
   const menuItems: Record<string, any[]> = {
@@ -110,17 +111,9 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
   // Helper for robust role-based navigation mapping
   const getNormalizedMenuKey = (role: string | undefined | null): string => {
-    if (!role) return "";
-    const normalized = role.toLowerCase().replace(/[\s-]/g, "_");
-    if (["institutionadmin", "instituteadmin", "admin", "institute_admin"].includes(normalized)) {
-      return "institute_admin";
-    }
-    if (normalized === "superadmin" || normalized === "super_admin") return "super_admin";
-    if (normalized === "teacher") return "teacher";
-    if (normalized === "student") return "student";
-    return normalized; 
+    return normalizeRole(role);
   };
-
+ 
   const effectiveRole = activeRole || userData?.role;
   const menuKey = getNormalizedMenuKey(effectiveRole);
   const currentMenu = (userData && menuItems[menuKey]) || [];
@@ -156,28 +149,27 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const getDashboardRoute = (role: string | undefined | null): string => {
     const roleToUse = role || userData?.role;
     if (!roleToUse) {
-      const currentEmail = auth.currentUser?.email?.toLowerCase() || "";
-      if (SUPER_ADMIN_EMAILS.includes(currentEmail)) {
+      if (verifySuperAdmin(auth.currentUser?.email)) {
         return "/super-admin/dashboard";
       }
       return "/";
     }
 
-    const normalizedRole = roleToUse.toLowerCase().replace(/[\s-]/g, "_");
+    const nRole = normalizeRole(roleToUse);
     
-    if (normalizedRole === "superadmin" || normalizedRole === "super_admin") {
+    if (nRole === "super_admin") {
       return "/super-admin/dashboard";
     }
 
-    if (["institutionadmin", "instituteadmin", "admin", "institute_admin"].includes(normalizedRole)) {
+    if (nRole === "institute_admin") {
       return "/admin/dashboard";
     }
     
-    if (normalizedRole === "teacher") {
+    if (nRole === "teacher") {
       return "/teacher/dashboard";
     }
     
-    if (normalizedRole === "student") {
+    if (nRole === "student") {
       return "/student/dashboard";
     }
     
