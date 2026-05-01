@@ -157,38 +157,30 @@ export default function LoginPage() {
     } else {
       userData = userDoc.data() as UserData;
       
-      // AUTO-MIGRATION: Update old 'admin' roles to 'institute_admin'
-      const oldRole = (userData.role || "").toLowerCase().replace(/\s+/g, "");
-      if (oldRole === "admin" || oldRole === "institutionadmin") {
-        userData.role = "institute_admin";
-        const { updateDoc } = await import("firebase/firestore");
-        await updateDoc(doc(db, "users", uid), { role: "institute_admin" });
-        // Also update subcollection if possible - but top-level update is primary for session
+      // ROLE NORMALIZATION & AUTO-MIGRATION
+      let rawRole = (userData.role || "").toLowerCase().replace(/[\s-]/g, "_");
+      let normalizedRole = rawRole;
+
+      if (rawRole === "admin" || rawRole === "institutionadmin" || rawRole === "institute_admin" || rawRole === "instituteadmin") {
+        normalizedRole = "institute_admin";
+      } else if (rawRole === "super_admin" || rawRole === "superadmin") {
+        normalizedRole = "super_admin";
       }
 
-      // STRICT Check for existing users trying to be super_admin
-      if (userData.role === "super_admin" || (userData.role as string).toLowerCase() === "superadmin") {
+      // STRICT Super Admin Security Verification
+      if (normalizedRole === "super_admin") {
         if (!currentEmail || !SUPER_ADMIN_EMAILS.includes(currentEmail)) {
           await signOut(auth);
-          toast.error("আপনার সুপার এডমিন প্যানেলে প্রবেশের অনুমতি নেই।");
+          toast.error("আপনার সুপার এডমিন প্যানেলে প্রবেশের অনুমতি নেই। (Unauthorized Email)");
           return;
         }
-        // Normalize name
-        if (userData.role !== "super_admin") {
-          userData.role = "super_admin";
-          const { updateDoc } = await import("firebase/firestore");
-          await updateDoc(doc(db, "users", uid), { role: "super_admin" });
-        }
       }
-      
-      // Normalize other roles if needed
-      const normalizedMap: Record<string, string> = {
-        teacher: "teacher",
-        student: "student"
-      };
-      const nRole = (userData.role || "").toLowerCase();
-      if (normalizedMap[nRole] && userData.role !== normalizedMap[nRole]) {
-        userData.role = normalizedMap[nRole];
+
+      // Auto-Migration: If userData.role !== normalizedRole, update FirestoreDoc
+      if (userData.role !== normalizedRole) {
+        userData.role = normalizedRole;
+        const { updateDoc } = await import("firebase/firestore");
+        await updateDoc(doc(db, "users", uid), { role: normalizedRole });
       }
     }
 

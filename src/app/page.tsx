@@ -48,9 +48,9 @@ export default function LandingPage() {
           {!authLoading && userData ? (
             <Link 
               href={
-                userData.role === "SuperAdmin" ? "/super-admin/dashboard" :
-                userData.role === "InstitutionAdmin" ? "/admin/dashboard" :
-                userData.role === "Teacher" ? "/teacher/dashboard" :
+                userData.role === "super_admin" ? "/super-admin/dashboard" :
+                userData.role === "institute_admin" ? "/admin/dashboard" :
+                userData.role === "teacher" ? "/teacher/dashboard" :
                 "/student/dashboard"
               }
               className="w-full sm:w-auto bg-[#6f42c1] text-white px-10 py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-2xl shadow-purple-500/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2"

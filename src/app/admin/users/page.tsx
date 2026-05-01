@@ -317,7 +317,7 @@ export default function AdminUsersPage() {
                     </div>
                     <p className="text-[11px] font-bold text-gray-700">{user.phone || "No Phone"}</p>
                  </div>
-                 {user.role === "Student" && (
+                 {user.role === "student" && (
                    <>
                      <div className="space-y-1">
                         <div className="flex items-center gap-1.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">

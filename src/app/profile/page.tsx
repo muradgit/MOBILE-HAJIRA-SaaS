@@ -41,7 +41,7 @@ export default function ProfilePage() {
   const [name, setName] = useState(userData?.name || "");
   const [nameBN, setNameBN] = useState(userData?.nameBN || "");
 
-  const canBeTeacher = userData?.role === "InstitutionAdmin" || (userData?.role as string) === "Admin";
+  const canBeTeacher = userData?.role === "institute_admin";
   const isAlreadyTeacher = userData?.is_also_teacher;
 
   const handleAssignAsTeacher = async () => {

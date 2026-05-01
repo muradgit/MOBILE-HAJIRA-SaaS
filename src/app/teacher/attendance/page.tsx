@@ -98,7 +98,7 @@ export default function TeacherAttendancePage() {
       const q = query(
         collection(db, "users"),
         where("tenant_id", "==", activeTenantId),
-        where("role", "==", "Student"),
+        where("role", "==", "student"),
         where("class", "==", selectedClass),
         ...(selectedDept ? [where("department", "==", selectedDept)] : [])
       );
@@ -230,7 +230,7 @@ export default function TeacherAttendancePage() {
   );
 
   // Auth/Role Protection
-  const isAuthorized = userData?.role === "Teacher" || userData?.role === "SuperAdmin" || userData?.role === "InstitutionAdmin" ;
+  const isAuthorized = userData?.role === "teacher" || userData?.role === "super_admin" || userData?.role === "institute_admin" ;
 
   if (authLoading || (loading && !tenant)) {
     return (

@@ -21,7 +21,7 @@ import { Card } from "@/src/components/ui/Card";
 import { cn } from "@/src/lib/utils";
 import { useUserStore } from "@/src/store/useUserStore";
 
-type Role = "InstitutionAdmin" | "Teacher" | "Student";
+type Role = "institute_admin" | "teacher" | "student";
 
 const ACADEMIC_LEVELS = [
   "Play", "Nursery", "Primary (Class 1-5)", "High (Class 6-10)", "Class Eleven", "Class Twelve", "Degree", "Honours", "Preliminary to Masters", "Masters", "Training", "Vocational", "Diploma"
@@ -94,7 +94,7 @@ export default function RegisterPage() {
       phone: formData.get("phone"),
     };
 
-    if (activeRole === "InstitutionAdmin") {
+    if (activeRole === "institute_admin") {
       data.institutionType = formData.get("instType");
       data.eiin = formData.get("eiin");
       data.institutionNameEN = formData.get("instNameEN");
@@ -114,7 +114,7 @@ export default function RegisterPage() {
       data.tenant_id = selectedTenant.tenant_id;
       data.institutionName = selectedTenant.name;
       
-      if (activeRole === "Student") {
+      if (activeRole === "student") {
         data.department = formData.get("dept");
         data.class = formData.get("class");
         data.session = formData.get("session");
@@ -126,7 +126,7 @@ export default function RegisterPage() {
 
     try {
       // Standardize role for Firestore
-      const firestoreRole = activeRole === "InstitutionAdmin" ? "admin" : activeRole;
+      const firestoreRole = activeRole; // already normalized
 
       // Save pending data to handle race conditions with onAuthStateChanged
       localStorage.setItem("pendingRegistration", JSON.stringify({
@@ -155,9 +155,9 @@ export default function RegisterPage() {
         }
       }
 
-      // 1. Create/Update Tenant (if InstitutionAdmin)
+      // 1. Create/Update Tenant (if institute_admin)
       let finalTenantId = data.tenant_id;
-      if (activeRole === "InstitutionAdmin") {
+      if (activeRole === "institute_admin") {
         finalTenantId = `tenant_${user.uid}`;
         await setDoc(doc(db, "tenants", finalTenantId), {
           tenant_id: finalTenantId,
@@ -186,14 +186,14 @@ export default function RegisterPage() {
         name: data.name,
         nameBN: data.nameBN,
         phone: data.phone,
-        role: isSuperAdminEmail ? "SuperAdmin" : firestoreRole,
+        role: isSuperAdminEmail ? "super_admin" : firestoreRole,
         tenant_id: finalTenantId,
-        status: (activeRole === "InstitutionAdmin" || isSuperAdminEmail) ? "approved" : "pending",
+        status: (activeRole === "institute_admin" || isSuperAdminEmail) ? "approved" : "pending",
         profile_image: user.photoURL,
         created_at: serverTimestamp(),
       };
 
-      if (activeRole === "Student") {
+      if (activeRole === "student") {
         Object.assign(userData, {
           class: data.class,
           department: data.department,
@@ -225,11 +225,11 @@ export default function RegisterPage() {
       // Force Next.js to invalidate layout cache and re-render the layout tree with the newly updated status
       router.refresh();
 
-      const normalizedRole = userData.role.toLowerCase().replace(/\s+/g, "");
+      const normalizedRole = userData.role.toLowerCase().replace(/\s+/g, "_");
       let target = "/";
-      if (normalizedRole === "superadmin") {
+      if (normalizedRole === "super_admin" || normalizedRole === "superadmin") {
         target = "/super-admin/dashboard";
-      } else if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
+      } else if (["institute_admin", "institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
         target = "/admin/onboarding";
       } else if (normalizedRole === "teacher") {
         target = "/teacher/dashboard";
@@ -262,11 +262,11 @@ export default function RegisterPage() {
         <div className="space-y-4">
           {/* Institution Admin */}
           <RoleAccordion 
-            id="InstitutionAdmin"
+            id="institute_admin"
             title="ইনস্টিটিউট এডমিন (প্রতিষ্ঠানের জন্য)"
             icon={<Building2 className="w-5 h-5" />}
-            active={activeRole === "InstitutionAdmin"}
-            onClick={() => setActiveRole("InstitutionAdmin")}
+            active={activeRole === "institute_admin"}
+            onClick={() => setActiveRole("institute_admin")}
           >
             <div className="space-y-6 pt-2 font-bengali">
               <div className="bg-purple-50 p-5 rounded-2xl border border-purple-100">
@@ -357,11 +357,11 @@ export default function RegisterPage() {
 
           {/* Teacher */}
           <RoleAccordion 
-            id="Teacher"
+            id="teacher"
             title="শিক্ষক (Teacher)"
             icon={<GraduationCap className="w-5 h-5" />}
-            active={activeRole === "Teacher"}
-            onClick={() => { setActiveRole("Teacher"); setSelectedTenant(null); }}
+            active={activeRole === "teacher"}
+            onClick={() => { setActiveRole("teacher"); setSelectedTenant(null); }}
           >
             <div className="space-y-6 pt-2 font-bengali">
               <SearchSection 
@@ -394,11 +394,11 @@ export default function RegisterPage() {
 
           {/* Student */}
           <RoleAccordion 
-            id="Student"
+            id="student"
             title="শিক্ষার্থী (Student)"
             icon={<Users className="w-5 h-5" />}
-            active={activeRole === "Student"}
-            onClick={() => { setActiveRole("Student"); setSelectedTenant(null); }}
+            active={activeRole === "student"}
+            onClick={() => { setActiveRole("student"); setSelectedTenant(null); }}
           >
             <div className="space-y-6 pt-2 font-bengali">
               <SearchSection 

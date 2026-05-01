@@ -55,7 +55,7 @@ export default function InstitutionManagement() {
 
   // Fetch Tenants (Global for SuperAdmin)
   useEffect(() => {
-    if (userData?.role !== "SuperAdmin") return;
+    if (userData?.role !== "super_admin") return;
 
     try {
       // SuperAdmins fetch everything
@@ -157,7 +157,7 @@ export default function InstitutionManagement() {
     </div>
   );
 
-  if (userData?.role !== "SuperAdmin") return (
+  if (userData?.role !== "super_admin") return (
     <div className="flex flex-col items-center justify-center p-12 text-center space-y-4">
       <ShieldAlert className="w-16 h-16 text-red-500" />
       <h2 className="text-2xl font-black text-gray-900 font-bengali">অ্যাক্সেস ডিনাইড</h2>

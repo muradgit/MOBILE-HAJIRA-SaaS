@@ -151,8 +151,7 @@ export default function AdminDashboard() {
   };
 
   // Access Denied Screen (Authorization Check First)
-  const lowerRole = (userData?.role || "").toLowerCase().replace(/\s+/g, "");
-  const isAuthorized = ["institutionadmin", "admin", "superadmin"].includes(lowerRole);
+  const isAuthorized = userData?.role === "institute_admin" || userData?.role === "super_admin";
   
   if (!authLoading && !isAuthorized) return (
     <div className="flex flex-col items-center justify-center p-12 text-center space-y-4 min-h-[60vh]">
@@ -197,7 +196,7 @@ export default function AdminDashboard() {
   }
 
   // Onboarding Phase - Redirect to dedicated page if needed
-  const needsOnboarding = !tenant?.googleSheetId && ["institutionadmin", "admin", "superadmin"].includes(lowerRole);
+  const needsOnboarding = !tenant?.googleSheetId && isAuthorized;
   useEffect(() => {
     if (!loading && !authLoading && needsOnboarding) {
       router.replace("/admin/onboarding");

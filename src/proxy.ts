@@ -3,8 +3,15 @@ import type { NextRequest } from "next/server";
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const userRole = request.cookies.get("user-role")?.value;
-  const userEmail = request.cookies.get("user-email")?.value; // Assume we set this or get it from somewhere
+  let userRole = request.cookies.get("user-role")?.value?.toLowerCase().replace(/[\s-]/g, "_");
+  const userEmail = request.cookies.get("user-email")?.value; 
+
+  // Aggressive Normalization for Stale Cookies
+  if (userRole === "admin" || userRole === "institutionadmin" || userRole === "instituteadmin") {
+    userRole = "institute_admin";
+  } else if (userRole === "superadmin") {
+    userRole = "super_admin";
+  }
 
   const SUPER_ADMIN_EMAILS = ["hello@muradkhank31.com", "muradkhan31@gmail.com"];
 

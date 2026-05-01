@@ -37,8 +37,8 @@ export function useAuth() {
              const pendingData = pendingDataStr ? JSON.parse(pendingDataStr) : {};
              
              // If we have pending registration data, use that role. Otherwise default.
-             const role = pendingData.role || "Student";
-             const isInstituteAdmin = ["institutionadmin", "admin"].includes(role.toLowerCase());
+             const role = (pendingData.role || "student").toLowerCase().replace(/\s+/g, "_");
+             const isInstituteAdmin = ["institute_admin", "institutionadmin", "admin"].includes(role);
              const tenant_id = isInstituteAdmin ? `tenant_${firebaseUser.uid}` : (pendingData.tenant_id || null);
 
              await setDoc(userDocRef, {
@@ -48,7 +48,7 @@ export function useAuth() {
                 nameBN: pendingData.nameBN || "নতুন ইউজার",
                 role,
                 tenant_id,
-                status: (isInstituteAdmin || role === "SuperAdmin") ? "approved" : "pending",
+                status: (isInstituteAdmin || role === "super_admin") ? "approved" : "pending",
                 created_at: new Date().toISOString()
              }, { merge: true });
           }
@@ -61,9 +61,14 @@ export function useAuth() {
           if (docSnap.exists()) {
             const data = docSnap.data() as UserData;
             
-            // CRITICAL: Resolve Role - Prioritize stored role, fallback to SuperAdmin if email matches
+            // CRITICAL: Resolve Role - Prioritize stored role, fallback to super_admin if email matches
             const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
-            const finalRole = data.role || (firebaseUser.email === superAdminEmail ? "SuperAdmin" : "");
+            let finalRole = data.role || (firebaseUser.email === superAdminEmail ? "super_admin" : "");
+            
+            // Auto-migration/Normalization
+            const normalizedRole = finalRole.toLowerCase().replace(/[\s-]/g, "_");
+            if (normalizedRole === "superadmin") finalRole = "super_admin";
+            if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) finalRole = "institute_admin";
             
             const resolvedUserData = { ...data, role: finalRole as any };
             setUser(resolvedUserData);

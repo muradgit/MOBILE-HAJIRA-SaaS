@@ -62,7 +62,7 @@ export default function UserManagement() {
     nameBN: "",
     identifier: "",
     password: "",
-    role: "Teacher" as any,
+    role: "teacher" as any,
     tenant_id: "",
     status: "approved" as any,
   });
@@ -185,7 +185,7 @@ export default function UserManagement() {
         nameBN: "", 
         identifier: "", 
         password: "",
-        role: "Teacher", 
+        role: "teacher", 
         tenant_id: "", 
         status: "approved" 
       });
@@ -270,7 +270,7 @@ export default function UserManagement() {
           item.role === "teacher" && "bg-green-50 text-green-600 border-green-100",
           item.role === "student" && "bg-orange-50 text-orange-600 border-orange-100"
         )}>
-          {item.role === "institute_admin" ? "Inst Admin" : item.role?.replace("_", " ")}
+          {item.role === "institute_admin" ? "Institute Admin" : item.role?.replace("_", " ")}
         </span>
       )
     },

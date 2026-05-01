@@ -81,7 +81,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   
   // 1. Role-Based Menu Definitions
   const menuItems: Record<string, any[]> = {
-    SuperAdmin: [
+    super_admin: [
       { label: "ড্যাশবোর্ড", href: "/super-admin/dashboard", icon: LayoutDashboard },
       { label: "প্রতিষ্ঠান", href: "/super-admin/institutes", icon: Building2 },
       { label: "ইউজার", href: "/super-admin/users", icon: Users },
@@ -89,19 +89,19 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       { label: "প্রোফাইল", href: "/profile", icon: User },
       { label: "সেটিংস", href: "/super-admin/settings", icon: Settings },
     ],
-    InstitutionAdmin: [
+    institute_admin: [
       { label: "ড্যাশবোর্ড", href: "/admin/dashboard", icon: LayoutDashboard },
       { label: "শিক্ষক", href: "/admin/teachers", icon: Users },
       { label: "শিক্ষার্থী", href: "/admin/students", icon: UserPlus },
       { label: "প্রোফাইল", href: "/profile", icon: User },
       { label: "সেটিংস", href: "/admin/settings", icon: Settings },
     ],
-    Teacher: [
+    teacher: [
       { label: "ড্যাশবোর্ড", href: "/teacher/dashboard", icon: LayoutDashboard },
       { label: "হাজিরা প্যানেল", href: "/teacher/attendance", icon: ClipboardCheck },
       { label: "প্রোফাইল", href: "/profile", icon: User },
     ],
-    Student: [
+    student: [
       { label: "ড্যাশবোর্ড", href: "/student/dashboard", icon: LayoutDashboard },
       { label: "আইডি কার্ড", href: "/student/id-card", icon: Contact },
       { label: "প্রোফাইল", href: "/profile", icon: User },
@@ -111,14 +111,14 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   // Helper for robust role-based navigation mapping
   const getNormalizedMenuKey = (role: string | undefined | null): string => {
     if (!role) return "";
-    const normalized = role.toLowerCase().replace(/\s+/g, "");
-    if (["institutionadmin", "instituteadmin", "admin"].includes(normalized)) {
-      return "InstitutionAdmin";
+    const normalized = role.toLowerCase().replace(/[\s-]/g, "_");
+    if (["institutionadmin", "instituteadmin", "admin", "institute_admin"].includes(normalized)) {
+      return "institute_admin";
     }
-    if (normalized === "superadmin") return "SuperAdmin";
-    if (normalized === "teacher") return "Teacher";
-    if (normalized === "student") return "Student";
-    return role; // Fallback
+    if (normalized === "superadmin" || normalized === "super_admin") return "super_admin";
+    if (normalized === "teacher") return "teacher";
+    if (normalized === "student") return "student";
+    return normalized; 
   };
 
   const effectiveRole = activeRole || userData?.role;
@@ -127,23 +127,23 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
   // 2. Mobile Bottom Navigation Config
   const mobileNavMapping: Record<string, any[]> = {
-    SuperAdmin: [
+    super_admin: [
       { label: "Dashboard", href: "/super-admin/dashboard", icon: LayoutDashboard },
       { label: "Institutes", href: "/super-admin/institutes", icon: Building2 },
       { label: "Users", href: "/super-admin/users", icon: Users },
       { label: "Payments", href: "/super-admin/payments", icon: CreditCard },
     ],
-    InstitutionAdmin: [
+    institute_admin: [
       { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
       { label: "Teachers", href: "/admin/teachers", icon: Users },
       { label: "Students", href: "/admin/students", icon: UserPlus },
       { label: "Settings", href: "/admin/settings", icon: Settings },
     ],
-    Teacher: [
+    teacher: [
       { label: "Dashboard", href: "/teacher/dashboard", icon: LayoutDashboard },
       { label: "Attendance", href: "/teacher/attendance", icon: ClipboardCheck },
     ],
-    Student: [
+    student: [
       { label: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
       { label: "ID Card", href: "/student/id-card", icon: Contact },
     ],
@@ -156,22 +156,19 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const getDashboardRoute = (role: string | undefined | null): string => {
     const roleToUse = role || userData?.role;
     if (!roleToUse) {
-      // If NO role is assigned yet, check for SuperAdmin email as a fallback
       if (auth.currentUser?.email === superAdminEmail) {
         return "/super-admin/dashboard";
       }
       return "/";
     }
 
-    const normalizedRole = roleToUse.toLowerCase().replace(/\s+/g, "");
+    const normalizedRole = roleToUse.toLowerCase().replace(/[\s-]/g, "_");
     
-    // Check for SuperAdmin explicitly
-    if (normalizedRole === "superadmin") {
+    if (normalizedRole === "superadmin" || normalizedRole === "super_admin") {
       return "/super-admin/dashboard";
     }
 
-    // Explicitly mapping all Admin variations to /admin/dashboard
-    if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
+    if (["institutionadmin", "instituteadmin", "admin", "institute_admin"].includes(normalizedRole)) {
       return "/admin/dashboard";
     }
     
@@ -213,10 +210,10 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     router.push("/auth/login");
   };
 
-  const isDualRole = (userData?.role === "InstitutionAdmin" || (userData?.role as string) === "Admin") && userData?.is_also_teacher;
+  const isDualRole = (userData?.role === "institute_admin") && userData?.is_also_teacher;
 
   const handleRoleSwitch = () => {
-    const nextRole = activeRole === "Teacher" ? (userData?.role || "InstitutionAdmin") : "Teacher";
+    const nextRole = activeRole === "teacher" ? (userData?.role || "institute_admin") : "teacher";
     setActiveRole(nextRole);
     router.push(getDashboardRoute(nextRole));
     setIsProfileOpen(false);
@@ -294,7 +291,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                     </h1>
                     <div className="flex flex-col -mt-0.5">
                       <p className="text-[9px] sm:text-[10px] font-bold text-gray-500 truncate max-w-[120px] sm:max-w-[200px]">
-                        {userData.role === "SuperAdmin" ? "System Administration" : (tenant?.name || "Institution Panel")}
+                        {userData.role === "super_admin" ? "System Administration" : (tenant?.name || "Institute Panel")}
                       </p>
                       {userData.department && (
                         <p className="text-[8px] sm:text-[9px] font-medium text-gray-400 truncate max-w-[120px] sm:max-w-[180px]">
@@ -334,7 +331,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                     <div className="absolute right-0 mt-4 w-60 bg-white border border-gray-100 rounded-2xl shadow-2xl py-2 z-[60] animate-in fade-in zoom-in-95">
                       <div className="px-4 py-3 border-b border-gray-50 mb-2">
                          <p className="text-xs font-black text-gray-900 truncate">{userData.email}</p>
-                         <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest mt-1">{userData.role}</p>
+                         <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest mt-1">{userData.role?.replace("_", " ")}</p>
                       </div>
                       <button 
                         onClick={() => {
@@ -352,7 +349,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                         >
                           <div className="flex items-center gap-3">
                             <ShieldCheck className="w-4 h-4" /> 
-                            {activeRole === "Teacher" ? "Admin View" : "Teacher View"}
+                            {activeRole === "teacher" ? "Institute Admin View" : "Teacher View"}
                           </div>
                           <div className="px-1.5 py-0.5 rounded-md bg-purple-100 text-[8px] font-black uppercase">Switch</div>
                         </button>
@@ -383,7 +380,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             <div className="p-8 pb-4 flex items-center justify-between border-b border-gray-50">
                <div className="flex flex-col">
                   <h3 className="text-lg font-black text-[#6f42c1] leading-none mb-1">MOBILE-HAJIRA</h3>
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Dashboard Menu</span>
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{userData.role?.replace("_", " ")} Menu</span>
                </div>
                <button 
                  onClick={() => setIsSidebarOpen(false)}

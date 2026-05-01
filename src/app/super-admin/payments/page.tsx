@@ -70,7 +70,7 @@ export default function PaymentsCreditsPage() {
 
   // Fetch Data
   useEffect(() => {
-    if (userData?.role !== "SuperAdmin") return;
+    if (userData?.role !== "super_admin") return;
 
     const unsubPayments = onSnapshot(query(collection(db, "payments"), orderBy("created_at", "desc")), (snap) => {
       setPayments(snap.docs.map(d => ({ payment_id: d.id, ...d.data() } as Payment)));
@@ -197,7 +197,7 @@ export default function PaymentsCreditsPage() {
     </div>
   );
 
-  if (userData?.role !== "SuperAdmin") return (
+  if (userData?.role !== "super_admin") return (
     <div className="flex flex-col items-center justify-center p-12 text-center space-y-4">
       <ShieldAlert className="w-16 h-16 text-red-500" />
       <h2 className="text-2xl font-black text-gray-900 font-bengali">অ্যাক্সেস ডিনাইড</h2>

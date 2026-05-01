@@ -114,7 +114,7 @@ export interface Broadcast {
   title: string;
   message: string;
   video_url?: string;
-  target_role: "All" | "InstitutionAdmin" | "Teacher" | "Student";
+  target_role: "All" | "institute_admin" | "teacher" | "student";
   created_at: string;
   created_by: string;
 }

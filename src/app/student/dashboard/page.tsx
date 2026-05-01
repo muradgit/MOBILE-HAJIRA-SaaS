@@ -24,7 +24,7 @@ export default function StudentDashboard() {
     );
   }
 
-  if (!userData || userData.role !== "Student") {
+  if (!userData || userData.role !== "student") {
     return <div className="p-8 text-center text-red-500 font-bold uppercase tracking-widest">Access Denied</div>;
   }
 

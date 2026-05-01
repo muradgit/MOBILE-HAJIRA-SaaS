@@ -23,7 +23,7 @@ export async function authenticate(req: NextRequest) {
         // Super Admin Bypass by email
         const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
         if (decodedToken.email === superAdminEmail && !decodedToken.role) {
-          (decodedToken as any).role = "SuperAdmin";
+          (decodedToken as any).role = "super_admin";
         }
         
         // Optionally update claims for next time (Fire and forget-ish)
@@ -37,7 +37,7 @@ export async function authenticate(req: NextRequest) {
          // Special case for initial super admin if no doc exists yet
          const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || "hello@muradkhank31.com";
          if (decodedToken.email === superAdminEmail) {
-           (decodedToken as any).role = "SuperAdmin";
+           (decodedToken as any).role = "super_admin";
          }
       }
     }
