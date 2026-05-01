@@ -43,7 +43,7 @@ export default function AdminUsersPage() {
   const { tenantId: storeTenantId } = useUserStore();
   
   // States
-  const [activeTab, setActiveTab] = useState<"Teacher" | "Student">("Teacher");
+  const [activeTab, setActiveTab] = useState<"teacher" | "student">("teacher");
   const [activeTenantId, setActiveTenantId] = useState<string | null>(null);
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,7 +122,7 @@ export default function AdminUsersPage() {
   };
 
   // 4. Role Switch Handler
-  const handleSwitchRole = async (targetUserId: string, newRole: "Teacher" | "Student" | "InstitutionAdmin") => {
+  const handleSwitchRole = async (targetUserId: string, newRole: "teacher" | "student" | "institute_admin") => {
     const confirm = window.confirm(`আপনি কি নিশ্চিতভাবে এই ইউজারের রোল পরিবর্তন করে "${newRole}" করতে চান?`);
     if (!confirm) return;
 
@@ -133,10 +133,10 @@ export default function AdminUsersPage() {
       const updates: any = { role: newRole };
       
       // Clear specific IDs when role changes
-      if (newRole === "Teacher") {
+      if (newRole === "teacher") {
         updates.student_id = null;
         updates.teacher_id = updates.teacher_id || `T-${newRole.charAt(0)}${Math.floor(1000 + Math.random() * 9000)}`;
-      } else if (newRole === "Student") {
+      } else if (newRole === "student") {
         updates.teacher_id = null;
         updates.student_id = updates.student_id || `S-${Math.floor(100000 + Math.random() * 900000)}`;
       }
@@ -160,7 +160,7 @@ export default function AdminUsersPage() {
     user.teacher_id?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const isAuthorized = userData?.role === "InstitutionAdmin" || userData?.role === "SuperAdmin";
+  const isAuthorized = userData?.role === "institute_admin" || userData?.role === "super_admin";
 
   if (authLoading || (loading && !activeTenantId)) {
     return (
@@ -214,19 +214,19 @@ export default function AdminUsersPage() {
       {/* Tabs Layout */}
       <div className="flex flex-wrap gap-2 bg-gray-100 p-1.5 rounded-3xl w-full sm:w-fit font-bengali">
         <button 
-          onClick={() => setActiveTab("Teacher")}
+          onClick={() => setActiveTab("teacher")}
           className={cn(
             "flex-1 sm:flex-none px-10 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all gap-2 flex items-center justify-center",
-            activeTab === "Teacher" ? "bg-white text-purple-600 shadow-md scale-[1.02]" : "text-gray-500 hover:text-gray-700"
+            activeTab === "teacher" ? "bg-white text-purple-600 shadow-md scale-[1.02]" : "text-gray-500 hover:text-gray-700"
           )}
         >
           <Users className="w-4 h-4" /> শিক্ষকবৃন্দ
         </button>
         <button 
-          onClick={() => setActiveTab("Student")}
+          onClick={() => setActiveTab("student")}
           className={cn(
             "flex-1 sm:flex-none px-10 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all gap-2 flex items-center justify-center",
-            activeTab === "Student" ? "bg-white text-purple-600 shadow-md scale-[1.02]" : "text-gray-500 hover:text-gray-700"
+            activeTab === "student" ? "bg-white text-purple-600 shadow-md scale-[1.02]" : "text-gray-500 hover:text-gray-700"
           )}
         >
           <GraduationCap className="w-4 h-4" /> শিক্ষার্থীবৃন্দ
@@ -291,13 +291,13 @@ export default function AdminUsersPage() {
                      {user.nameBN || user.name}
                    </h3>
                    <p className="text-xs font-black text-purple-400 uppercase tracking-widest mt-1 mb-3">
-                     {user.role}
+                     {user.role?.replace("_", " ")}
                    </p>
                    {/* Unique ID Badge */}
                    <div className="inline-flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
                       <Hash className="w-3 h-3 text-gray-400" />
                       <span className="text-[10px] font-bold text-gray-600 font-mono">
-                        {user.role === "Student" ? (user.student_id || "NO-ID") : (user.teacher_id || "NO-ID")}
+                        {user.role === "student" ? (user.student_id || "NO-ID") : (user.teacher_id || "NO-ID")}
                       </span>
                    </div>
                 </div>
@@ -375,24 +375,24 @@ export default function AdminUsersPage() {
                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Role Switching</p>
                     </div>
 
-                    {user.role === "Student" && (
+                    {user.role === "student" && (
                        <button 
-                         onClick={() => handleSwitchRole(user.user_id, "Teacher")}
+                         onClick={() => handleSwitchRole(user.user_id, "teacher")}
                          className="w-full px-5 py-3 text-left text-xs font-black text-purple-600 hover:bg-purple-50 flex items-center gap-3 transition-colors font-bengali"
                        >
-                         <ArrowLeftRight className="w-4 h-4" /> শিক্ষক হিসেবে পরিবর্তন (Promote)
+                         <ArrowLeftRight className="w-4 h-4" /> शिक्षक হিসেবে পরিবর্তন (Promote)
                        </button>
                     )}
-                    {user.role === "Teacher" && (
+                    {user.role === "teacher" && (
                        <>
                          <button 
-                           onClick={() => handleSwitchRole(user.user_id, "Student")}
+                           onClick={() => handleSwitchRole(user.user_id, "student")}
                            className="w-full px-5 py-3 text-left text-xs font-black text-orange-600 hover:bg-orange-50 flex items-center gap-3 transition-colors font-bengali"
                          >
                            <ArrowLeftRight className="w-4 h-4" /> শিক্ষার্থী হিসেবে পরিবর্তন
                          </button>
                          <button 
-                           onClick={() => handleSwitchRole(user.user_id, "InstitutionAdmin")}
+                           onClick={() => handleSwitchRole(user.user_id, "institute_admin")}
                            className="w-full px-5 py-3 text-left text-xs font-black text-indigo-600 hover:bg-indigo-50 flex items-center gap-3 transition-colors font-bengali"
                          >
                            <ShieldAlert className="w-4 h-4" /> ইনস্টিটিউট এডমিন বানান

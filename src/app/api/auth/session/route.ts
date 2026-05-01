@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 
 export async function POST(request: Request) {
   try {
-    const { role, userId } = await request.json();
+    const { role, userId, email } = await request.json();
 
     if (!role || !userId) {
       return NextResponse.json({ error: "Missing role or userId" }, { status: 400 });
@@ -31,6 +31,16 @@ export async function POST(request: Request) {
       maxAge: 60 * 60 * 24 * 7, // 1 week
     });
 
+    if (email) {
+      cookieStore.set("user-email", email, {
+        path: "/",
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7, // 1 week
+      });
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
@@ -41,5 +51,6 @@ export async function DELETE() {
   const cookieStore = await cookies();
   cookieStore.delete("user-role");
   cookieStore.delete("user-id");
+  cookieStore.delete("user-email");
   return NextResponse.json({ success: true });
 }

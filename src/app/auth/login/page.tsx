@@ -118,17 +118,18 @@ export default function LoginPage() {
     }
     
     let userData: UserData;
+    const SUPER_ADMIN_EMAILS = ["hello@muradkhank31.com", "muradkhan31@gmail.com"];
 
     if (!userDoc.exists()) {
-      // If user doesn't exist, check if they should be SuperAdmin based on email
-      if (currentEmail === superAdminEmail) {
+      // If user doesn't exist, check if they should be super_admin based on email
+      if (SUPER_ADMIN_EMAILS.includes(currentEmail || "")) {
         userData = {
           user_id: uid,
           tenant_id: "SUPER_ADMIN",
-          role: "SuperAdmin",
+          role: "super_admin",
           name: auth.currentUser?.displayName || "Super Admin",
           nameBN: "সুপার এডমিন",
-          email: currentEmail,
+          email: currentEmail || "",
           status: "approved",
           created_at: new Date().toISOString()
         };
@@ -155,28 +156,65 @@ export default function LoginPage() {
       }
     } else {
       userData = userDoc.data() as UserData;
+      
+      // AUTO-MIGRATION: Update old 'admin' roles to 'institute_admin'
+      const oldRole = (userData.role || "").toLowerCase().replace(/\s+/g, "");
+      if (oldRole === "admin" || oldRole === "institutionadmin") {
+        userData.role = "institute_admin";
+        const { updateDoc } = await import("firebase/firestore");
+        await updateDoc(doc(db, "users", uid), { role: "institute_admin" });
+        // Also update subcollection if possible - but top-level update is primary for session
+      }
+
+      // STRICT Check for existing users trying to be super_admin
+      if (userData.role === "super_admin" || (userData.role as string).toLowerCase() === "superadmin") {
+        if (!currentEmail || !SUPER_ADMIN_EMAILS.includes(currentEmail)) {
+          await signOut(auth);
+          toast.error("আপনার সুপার এডমিন প্যানেলে প্রবেশের অনুমতি নেই।");
+          return;
+        }
+        // Normalize name
+        if (userData.role !== "super_admin") {
+          userData.role = "super_admin";
+          const { updateDoc } = await import("firebase/firestore");
+          await updateDoc(doc(db, "users", uid), { role: "super_admin" });
+        }
+      }
+      
+      // Normalize other roles if needed
+      const normalizedMap: Record<string, string> = {
+        teacher: "teacher",
+        student: "student"
+      };
+      const nRole = (userData.role || "").toLowerCase();
+      if (normalizedMap[nRole] && userData.role !== normalizedMap[nRole]) {
+        userData.role = normalizedMap[nRole];
+      }
     }
 
     // 2. Resolve Role
-    // Prioritize stored role, fallback to SuperAdmin if email matches and no role exists
-    const finalRole = userData.role || (currentEmail === superAdminEmail ? "SuperAdmin" : "");
+    const finalRole = userData.role;
 
-    // 3. Set session cookie (Safe background task)
+    // 3. Set session cookies via API
     try {
-      fetch("/api/auth/session", {
+      await fetch("/api/auth/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: finalRole, userId: uid }),
+        body: JSON.stringify({ 
+          role: finalRole, 
+          userId: uid,
+          email: currentEmail // Send email to set user-email cookie
+        }),
       });
     } catch (err) {
       console.error("Session Error:", err);
     }
 
     // 4. Approval Check (Teachers & Students)
-    const normalizedRole = (finalRole || "").toLowerCase().replace(/\s+/g, "");
+    const lowerRole = (finalRole || "").toLowerCase();
     
     // Explicitly allow admins and superadmins
-    const isPrivileged = ["superadmin", "institutionadmin", "instituteadmin", "admin"].includes(normalizedRole);
+    const isPrivileged = ["super_admin", "institute_admin"].includes(lowerRole);
     
     if (!isPrivileged) {
       const isAllowed = ["active", "approved"].includes(userData.status || "");
@@ -215,22 +253,18 @@ export default function LoginPage() {
     // Sync store
     setUser({ ...userData, role: finalRole as any });
 
-    // Force Next.js to invalidate layout cache and re-render the layout tree with the newly updated Zustan status
+    // Force Next.js to invalidate layout cache
     router.refresh();
 
     // Handle redirection map
-    let target = "/";
-    if (normalizedRole === "superadmin") {
-      target = "/super-admin/dashboard";
-    } else if (["institutionadmin", "instituteadmin", "admin"].includes(normalizedRole)) {
-      target = "/admin/dashboard";
-    } else if (normalizedRole === "teacher") {
-      target = "/teacher/dashboard";
-    } else if (normalizedRole === "student") {
-      target = "/student/dashboard";
-    }
+    const targetMap: Record<string, string> = {
+      super_admin: "/super-admin/dashboard",
+      institute_admin: "/admin/dashboard",
+      teacher: "/teacher/dashboard",
+      student: "/student/dashboard"
+    };
 
-    router.push(target);
+    router.push(targetMap[lowerRole] || "/");
   };
 
   return (

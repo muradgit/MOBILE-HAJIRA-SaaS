@@ -60,7 +60,7 @@ export interface Tenant {
 export interface UserData {
   user_id: string;
   tenant_id: string;
-  role: "SuperAdmin" | "InstitutionAdmin" | "Teacher" | "Student" | string;
+  role: "super_admin" | "institute_admin" | "teacher" | "student" | string;
   name: string;
   nameBN?: string;
   email?: string;

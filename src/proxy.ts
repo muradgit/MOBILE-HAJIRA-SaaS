@@ -4,15 +4,17 @@ import type { NextRequest } from "next/server";
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const userRole = request.cookies.get("user-role")?.value;
+  const userEmail = request.cookies.get("user-email")?.value; // Assume we set this or get it from somewhere
+
+  const SUPER_ADMIN_EMAILS = ["hello@muradkhank31.com", "muradkhan31@gmail.com"];
 
   // Task 1: Redirect from root (/) to dashboard if role exists
   if (pathname === "/" && userRole) {
     const dashboardMap: Record<string, string> = {
-      SuperAdmin: "/super-admin/dashboard",
-      InstitutionAdmin: "/admin/dashboard",
-      admin: "/admin/dashboard",
-      Teacher: "/teacher/dashboard",
-      Student: "/student/dashboard",
+      super_admin: "/super-admin/dashboard",
+      institute_admin: "/admin/dashboard",
+      teacher: "/teacher/dashboard",
+      student: "/student/dashboard",
     };
     const redirectUrl = dashboardMap[userRole];
     if (redirectUrl) {
@@ -22,10 +24,10 @@ export function proxy(request: NextRequest) {
 
   // Define protected routes and their allowed roles
   const protectedRoutes = [
-    { path: "/super-admin", roles: ["SuperAdmin"] },
-    { path: "/admin", roles: ["InstitutionAdmin", "admin"] },
-    { path: "/teacher", roles: ["Teacher"] },
-    { path: "/student", roles: ["Student"] },
+    { path: "/super-admin", roles: ["super_admin"] },
+    { path: "/admin", roles: ["institute_admin"] },
+    { path: "/teacher", roles: ["teacher"] },
+    { path: "/student", roles: ["student"] },
   ];
 
   // Check if the current path is a protected route
@@ -38,18 +40,24 @@ export function proxy(request: NextRequest) {
     if (!userRole) {
       const loginUrl = new URL("/auth/login", request.url);
       loginUrl.searchParams.set("from", pathname);
-      // Hard redirect to clear any state issues
       return NextResponse.redirect(loginUrl);
     }
 
-    // If the user's role is not allowed for this route, redirect to their own dashboard or login
+    // STRICT Super Admin Security: Even if role matches, check email
+    if (pathname.startsWith("/super-admin")) {
+      if (!userEmail || !SUPER_ADMIN_EMAILS.includes(userEmail)) {
+        console.warn(`Unauthorized Super Admin attempt by ${userEmail}`);
+        return NextResponse.redirect(new URL("/auth/login", request.url));
+      }
+    }
+
+    // Role-based access check
     if (!protectedRoute.roles.includes(userRole)) {
       const dashboardMap: Record<string, string> = {
-        SuperAdmin: "/super-admin/dashboard",
-        InstitutionAdmin: "/admin/dashboard",
-        admin: "/admin/dashboard",
-        Teacher: "/teacher/dashboard",
-        Student: "/student/dashboard",
+        super_admin: "/super-admin/dashboard",
+        institute_admin: "/admin/dashboard",
+        teacher: "/teacher/dashboard",
+        student: "/student/dashboard",
       };
 
       const redirectUrl = dashboardMap[userRole] || "/auth/login";

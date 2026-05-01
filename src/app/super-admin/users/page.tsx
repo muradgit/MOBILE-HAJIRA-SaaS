@@ -69,7 +69,7 @@ export default function UserManagement() {
 
   // 1. Fetch Tenants for Mapping and Selects
   useEffect(() => {
-    if (userData?.role !== "SuperAdmin") return;
+    if (userData?.role !== "super_admin") return;
 
     const fetchTenants = async () => {
       try {
@@ -96,7 +96,7 @@ export default function UserManagement() {
 
   // 2. Real-time Users Fetch (Total Collection for SuperAdmin)
   useEffect(() => {
-    if (userData?.role !== "SuperAdmin") return;
+    if (userData?.role !== "super_admin") return;
 
     try {
       // For SuperAdmin, we fetch everything across all tenants
@@ -226,7 +226,7 @@ export default function UserManagement() {
     </div>
   );
 
-  if (userData?.role !== "SuperAdmin") return (
+  if (userData?.role !== "super_admin") return (
     <div className="flex flex-col items-center justify-center p-12 text-center space-y-4">
       <ShieldAlert className="w-16 h-16 text-red-500" />
       <h2 className="text-2xl font-black text-gray-900 font-bengali">অ্যাক্সেস ডিনাইড</h2>
@@ -265,12 +265,12 @@ export default function UserManagement() {
       cell: (item: UserData) => (
         <span className={cn(
           "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border",
-          item.role === "SuperAdmin" && "bg-purple-50 text-purple-600 border-purple-100",
-          item.role === "InstitutionAdmin" && "bg-blue-50 text-blue-600 border-blue-100",
-          item.role === "Teacher" && "bg-green-50 text-green-600 border-green-100",
-          item.role === "Student" && "bg-orange-50 text-orange-600 border-orange-100"
+          item.role === "super_admin" && "bg-purple-50 text-purple-600 border-purple-100",
+          item.role === "institute_admin" && "bg-blue-50 text-blue-600 border-blue-100",
+          item.role === "teacher" && "bg-green-50 text-green-600 border-green-100",
+          item.role === "student" && "bg-orange-50 text-orange-600 border-orange-100"
         )}>
-          {item.role === "InstitutionAdmin" ? "Inst Admin" : item.role}
+          {item.role === "institute_admin" ? "Inst Admin" : item.role?.replace("_", " ")}
         </span>
       )
     },
@@ -386,10 +386,10 @@ export default function UserManagement() {
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Role</label>
                 <select value={createData.role} onChange={e => setCreateData({...createData, role: e.target.value as any})} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3.5 text-sm font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all">
-                   <option value="SuperAdmin">SuperAdmin</option>
-                   <option value="InstitutionAdmin">Institution Admin</option>
-                   <option value="Teacher">Teacher</option>
-                   <option value="Student">Student</option>
+                   <option value="super_admin">Super Admin</option>
+                   <option value="institute_admin">Institute Admin</option>
+                   <option value="teacher">Teacher</option>
+                   <option value="student">Student</option>
                 </select>
               </div>
               <div className="space-y-1">
@@ -443,10 +443,10 @@ export default function UserManagement() {
                   onChange={(e) => setFormData({...formData, role: e.target.value as any})}
                   className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3.5 text-sm font-bold focus:ring-2 focus:ring-[#6f42c1] outline-none transition-all appearance-none cursor-pointer"
                 >
-                  <option value="SuperAdmin">SuperAdmin</option>
-                  <option value="InstitutionAdmin">Institution Admin</option>
-                  <option value="Teacher">Teacher</option>
-                  <option value="Student">Student</option>
+                  <option value="super_admin">Super Admin</option>
+                  <option value="institute_admin">Institute Admin</option>
+                  <option value="teacher">Teacher</option>
+                  <option value="student">Student</option>
                 </select>
               </div>
 

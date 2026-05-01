@@ -11,7 +11,8 @@ export async function POST(req: NextRequest) {
   if (!auth) return errorResponse("Unauthorized", 401);
   const role = auth.role as string;
   const normalizedRole = role?.toLowerCase().replace(/\s+/g, "");
-  if (!["admin", "institutionadmin", "superadmin", "super-admin", "teacher"].includes(normalizedRole)) {
+  
+  if (!["admin", "institutionadmin", "superadmin", "super_admin", "instituteadmin", "institute_admin", "teacher"].includes(normalizedRole)) {
     return errorResponse("Forbidden", 403);
   }
 
@@ -25,24 +26,31 @@ export async function POST(req: NextRequest) {
 
     // 0. Hierarchy Rules Enforcement
     const creatorRole = (auth.role as string).toLowerCase().replace(/\s+/g, "");
-    const normalizedTargetRole = targetRole.toLowerCase().replace(/\s+/g, "");
+    let normalizedTargetRole = targetRole.toLowerCase().replace(/\s+/g, "");
+    
+    // Auto-migrate target role if it's 'admin'
+    if (normalizedTargetRole === "admin" || normalizedTargetRole === "institutionadmin") {
+      normalizedTargetRole = "institute_admin";
+    }
 
-    const isSuperAdmin = ["superadmin", "super-admin"].includes(creatorRole);
-    const isInstitutionAdmin = ["institutionadmin", "admin"].includes(creatorRole);
+    const isSuperAdmin = ["superadmin", "super_admin"].includes(creatorRole);
+    const isInstitutionAdmin = ["institutionadmin", "instituteadmin", "institute_admin"].includes(creatorRole);
     const isTeacher = creatorRole === "teacher";
 
     let isAuthorized = false;
 
     if (isSuperAdmin) {
-      // Super Admin can create anything
-      isAuthorized = true;
+      // Super Admin can create institute_admin, teacher, student
+      if (["institute_admin", "teacher", "student"].includes(normalizedTargetRole)) {
+        isAuthorized = true;
+      }
     } else if (isInstitutionAdmin) {
-      // Admin can create Teacher and Student
+      // Admin can create teacher and student
       if (["teacher", "student"].includes(normalizedTargetRole)) {
         isAuthorized = true;
       }
     } else if (isTeacher) {
-      // Teacher can ONLY create Student
+      // Teacher can ONLY create student
       if (normalizedTargetRole === "student") {
         isAuthorized = true;
       }
@@ -51,6 +59,8 @@ export async function POST(req: NextRequest) {
     if (!isAuthorized) {
       return errorResponse(`আপনার (${auth.role}) ইউজার টাইপ দিয়ে এই রোলের (${targetRole}) ইউজার তৈরি করা সম্ভব নয়।`, 403);
     }
+
+    const finalTargetRole = normalizedTargetRole;
 
     // 1. Determine Email & Verification Status
     let finalEmail = identifier;
@@ -85,7 +95,7 @@ export async function POST(req: NextRequest) {
 
     // 3. Set Custom Claims
     await adminAuth.setCustomUserClaims(userRecord.uid, {
-      role: targetRole,
+      role: finalTargetRole,
       tenant_id,
     });
 
@@ -95,9 +105,9 @@ export async function POST(req: NextRequest) {
       tenant_id,
       name,
       email: finalEmail,
-      role: targetRole,
-      username: identifierType === "username" ? identifier : null,
-      identifierType: identifierType || "email",
+      role: finalTargetRole,
+      username: (isExplicitUsername || isImplicitUsername) ? identifier : null,
+      identifierType: (isExplicitUsername || isImplicitUsername) ? "username" : "email",
       has_password: true,
       status: "approved",
       created_at: new Date().toISOString(),
@@ -111,13 +121,13 @@ export async function POST(req: NextRequest) {
 
     // TENANT SUBCOLLECTION
     let collectionName = "students";
-    if (normalizedTargetRole === "teacher") collectionName = "teachers";
-    if (normalizedTargetRole === "institutionadmin" || normalizedTargetRole === "admin") collectionName = "admins";
+    if (finalTargetRole === "teacher") collectionName = "teachers";
+    if (finalTargetRole === "institute_admin") collectionName = "admins";
 
     await adminDb.collection("tenants").doc(tenant_id).collection(collectionName).doc(userRecord.uid).set(profileData);
 
     // 5. Queue Sync to Google Sheets
-    const syncType = normalizedTargetRole === "teacher" ? "TEACHER" : "STUDENT";
+    const syncType = finalTargetRole === "teacher" ? "TEACHER" : (finalTargetRole === "student" ? "STUDENT" : null);
     if (syncType) {
       await queueGoogleSheetSync(tenant_id, profileData, syncType).catch(e => console.error("Sheet sync failed", e));
     }
@@ -143,11 +153,17 @@ export async function PUT(req: NextRequest) {
 
     // Hierarchy Check
     const creatorRole = (auth.role as string).toLowerCase().replace(/\s+/g, "");
-    const targetRole = role.toLowerCase().replace(/\s+/g, "");
+    let normalizedTargetRole = role.toLowerCase().replace(/\s+/g, "");
+    
+    // Auto-migrate
+    if (normalizedTargetRole === "admin" || normalizedTargetRole === "institutionadmin") {
+      normalizedTargetRole = "institute_admin";
+    }
+
     const isAuthorized = 
-      ["superadmin", "super-admin"].includes(creatorRole) || 
-      (["institutionadmin", "admin"].includes(creatorRole) && ["teacher", "student"].includes(targetRole)) ||
-      (creatorRole === "teacher" && targetRole === "student");
+      ["superadmin", "super_admin"].includes(creatorRole) || 
+      (["institutionadmin", "instituteadmin", "institute_admin"].includes(creatorRole) && ["teacher", "student"].includes(normalizedTargetRole)) ||
+      (creatorRole === "teacher" && normalizedTargetRole === "student");
 
     if (!isAuthorized) return errorResponse("উক্ত পরিবর্তন করার অনুমতি আপনার নেই।", 403);
 
@@ -162,7 +178,10 @@ export async function PUT(req: NextRequest) {
       delete updates.password;
     }
 
-    const collectionName = role === "teacher" ? "teachers" : "students";
+    let collectionName = "students";
+    if (normalizedTargetRole === "teacher") collectionName = "teachers";
+    if (normalizedTargetRole === "institute_admin") collectionName = "admins";
+
     const subRef = adminDb.collection("tenants").doc(tenant_id).collection(collectionName).doc(user_id);
     const globalRef = adminDb.collection("users").doc(user_id);
     
@@ -182,8 +201,10 @@ export async function PUT(req: NextRequest) {
     const fullData = updatedDoc.data();
 
     // Queue Sync to Google Sheets
-    const syncType = role === "teacher" ? "TEACHER" : "STUDENT";
-    await queueGoogleSheetSync(tenant_id, fullData, syncType);
+    const syncType = normalizedTargetRole === "teacher" ? "TEACHER" : (normalizedTargetRole === "student" ? "STUDENT" : null);
+    if (syncType) {
+      await queueGoogleSheetSync(tenant_id, fullData, syncType).catch(e => console.error("Sheet sync failed", e));
+    }
 
     return successResponse({ success: true });
   } catch (error: any) {
@@ -200,7 +221,7 @@ export async function DELETE(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const tenant_id = searchParams.get("tenant_id");
     const user_id = searchParams.get("user_id");
-    const role = searchParams.get("role");
+    const role = searchParams.get("role") || "";
 
     if (!tenant_id || !user_id || !role) {
       return errorResponse("Missing params", 400);
@@ -208,15 +229,24 @@ export async function DELETE(req: NextRequest) {
 
     // Hierarchy Check
     const creatorRole = (auth.role as string).toLowerCase().replace(/\s+/g, "");
-    const targetRole = role.toLowerCase().replace(/\s+/g, "");
+    let normalizedTargetRole = role.toLowerCase().replace(/\s+/g, "");
+
+    // Auto-migrate
+    if (normalizedTargetRole === "admin" || normalizedTargetRole === "institutionadmin") {
+      normalizedTargetRole = "institute_admin";
+    }
+
     const isAuthorized = 
-      ["superadmin", "super-admin"].includes(creatorRole) || 
-      (["institutionadmin", "admin"].includes(creatorRole) && ["teacher", "student"].includes(targetRole)) ||
-      (creatorRole === "teacher" && targetRole === "student");
+      ["superadmin", "super_admin"].includes(creatorRole) || 
+      (["institutionadmin", "instituteadmin", "institute_admin"].includes(creatorRole) && ["teacher", "student"].includes(normalizedTargetRole)) ||
+      (creatorRole === "teacher" && normalizedTargetRole === "student");
 
     if (!isAuthorized) return errorResponse("উক্ত ইউজারকে ডিলিট করার অনুমতি আপনার নেই।", 403);
 
-    const collectionName = role === "teacher" ? "teachers" : "students";
+    let collectionName = "students";
+    if (normalizedTargetRole === "teacher") collectionName = "teachers";
+    if (normalizedTargetRole === "institute_admin") collectionName = "admins";
+
     const userRef = adminDb.collection("tenants").doc(tenant_id).collection(collectionName).doc(user_id);
 
     // Soft delete
@@ -227,8 +257,10 @@ export async function DELETE(req: NextRequest) {
 
     // Sync status update to sheet
     const updatedDoc = await userRef.get();
-    const syncType = role === "teacher" ? "TEACHER" : "STUDENT";
-    await queueGoogleSheetSync(tenant_id, updatedDoc.data(), syncType);
+    const syncType = normalizedTargetRole === "teacher" ? "TEACHER" : (normalizedTargetRole === "student" ? "STUDENT" : null);
+    if (syncType) {
+      await queueGoogleSheetSync(tenant_id, updatedDoc.data(), syncType).catch(e => console.error("Sheet sync failed", e));
+    }
 
     return successResponse({ success: true });
   } catch (error: any) {
