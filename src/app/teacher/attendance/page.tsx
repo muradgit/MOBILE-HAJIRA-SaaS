@@ -1,504 +1,249 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useUserStore } from "@/src/store/useUserStore";
-import { db } from "@/src/lib/firebase";
+import React, { useState } from "react";
 import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  doc, 
-  onSnapshot, 
-  addDoc, 
-  serverTimestamp,
-  Timestamp 
-} from "firebase/firestore";
-import { 
-  CheckCircle, 
-  XCircle, 
-  QrCode, 
-  ClipboardList, 
-  Loader2, 
   Users, 
-  Calendar, 
-  ChevronRight, 
-  Zap, 
-  ShieldAlert,
-  Search,
-  Filter,
-  Check
+  QrCode, 
+  Hash, 
+  ScanFace, 
+  Camera, 
+  MapPin, 
+  ChevronRight,
+  GraduationCap
 } from "lucide-react";
-import { cn } from "@/src/lib/utils";
-import { toast } from "sonner";
+import { motion, AnimatePresence } from "motion/react";
+import { useUserStore } from "@/src/store/useUserStore";
 import { Card } from "@/src/components/ui/Card";
-import { UserData, Tenant } from "@/src/lib/types";
-
-interface StudentAttendance {
-  user_id: string;
-  name: string;
-  nameBN?: string;
-  status: "present" | "absent";
-  roll?: string;
-}
+import { toast } from "sonner";
+import { cn } from "@/src/lib/utils";
 
 /**
- * Teacher Attendance Panel
- * Step 5.1: Manual & Session Code Attendance
+ * Teacher Attendance Page - MOBILE-HAJIRA SaaS
+ * Main portal for teachers to take student attendance using 6 different methods.
  */
-export default function TeacherAttendancePage() {
-  const { userData, loading: authLoading } = useAuth();
-  const { tenantId: storeTenantId } = useUserStore();
-  
-  const [activeTab, setActiveTab] = useState<"manual" | "smart-code">("manual");
-  const [activeTenantId, setActiveTenantId] = useState<string | null>(null);
-  const [tenant, setTenant] = useState<Tenant | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  // Filters
-  const [selectedClass, setSelectedClass] = useState("");
-  const [selectedDept, setSelectedDept] = useState("");
-  const [selectedSubject, setSelectedSubject] = useState("");
-  const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
-  
-  // Manual Mode State
-  const [students, setStudents] = useState<StudentAttendance[]>([]);
-  const [fetchingStudents, setFetchingStudents] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+const ATTENDANCE_METHODS = [
+  {
+    id: "manual",
+    title: "ম্যানুয়াল হাজিরা",
+    description: "শিক্ষার্থীদের তালিকা থেকে সরাসরি হাজিরা দিন",
+    icon: Users,
+    color: "bg-purple-100 text-purple-600",
+    hoverColor: "hover:bg-purple-600",
+  },
+  {
+    id: "qr",
+    title: "QR কোড স্ক্যান",
+    description: "শিক্ষার্থীর আইডি কার্ডের QR কোড স্ক্যান করুন",
+    icon: QrCode,
+    color: "bg-blue-100 text-blue-600",
+    hoverColor: "hover:bg-blue-600",
+  },
+  {
+    id: "code",
+    title: "কোড দিয়ে হাজিরা",
+    description: "একটি নির্দিষ্ট কোড শেয়ার করে হাজিরা সংগ্রহ করুন",
+    icon: Hash,
+    color: "bg-emerald-100 text-emerald-600",
+    hoverColor: "hover:bg-emerald-600",
+  },
+  {
+    id: "face",
+    title: "ফেস স্ক্যান",
+    description: "ফেস রিকগনিশন ব্যবহার করে দ্রুত হাজিরা নিন",
+    icon: ScanFace,
+    color: "bg-orange-100 text-orange-600",
+    hoverColor: "hover:bg-orange-600",
+  },
+  {
+    id: "camera",
+    title: "ক্যামেরা হাজিরা",
+    description: "পুরো ক্লাসের ছবি বা ভিডিও থেকে অটোমেটিক হাজিরা",
+    icon: Camera,
+    color: "bg-rose-100 text-rose-600",
+    hoverColor: "hover:bg-rose-600",
+  },
+  {
+    id: "geo",
+    title: "জিও লোকেশন",
+    description: "শিক্ষার্থীর অবস্থান যাচাই করে হাজিরা নিশ্চিত করুন",
+    icon: MapPin,
+    color: "bg-indigo-100 text-indigo-600",
+    hoverColor: "hover:bg-indigo-600",
+  },
+];
 
-  // Smart Code State
-  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [expiryTime, setExpiryTime] = useState<Date | null>(null);
+const CLASSES = ["Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"];
 
-  // 1. Resolve Tenant ID
-  useEffect(() => {
-    if (storeTenantId) setActiveTenantId(storeTenantId);
-    else if (userData?.tenant_id) setActiveTenantId(userData.tenant_id);
-  }, [storeTenantId, userData]);
+export default function AttendancePage() {
+  const { tenantId } = useUserStore();
+  const [selectedClass, setSelectedClass] = useState<string | null>(null);
 
-  // 2. Fetch Tenant Config (Classes/Depts)
-  useEffect(() => {
-    if (!activeTenantId) return;
-    const unsub = onSnapshot(doc(db, "tenants", activeTenantId), (snap) => {
-      if (snap.exists()) setTenant(snap.data() as Tenant);
-      setLoading(false);
-    });
-    return () => unsub();
-  }, [activeTenantId]);
-
-  // 3. Fetch Students for Manual List
-  const fetchStudents = async () => {
-    if (!activeTenantId || !selectedClass) return;
-    
-    setFetchingStudents(true);
-    try {
-      const q = query(
-        collection(db, "users"),
-        where("tenant_id", "==", activeTenantId),
-        where("role", "==", "student"),
-        where("class", "==", selectedClass),
-        ...(selectedDept ? [where("department", "==", selectedDept)] : [])
-      );
-
-      const snap = await getDocs(q);
-      const studentData = snap.docs.map(doc => {
-        const data = doc.data() as UserData;
-        return {
-          user_id: doc.id,
-          name: data.name,
-          nameBN: data.nameBN || "",
-          status: "present" as const, // Default to present
-          roll: data.student_id ? data.student_id.split("-").pop() : "" // Mock roll from ID
-        };
-      });
-
-      setStudents(studentData);
-      if (studentData.length === 0) toast.info("এই ক্লাসে কোনো শিক্ষার্থী খুঁজে পাওয়া যায়নি");
-    } catch (err: any) {
-      console.error("Fetch Students Error:", err);
-      toast.error("শিক্ষার্থী তালিকা লোড করতে সমস্যা হয়েছে");
-    } finally {
-      setFetchingStudents(false);
+  const handleMethodClick = (methodName: string) => {
+    if (!selectedClass) {
+      toast.error("অনুগ্রহ করে আগে ক্লাস নির্বাচন করুন!");
+      return;
     }
+    toast.success(`${methodName} শুরু হচ্ছে...`);
+    // Future expansion: Navigate to specific method route
   };
-
-  // Re-fetch when filters change
-  useEffect(() => {
-    if (activeTab === "manual" && selectedClass) {
-      fetchStudents();
-    }
-  }, [selectedClass, selectedDept, activeTab]);
-
-  // 4. Handle Single Student Status Toggle
-  const toggleStatus = (userId: string, status: "present" | "absent") => {
-    setStudents(prev => prev.map(s => 
-      s.user_id === userId ? { ...s, status } : s
-    ));
-  };
-
-  // 5. Submit Manual Attendance
-  const handleSaveManualAttendance = async () => {
-    if (!selectedClass) return toast.error("একটি ক্লাস সিলেক্ট করুন");
-    if (!selectedSubject) return toast.error("একটি বিষয় (Subject) সিলেক্ট করুন");
-    if (students.length === 0) return toast.error("শিক্ষার্থী তালিকা খালি");
-    
-    setIsSubmitting(true);
-    
-    try {
-      const presentStudents = students
-        .filter(s => s.status === "present")
-        .map(s => s.nameBN || s.name);
-        
-      const absentStudents = students
-        .filter(s => s.status === "absent")
-        .map(s => s.nameBN || s.name);
-
-      const payload = {
-        tenant_id: activeTenantId,
-        classId: selectedClass,
-        section: selectedDept || "All",
-        subject: selectedSubject,
-        teacherName: userData?.name || "Unknown Teacher",
-        totalPresent: presentStudents.length,
-        totalAbsent: absentStudents.length,
-        presentStudents,
-        absentStudents
-      };
-
-      const res = await fetch("/api/attendance/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const result = await res.json();
-
-      if (!res.ok) throw new Error(result.error || "হাজিরা সেভ করতে সমস্যা হয়েছে");
-
-      toast.success("সাফল্যজনকভাবে হাজিরা সাবমিট করা হয়েছে।", {
-        description: `উপস্থিত: ${presentStudents.length}, অনুপস্থিত: ${absentStudents.length}. এটি শীঘ্রই শিটে যুক্ত হবে।`
-      });
-
-    } catch (err: any) {
-      console.error("Submission Error:", err);
-      toast.error(err.message || "হাজিরা সেভ করতে ব্যর্থ হয়েছে");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // 6. Generate Smart Session Code
-  const handleGenerateCode = async () => {
-    if (!selectedClass) return toast.error("একটি ক্লাস সিলেক্ট করুন");
-    
-    setIsGenerating(true);
-    try {
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-      await addDoc(collection(db, "session_codes"), {
-        code,
-        tenant_id: activeTenantId,
-        class: selectedClass,
-        department: selectedDept || "All",
-        teacher_id: userData?.user_id,
-        teacher_name: userData?.name,
-        date: attendanceDate,
-        expires_at: Timestamp.fromDate(expiresAt),
-        status: "active",
-        created_at: serverTimestamp()
-      });
-
-      setGeneratedCode(code);
-      setExpiryTime(expiresAt);
-      toast.success("সেশন কোড তৈরি হয়েছে! শিক্ষার্থীরা এখন হাজিরা দিতে পারবে।");
-    } catch (err: any) {
-      toast.error("কোড তৈরি করতে ব্যর্থ হয়েছে: " + err.message);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  // 7. Search Filter
-  const filteredStudents = students.filter(s => 
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    s.nameBN?.includes(searchQuery) ||
-    s.roll?.includes(searchQuery)
-  );
-
-  // Auth/Role Protection
-  const isAuthorized = userData?.role === "teacher" || userData?.role === "super_admin" || userData?.role === "institute_admin" ;
-
-  if (authLoading || (loading && !tenant)) {
-    return (
-      <div className="flex h-[60vh] items-center justify-center">
-        <Loader2 className="w-10 h-10 text-purple-600 animate-spin" />
-      </div>
-    );
-  }
-
-  if (!isAuthorized) {
-    return (
-      <div className="p-8 text-center flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <ShieldAlert className="w-16 h-16 text-red-500" />
-        <h2 className="text-2xl font-black text-red-500 font-bengali">অ্যাক্সেস ডিনাইড</h2>
-        <p className="text-gray-500 max-w-xs font-bengali">শুধুমাত্র শিক্ষকরা এই প্যানেলটি ব্যবহার করতে পারবেন।</p>
-      </div>
-    );
-  }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-24 p-2 animate-in fade-in duration-500">
-      
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 bg-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-200">
-          <ClipboardList className="w-6 h-6 text-white" />
-        </div>
-        <div>
-          <h1 className="text-xl font-black text-gray-900 font-bengali">শিক্ষার্থী হাজিরা</h1>
-          <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Attendance Management</p>
+    <div className="min-h-screen bg-gray-50 pb-20 font-bengali">
+      {/* Header Section */}
+      <div className="bg-[#6f42c1] text-white pt-10 pb-16 px-6 rounded-b-[3rem] shadow-2xl shadow-purple-900/10 relative overflow-hidden">
+        {/* Abstract Background Shapes */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-400/20 rounded-full blur-2xl -ml-10 -mb-10"></div>
+        
+        <div className="relative z-10 max-w-2xl mx-auto space-y-2">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl">
+              <Users className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black tracking-tight">হাজিরা নিন</h1>
+              <p className="text-purple-100 text-xs font-medium opacity-80 uppercase tracking-widest">Attendance Management Portal</p>
+            </div>
+          </div>
+          <p className="text-purple-50 text-sm leading-relaxed max-w-sm">
+            ধন্যবাদ শিক্ষক! আজকের ক্লাসের হাজিরা নিতে নিচের পদ্ধতিগুলো থেকে একটি বেছে নিন।
+          </p>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex bg-gray-100 p-1 rounded-2xl font-bengali">
-        <button 
-          onClick={() => setActiveTab("manual")}
-          className={cn(
-            "flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-            activeTab === "manual" ? "bg-white text-purple-600 shadow-sm" : "text-gray-500"
-          )}
-        >
-          <CheckCircle className="w-4 h-4" /> ম্যানুয়াল হাজিরা
-        </button>
-        <button 
-          onClick={() => setActiveTab("smart-code")}
-          className={cn(
-            "flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-            activeTab === "smart-code" ? "bg-white text-purple-600 shadow-sm" : "text-gray-500"
-          )}
-        >
-          <QrCode className="w-4 h-4" /> স্মার্ট কোড
-        </button>
-      </div>
-
-      {/* Common Filters Container */}
-      <Card className="p-6 border-transparent shadow-xl shadow-purple-500/5 rounded-[2rem]">
-         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                <Users className="w-3 h-3" /> ক্লাস
-              </label>
-              <select 
-                value={selectedClass}
-                onChange={(e) => setSelectedClass(e.target.value)}
-                className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-purple-600 transition-all font-bengali text-sm font-bold"
+      <div className="max-w-2xl mx-auto px-6 -mt-8 space-y-8">
+        {/* Step 1: Class Selection */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+              <GraduationCap className="w-4 h-4" /> ক্লাস নির্বাচন করুন
+            </h2>
+            {selectedClass && (
+              <button 
+                onClick={() => setSelectedClass(null)}
+                className="text-[10px] font-black text-purple-600 uppercase tracking-widest"
               >
-                <option value="">ক্লাস সিলেক্ট করুন</option>
-                {tenant?.classes?.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                <Filter className="w-3 h-3" /> বিভাগ / সেকশন
-              </label>
-              <select 
-                value={selectedDept}
-                onChange={(e) => setSelectedDept(e.target.value)}
-                className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-purple-600 transition-all font-bengali text-sm font-bold"
-              >
-                <option value="">সকল বিভাগ</option>
-                {tenant?.departments?.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                <ClipboardList className="w-3 h-3" /> বিষয় (Subject)
-              </label>
-              <input 
-                type="text"
-                placeholder="বিষয় লিখুন..."
-                value={selectedSubject}
-                onChange={(e) => setSelectedSubject(e.target.value)}
-                className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-purple-600 transition-all font-bengali text-sm font-bold"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                <Calendar className="w-3 h-3" /> তারিখ
-              </label>
-              <input 
-                type="date"
-                value={attendanceDate}
-                onChange={(e) => setAttendanceDate(e.target.value)}
-                className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-purple-600 transition-all text-sm font-bold"
-              />
-            </div>
-         </div>
-      </Card>
-
-      {/* Manual Tab Body */}
-      {activeTab === "manual" && (
-        <div className="space-y-4">
-           {selectedClass ? (
-             <div className="space-y-4">
-                {/* Local Search */}
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
-                  <input 
-                    type="text"
-                    placeholder="নাম বা রোল দিয়ে খুঁজুন..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-white border border-gray-100 rounded-2xl pl-12 pr-4 py-3.5 outline-none focus:ring-2 focus:ring-purple-600 transition-all font-bengali text-sm font-medium"
-                  />
-                </div>
-
-                {fetchingStudents ? (
-                  <div className="flex flex-col items-center justify-center py-20 gap-4">
-                    <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
-                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest">শিক্ষার্থী তালিকা নিয়ে আসা হচ্ছে...</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3 pb-20">
-                    {filteredStudents.map((student) => (
-                      <Card key={student.user_id} className="p-4 border-transparent shadow-sm flex items-center justify-between gap-4 rounded-2xl hover:shadow-md transition-all group overflow-hidden relative">
-                         {student.status === "present" && <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500" />}
-                         {student.status === "absent" && <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500" />}
-                         
-                         <div className="flex items-center gap-3 overflow-hidden">
-                           <div className={cn(
-                             "w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shrink-0",
-                             student.status === "present" ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
-                           )}>
-                             {student.roll || "#"}
-                           </div>
-                           <div className="min-w-0">
-                              <h4 className="text-sm font-black text-gray-900 font-bengali truncate">{student.nameBN || student.name}</h4>
-                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">{student.user_id.slice(-6).toUpperCase()}</p>
-                           </div>
-                         </div>
-
-                         <div className="flex items-center gap-2 shrink-0">
-                            <button 
-                              onClick={() => toggleStatus(student.user_id, "present")}
-                              className={cn(
-                                "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
-                                student.status === "present" ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-gray-50 text-gray-300 hover:bg-emerald-50"
-                              )}
-                            >
-                              <CheckCircle className="w-5 h-5" />
-                            </button>
-                            <button 
-                              onClick={() => toggleStatus(student.user_id, "absent")}
-                              className={cn(
-                                "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
-                                student.status === "absent" ? "bg-red-500 text-white shadow-lg shadow-red-500/20" : "bg-gray-50 text-gray-300 hover:bg-red-50"
-                              )}
-                            >
-                              <XCircle className="w-5 h-5" />
-                            </button>
-                         </div>
-                      </Card>
-                    ))}
-
-                    {/* Bottom Action Bar */}
-                    <div className="fixed bottom-20 left-0 right-0 p-4 max-w-4xl mx-auto z-40 bg-transparent pointer-events-none">
-                       <button 
-                         disabled={isSubmitting}
-                         onClick={handleSaveManualAttendance}
-                         className="pointer-events-auto w-full bg-purple-600 disabled:bg-purple-300 text-white py-4 rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-purple-600/40 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all font-bengali"
-                       >
-                         {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
-                         হাজিরা সেভ করুন
-                       </button>
-                    </div>
-                  </div>
+                Clear
+              </button>
+            )}
+          </div>
+          
+          <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+            {CLASSES.map((cls) => (
+              <button
+                key={cls}
+                onClick={() => setSelectedClass(cls)}
+                className={cn(
+                  "px-6 py-4 rounded-2xl font-black text-sm transition-all shrink-0 border-2",
+                  selectedClass === cls
+                    ? "bg-[#6f42c1] border-[#6f42c1] text-white shadow-xl shadow-purple-600/20 scale-105"
+                    : "bg-white border-transparent text-gray-500 hover:border-purple-200"
                 )}
-             </div>
-           ) : (
-             <div className="text-center py-20 bg-white rounded-[3rem] border border-gray-100 flex flex-col items-center gap-4">
-                <Filter className="w-12 h-12 text-gray-100" />
-                <p className="text-xs font-black text-gray-400 uppercase tracking-widest font-bengali">একটি ক্লাস সিলেক্ট করে ডাটা লোড করুন</p>
-             </div>
-           )}
-        </div>
-      )}
+              >
+                Class {cls}
+              </button>
+            ))}
+          </div>
+        </section>
 
-      {/* Smart Code Tab Body */}
-      {activeTab === "smart-code" && (
-        <Card className="p-10 border-transparent shadow-2xl shadow-purple-500/5 rounded-[3rem] text-center space-y-8">
-           {!generatedCode ? (
-              <div className="space-y-6">
-                 <div className="w-20 h-20 bg-purple-50 rounded-[2.5rem] flex items-center justify-center mx-auto ring-8 ring-purple-600/5">
-                   <Zap className="w-10 h-10 text-purple-600" />
-                 </div>
-                 <div className="space-y-2">
-                    <h3 className="text-2xl font-black text-gray-900 font-bengali">স্মার্ট সেশন জেনারেটর</h3>
-                    <p className="text-sm text-gray-500 font-medium font-bengali max-w-xs mx-auto leading-relaxed">শিক্ষার্থীরা তাদের অ্যাপে এই কোডটি দিয়ে স্বয়ংক্রিয়ভাবে হাজিরা দিতে পারবে।</p>
-                 </div>
-                 
-                 <button 
-                   disabled={isGenerating || !selectedClass}
-                   onClick={handleGenerateCode}
-                   className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-100 text-white py-5 rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-xl shadow-purple-600/20 flex items-center justify-center gap-3 transition-all active:scale-95 font-bengali"
-                 >
-                   {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <QrCode className="w-5 h-5" />}
-                   কোড তৈরি করুন
-                 </button>
-              </div>
-           ) : (
-              <div className="space-y-8 animate-in zoom-in duration-500">
-                 <div className="space-y-2">
-                    <p className="text-[10px] font-black text-purple-600 uppercase tracking-[0.3em]">ACTIVE SESSION CODE</p>
-                    <h2 className="text-7xl font-black text-gray-900 tracking-tighter">{generatedCode}</h2>
-                 </div>
+        {/* Step 2: Attendance Methods Grid */}
+        <section className="space-y-4">
+          <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+            <ChevronRight className="w-4 h-4" /> হাজিরা পদ্ধতি বেছে নিন
+          </h2>
 
-                 <div className="bg-emerald-50 rounded-2xl p-4 flex items-center justify-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                    <p className="text-[11px] font-black text-emerald-600 tracking-widest font-bengali italic">
-                       কোডটি আগামী ১০ মিনিট সক্রিয় থাকবে।
-                    </p>
-                 </div>
-
-                 <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-gray-50 rounded-2xl">
-                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Class</p>
-                       <p className="text-sm font-bold text-gray-900">{selectedClass}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <AnimatePresence>
+              {ATTENDANCE_METHODS.map((method, index) => {
+                const Icon = method.icon;
+                return (
+                  <motion.button
+                    key={method.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    whileHover={{ scale: selectedClass ? 1.02 : 1 }}
+                    whileTap={{ scale: selectedClass ? 0.98 : 1 }}
+                    onClick={() => handleMethodClick(method.title)}
+                    className={cn(
+                      "group text-left p-5 rounded-[2rem] bg-white border-2 border-transparent transition-all relative overflow-hidden",
+                      selectedClass 
+                        ? "shadow-sm hover:shadow-xl hover:border-[#6f42c1]/20 active:bg-gray-50 cursor-pointer" 
+                        : "opacity-60 grayscale cursor-not-allowed"
+                    )}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className={cn(
+                        "p-4 rounded-2xl transition-colors shrink-0",
+                        method.color,
+                        selectedClass && `group-hover:${method.hoverColor.replace('hover:', '')} group-hover:text-white`
+                      )}>
+                        <Icon className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-1">
+                        <h3 className="font-black text-gray-900 leading-tight">
+                          {method.title}
+                        </h3>
+                        <p className="text-[11px] text-gray-400 font-medium leading-relaxed">
+                          {method.description}
+                        </p>
+                      </div>
                     </div>
-                    <div className="p-4 bg-gray-50 rounded-2xl">
-                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Expires at</p>
-                       <p className="text-sm font-bold text-gray-900">{expiryTime?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                    </div>
-                 </div>
+                    
+                    {/* Visual indicator for active selection */}
+                    {selectedClass && (
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <div className="w-1.5 h-1.5 rounded-full bg-[#6f42c1]" />
+                      </div>
+                    )}
+                  </motion.button>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        </section>
 
-                 <button 
-                  onClick={() => setGeneratedCode(null)}
-                  className="text-[10px] font-black text-gray-300 uppercase tracking-widest hover:text-red-500 transition-colors"
-                 >
-                   Cancel & New Code
-                 </button>
-              </div>
-           )}
-        </Card>
-      )}
-
-      {/* Info Card */}
-      <div className="mx-auto max-w-sm text-center space-y-2 py-4">
-        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] font-bengali">
-          সাহায্যের জন্য <span className="text-purple-600">গাইড ভিডিও</span> দেখুন
-        </p>
-        <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
-           <div className="w-2/3 h-full bg-purple-600 rounded-full" />
-        </div>
+        {/* Info Card */}
+        {!selectedClass && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="p-6 bg-purple-50 rounded-3xl border border-purple-100 flex items-center gap-4"
+          >
+            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
+              <ChevronRight className="w-5 h-5 text-[#6f42c1] transform animate-bounce" />
+            </div>
+            <p className="text-xs font-bold text-purple-700 leading-relaxed">
+              হাজিরা শুরু করতে অনুগ্রহ করে উপরের তালিকা থেকে একটি ক্লাস নির্বাচন করুন।
+            </p>
+          </motion.div>
+        )}
       </div>
+
+      {/* Quick Footer Stats (Mock) */}
+      {selectedClass && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-md z-50">
+          <div className="bg-white/80 backdrop-blur-xl border border-white p-4 rounded-3xl shadow-2xl flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-purple-100 flex items-center justify-center">
+                 <Users className="w-5 h-5 text-[#6f42c1]" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">নির্বাচিত ক্লাস</p>
+                <p className="text-sm font-black text-gray-900">Class {selectedClass}</p>
+              </div>
+            </div>
+            <div className="h-10 w-[1px] bg-gray-100" />
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">মোট শিক্ষার্থী</p>
+                <p className="text-sm font-black text-[#6f42c1]">লোড হচ্ছে...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
