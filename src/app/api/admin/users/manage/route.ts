@@ -99,7 +99,8 @@ export async function POST(req: NextRequest) {
       tenant_id,
     });
 
-    // 4. Save to Firestore
+    // 4. Save to Firestore (Atomic Batch Write)
+    const batch = adminDb.batch();
     const profileData = {
       user_id: userRecord.uid,
       tenant_id,
@@ -111,20 +112,24 @@ export async function POST(req: NextRequest) {
       has_password: true,
       status: "approved",
       created_at: new Date().toISOString(),
-      extra_data: extra_data || {}, // Keep extra_data structured
+      updated_at: new Date().toISOString(),
+      extra_data: extra_data || {},
     };
     
-    delete (profileData as any).password;
+    // Global Reference
+    const globalRef = adminDb.collection("users").doc(userRecord.uid);
+    batch.set(globalRef, profileData);
 
-    // TOP-LEVEL USERS COLLECTION
-    await adminDb.collection("users").doc(userRecord.uid).set(profileData);
-
-    // TENANT SUBCOLLECTION
+    // Tenant Subcollection Reference
     let collectionName = "students";
     if (finalTargetRole === "teacher") collectionName = "teachers";
     if (finalTargetRole === "institute_admin") collectionName = "admins";
 
-    await adminDb.collection("tenants").doc(tenant_id).collection(collectionName).doc(userRecord.uid).set(profileData);
+    const subRef = adminDb.collection("tenants").doc(tenant_id).collection(collectionName).doc(userRecord.uid);
+    batch.set(subRef, profileData);
+
+    // Commit changes atomically
+    await batch.commit();
 
     // 5. Queue Sync to Google Sheets
     const syncType = finalTargetRole === "teacher" ? "TEACHER" : (finalTargetRole === "student" ? "STUDENT" : null);
@@ -182,19 +187,27 @@ export async function PUT(req: NextRequest) {
     if (normalizedTargetRole === "teacher") collectionName = "teachers";
     if (normalizedTargetRole === "institute_admin") collectionName = "admins";
 
-    const subRef = adminDb.collection("tenants").doc(tenant_id).collection(collectionName).doc(user_id);
     const globalRef = adminDb.collection("users").doc(user_id);
-    
+    const subRef = adminDb.collection("tenants").doc(tenant_id).collection(collectionName).doc(user_id);
+
     const finalUpdates = {
       ...updates,
       updated_at: new Date().toISOString(),
     };
 
-    // 2. Update Both Firestore Locations
-    await Promise.all([
-      subRef.update(finalUpdates),
-      globalRef.update(finalUpdates).catch(() => console.warn("Global user doc missing for", user_id))
-    ]);
+    // 2. Update Both Firestore Locations (Atomic Batch)
+    const batch = adminDb.batch();
+    batch.update(subRef, finalUpdates);
+    batch.update(globalRef, finalUpdates);
+    
+    await batch.commit().catch(async (err) => {
+      // If global update fails because it doesn't exist, try updating subcollection only
+      if (err.code === 5 || err.message.includes("NOT_FOUND")) {
+        await subRef.update(finalUpdates);
+      } else {
+        throw err;
+      }
+    });
 
     // 3. Get fresh data for sync
     const updatedDoc = await subRef.get();
@@ -247,16 +260,30 @@ export async function DELETE(req: NextRequest) {
     if (normalizedTargetRole === "teacher") collectionName = "teachers";
     if (normalizedTargetRole === "institute_admin") collectionName = "admins";
 
-    const userRef = adminDb.collection("tenants").doc(tenant_id).collection(collectionName).doc(user_id);
+    const subRef = adminDb.collection("tenants").doc(tenant_id).collection(collectionName).doc(user_id);
+    const globalRef = adminDb.collection("users").doc(user_id);
 
-    // Soft delete
-    await userRef.update({
+    const deleteUpdates = {
       status: "deleted",
       deleted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    // Soft delete in both locations (Atomic Batch)
+    const batch = adminDb.batch();
+    batch.update(subRef, deleteUpdates);
+    batch.update(globalRef, deleteUpdates);
+    
+    await batch.commit().catch(async (err) => {
+      if (err.code === 5 || err.message.includes("NOT_FOUND")) {
+        await subRef.update(deleteUpdates);
+      } else {
+        throw err;
+      }
     });
 
     // Sync status update to sheet
-    const updatedDoc = await userRef.get();
+    const updatedDoc = await subRef.get();
     const syncType = normalizedTargetRole === "teacher" ? "TEACHER" : (normalizedTargetRole === "student" ? "STUDENT" : null);
     if (syncType) {
       await queueGoogleSheetSync(tenant_id, updatedDoc.data(), syncType).catch(e => console.error("Sheet sync failed", e));

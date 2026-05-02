@@ -3,21 +3,17 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ===============================================================
-    // Phase 3: Primitive Definitions (Hardened Helpers)
+    // GLOBAL HELPERS
     // ===============================================================
     
-    function isValidId(id) { 
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    function isSignedIn() {
+      return request.auth != null;
     }
-    
-    function incoming() { return request.resource.data; }
-    function existing() { return resource.data; }
-    function isSignedIn() { return request.auth != null; }
-    
+
     function isSuperAdmin() {
       return isSignedIn() && (
-        request.auth.token.email.lower() in ["hello@muradkhank31.com", "muradkhan31@gmail.com"] ||
-        request.auth.token.role == "super_admin"
+        request.auth.token.role == "super_admin" ||
+        request.auth.token.email.lower() in ["hello@muradkhank31.com", "muradkhan31@gmail.com"]
       );
     }
 
@@ -33,75 +29,89 @@ service cloud.firestore {
       return isSignedIn() && (isSuperAdmin() || getTenantId() == tenantId);
     }
 
-    function isInstitutionAdmin(tenantId) {
+    function isInstituteAdmin(tenantId) {
       return isSuperAdmin() || (isMemberOfTenant(tenantId) && getRole() == "institute_admin");
     }
 
+    function isTeacher(tenantId) {
+      return isMemberOfTenant(tenantId) && getRole() == "teacher";
+    }
+
     // ===============================================================
-    // Global Safety Net & Super Admin Override
+    // SECURITY OVERRIDE (Super Admin)
     // ===============================================================
     match /{document=**} {
       allow read, write: if isSuperAdmin();
     }
 
     // ===============================================================
-    // Entity Validations
+    // SCHEMA VALIDATION (Lean & Robust)
     // ===============================================================
     
-    function isValidTenant(data) {
-      return data.keys().hasAll(['tenant_id', 'name', 'owner_email', 'status']) &&
-             data.tenant_id is string && data.tenant_id.size() <= 100 &&
-             data.name is string && data.name.size() <= 200 &&
-             data.owner_email is string && data.owner_email.size() <= 100 &&
-             data.status in ['active', 'suspended', 'pending'];
+    function isValidUserSchema(data) {
+      return data.keys().hasAll(['user_id', 'email', 'role']) &&
+             data.user_id is string &&
+             data.email is string &&
+             data.role is string;
     }
 
-    function isValidUser(data) {
-      return data.keys().hasAll(['user_id', 'email', 'role', 'status']) &&
-             data.user_id is string && data.user_id.size() <= 100 &&
-             data.email is string && data.email.size() <= 100 &&
-             data.role in ['super_admin', 'institute_admin', 'teacher', 'student'] &&
-             data.status in ['approved', 'pending', 'blocked'];
+    function isValidTenantSchema(data) {
+      return data.keys().hasAll(['tenant_id', 'name']) &&
+             data.tenant_id is string &&
+             data.name is string;
     }
 
     // ===============================================================
-    // Collection Rules
+    // COLLECTION RULES
     // ===============================================================
 
+    // Tenants
     match /tenants/{tenantId} {
-      allow read: if isSuperAdmin() || isMemberOfTenant(tenantId);
-      allow create: if isSuperAdmin() || (isSignedIn() && isValidTenant(incoming()) && incoming().tenant_id == tenantId);
-      allow update: if isSuperAdmin() || (isInstitutionAdmin(tenantId) && isValidTenant(incoming()) && incoming().tenant_id == tenantId);
+      allow read: if isMemberOfTenant(tenantId);
+      allow create: if isSuperAdmin() || (isSignedIn() && isValidTenantSchema(request.resource.data));
+      allow update: if isInstitutionAdmin(tenantId);
       allow delete: if isSuperAdmin();
 
-      match /teachers/{teacherId} {
-        allow read: if isSuperAdmin() || isMemberOfTenant(tenantId);
-        allow create, update: if isSuperAdmin() || isInstitutionAdmin(tenantId);
-        allow delete: if isSuperAdmin();
+      // Subcollections
+      match /admins/{id} { allow read, write: if isInstitutionAdmin(tenantId); }
+      match /teachers/{id} { allow read, write: if isInstitutionAdmin(tenantId); }
+      match /students/{id} { 
+        allow read: if isMemberOfTenant(tenantId);
+        allow write: if isInstitutionAdmin(tenantId) || isTeacher(tenantId);
       }
-
-      match /students/{studentId} {
-        allow read: if isSuperAdmin() || isMemberOfTenant(tenantId);
-        allow create, update: if isSuperAdmin() || isInstitutionAdmin(tenantId) || (isMemberOfTenant(tenantId) && getRole() == "teacher");
-        allow delete: if isSuperAdmin();
-      }
+      
+      // Attendance & Data
+      match /attendance_logs/{id} { allow read, write: if isMemberOfTenant(tenantId); }
+      match /settings/{id} { allow read, write: if isInstitutionAdmin(tenantId); }
     }
 
+    // Global User Profiles
     match /users/{userId} {
       allow read: if isSuperAdmin() || request.auth.uid == userId || (isSignedIn() && getTenantId() == resource.data.tenant_id);
-      allow create: if isSuperAdmin() || (isSignedIn() && request.auth.uid == userId && isValidUser(incoming()));
-      allow update: if isSuperAdmin() || (request.auth.uid == userId && isValidUser(incoming()));
+      allow create: if isSuperAdmin() || (isSignedIn() && request.auth.uid == userId && isValidUserSchema(request.resource.data));
+      allow update: if isSuperAdmin() || (request.auth.uid == userId) || (isSignedIn() && isInstitutionAdmin(resource.data.tenant_id));
       allow delete: if isSuperAdmin();
     }
 
-    match /broadcasts/{broadcastId} {
+    // System Config
+    match /broadcasts/{id} {
       allow read: if isSignedIn();
       allow write: if isSuperAdmin();
     }
 
-    match /payments/{paymentId} {
-       allow read: if isSuperAdmin() || (isSignedIn() && (incoming().tenant_id == request.auth.token.tenant_id || existing().tenant_id == request.auth.token.tenant_id));
-       allow write: if isSignedIn(); // Add more strict validation here if needed
+    match /sms_history/{id} {
+      allow read: if isSuperAdmin() || isInstitutionAdmin(getTenantId());
+      allow write: if isSuperAdmin();
+    }
+
+    match /payments/{id} {
+      allow read: if isSuperAdmin() || (isSignedIn() && (resource.data.tenant_id == getTenantId() || request.resource.data.tenant_id == getTenantId()));
+      allow write: if isSignedIn();
+    }
+    
+    match /session_codes/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
   }
 }
