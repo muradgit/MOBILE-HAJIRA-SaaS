@@ -34,6 +34,7 @@ import { DataTable } from "@/src/components/shared/DataTable";
 import { SlideOverForm } from "@/src/components/shared/SlideOverForm";
 import { UserData, Tenant } from "@/src/lib/types";
 import { cn } from "@/src/lib/utils";
+import { normalizeRole } from "@/src/lib/auth-utils";
 
 /**
  * Super Admin - Global User Management Module
@@ -69,7 +70,7 @@ export default function UserManagement() {
 
   // 1. Fetch Tenants for Mapping and Selects
   useEffect(() => {
-    if (userData?.role !== "super_admin") return;
+    if (normalizeRole(userData?.role) !== "super_admin") return;
 
     const fetchTenants = async () => {
       try {
@@ -96,7 +97,7 @@ export default function UserManagement() {
 
   // 2. Real-time Users Fetch (Total Collection for SuperAdmin)
   useEffect(() => {
-    if (userData?.role !== "super_admin") return;
+    if (normalizeRole(userData?.role) !== "super_admin") return;
 
     try {
       // For SuperAdmin, we fetch everything across all tenants
@@ -226,7 +227,7 @@ export default function UserManagement() {
     </div>
   );
 
-  if (userData?.role !== "super_admin") return (
+  if (normalizeRole(userData?.role) !== "super_admin") return (
     <div className="flex flex-col items-center justify-center p-12 text-center space-y-4">
       <ShieldAlert className="w-16 h-16 text-red-500" />
       <h2 className="text-2xl font-black text-gray-900 font-bengali">অ্যাক্সেস ডিনাইড</h2>

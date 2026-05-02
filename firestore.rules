@@ -21,19 +21,27 @@ service cloud.firestore {
       );
     }
 
+    function getTenantId() {
+      return request.auth.token.tenant_id;
+    }
+
+    function getRole() {
+      return request.auth.token.role;
+    }
+
     function isMemberOfTenant(tenantId) {
-      return isSignedIn() && request.auth.token.tenant_id == tenantId;
+      return isSignedIn() && (isSuperAdmin() || getTenantId() == tenantId);
     }
 
     function isInstitutionAdmin(tenantId) {
-      return isMemberOfTenant(tenantId) && request.auth.token.role == "institute_admin";
+      return isSuperAdmin() || (isMemberOfTenant(tenantId) && getRole() == "institute_admin");
     }
 
     // ===============================================================
-    // Global Safety Net
+    // Global Safety Net & Super Admin Override
     // ===============================================================
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if isSuperAdmin();
     }
 
     // ===============================================================
@@ -74,14 +82,14 @@ service cloud.firestore {
 
       match /students/{studentId} {
         allow read: if isSuperAdmin() || isMemberOfTenant(tenantId);
-        allow create, update: if isSuperAdmin() || isInstitutionAdmin(tenantId) || (isMemberOfTenant(tenantId) && request.auth.token.role == "teacher");
+        allow create, update: if isSuperAdmin() || isInstitutionAdmin(tenantId) || (isMemberOfTenant(tenantId) && getRole() == "teacher");
         allow delete: if isSuperAdmin();
       }
     }
 
     match /users/{userId} {
-      allow read: if isSuperAdmin() || request.auth.uid == userId;
-      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
+      allow read: if isSuperAdmin() || request.auth.uid == userId || (isSignedIn() && getTenantId() == resource.data.tenant_id);
+      allow create: if isSuperAdmin() || (isSignedIn() && request.auth.uid == userId && isValidUser(incoming()));
       allow update: if isSuperAdmin() || (request.auth.uid == userId && isValidUser(incoming()));
       allow delete: if isSuperAdmin();
     }
