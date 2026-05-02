@@ -31,7 +31,21 @@ export default function AdminSettingsPage() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
   
-  // Form States for each section
+  // General Info Form State
+  const [generalInfo, setGeneralInfo] = useState({
+    name: "",
+    nameBN: "",
+    eiin: "",
+    googleSheetId: "",
+    address: "",
+    phone: "",
+    website: "",
+    academicLevels: [] as string[]
+  });
+
+  const [savingGeneral, setSavingGeneral] = useState(false);
+
+  // Form States for each list section
   const [inputs, setInputs] = useState({
     class: "",
     department: "",
@@ -39,7 +53,7 @@ export default function AdminSettingsPage() {
     shift: ""
   });
   
-  const [saving, setSaving] = useState({
+  const [savingLists, setSavingLists] = useState({
     class: false,
     department: false,
     session: false,
@@ -52,7 +66,18 @@ export default function AdminSettingsPage() {
 
     const unsub = onSnapshot(doc(db, "tenants", tenantId), (docSnap) => {
       if (docSnap.exists()) {
-        setTenant(docSnap.data() as Tenant);
+        const data = docSnap.data() as Tenant;
+        setTenant(data);
+        setGeneralInfo({
+          name: data.name || "",
+          nameBN: data.nameBN || "",
+          eiin: data.eiin || "",
+          googleSheetId: data.googleSheetId || "",
+          address: data.address || "",
+          phone: data.admin_mobile || "",
+          website: data.website || "",
+          academicLevels: data.academicLevels || []
+        });
       } else {
         console.error("Tenant document not found");
       }
@@ -66,6 +91,31 @@ export default function AdminSettingsPage() {
     return () => unsub();
   }, [tenantId]);
 
+  const handleSaveGeneralInfo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tenantId) return;
+
+    setSavingGeneral(true);
+    try {
+      await updateDoc(doc(db, "tenants", tenantId), {
+        name: generalInfo.name,
+        nameBN: generalInfo.nameBN,
+        eiin: generalInfo.eiin,
+        googleSheetId: generalInfo.googleSheetId,
+        address: generalInfo.address,
+        admin_mobile: generalInfo.phone,
+        website: generalInfo.website,
+        academicLevels: generalInfo.academicLevels,
+        updated_at: new Date().toISOString()
+      });
+      toast.success("প্রতিষ্ঠান তথ্য সফলভাবে আপডেট করা হয়েছে");
+    } catch (error: any) {
+      toast.error("আপডেট করতে ব্যর্থ: " + error.message);
+    } finally {
+      setSavingGeneral(false);
+    }
+  };
+
   // Unified handler to add an item to an array field in the tenant document
   const handleAddItem = async (field: keyof typeof inputs, collectionName: "classes" | "departments" | "sessions" | "shifts") => {
     const value = inputs[field].trim();
@@ -78,7 +128,7 @@ export default function AdminSettingsPage() {
       return;
     }
 
-    setSaving(prev => ({ ...prev, [field]: true }));
+    setSavingLists(prev => ({ ...prev, [field]: true }));
     try {
       await updateDoc(doc(db, "tenants", tenantId), {
         [collectionName]: arrayUnion(value)
@@ -88,7 +138,7 @@ export default function AdminSettingsPage() {
     } catch (error: any) {
       toast.error("ভুল হয়েছে: " + error.message);
     } finally {
-      setSaving(prev => ({ ...prev, [field]: false }));
+      setSavingLists(prev => ({ ...prev, [field]: false }));
     }
   };
 
@@ -139,10 +189,10 @@ export default function AdminSettingsPage() {
           />
           <button 
             onClick={() => handleAddItem(field, collectionName)}
-            disabled={saving[field] || !inputs[field].trim()}
+            disabled={savingLists[field] || !inputs[field].trim()}
             className="bg-[#6f42c1] text-white p-3 rounded-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center w-12"
           >
-            {saving[field] ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+            {savingLists[field] ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
           </button>
         </div>
 
@@ -214,17 +264,81 @@ export default function AdminSettingsPage() {
       </div>
 
       {/* Main Settings Responsive Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-10 grow pb-10">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 grow pb-10">
         
-        {/* Classes Manager */}
-        <SettingsSection 
-          title="ক্লাস (Classes)" 
-          icon={GraduationCap} 
-          field="class" 
-          collectionName="classes"
-          placeholder="ক্লাসের নাম লিখুন (উদা: Class 10)"
-          items={tenant?.classes || []}
-        />
+        {/* General Institute Info Form */}
+        <div className="lg:col-span-1">
+          <Card title="প্রতিষ্ঠান সাধারণ তথ্য" icon={Settings} className="h-full">
+            <form onSubmit={handleSaveGeneralInfo} className="space-y-6">
+               <div className="space-y-4">
+                  <InputGroup 
+                    label="প্রতিষ্ঠানের নাম (বাংলা)" 
+                    value={generalInfo.nameBN} 
+                    onChange={(v: string) => setGeneralInfo(p => ({ ...p, nameBN: v }))} 
+                    placeholder="উদা: আমাদের স্কুল ও কলেজ"
+                  />
+                  <InputGroup 
+                    label="Institute Name (English)" 
+                    value={generalInfo.name} 
+                    onChange={(v: string) => setGeneralInfo(p => ({ ...p, name: v }))} 
+                    placeholder="e.g. Our School & College"
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <InputGroup 
+                      label="EIIN" 
+                      value={generalInfo.eiin} 
+                      onChange={(v: string) => setGeneralInfo(p => ({ ...p, eiin: v }))} 
+                      placeholder="EIIN Number"
+                    />
+                    <InputGroup 
+                      label="Sheet ID" 
+                      value={generalInfo.googleSheetId} 
+                      onChange={(v: string) => setGeneralInfo(p => ({ ...p, googleSheetId: v }))} 
+                      placeholder="Spreadsheet ID"
+                    />
+                  </div>
+                  <InputGroup 
+                    label="ঠিকানা" 
+                    value={generalInfo.address} 
+                    onChange={(v: string) => setGeneralInfo(p => ({ ...p, address: v }))} 
+                    placeholder="গ্রাম, ডাকঘর, থানা, জেলা"
+                  />
+                  <InputGroup 
+                    label="মোবাইল ফোন" 
+                    value={generalInfo.phone} 
+                    onChange={(v: string) => setGeneralInfo(p => ({ ...p, phone: v }))} 
+                    placeholder="০১৭XXXXXXXX"
+                  />
+                  <InputGroup 
+                    label="ওয়েবসাইট (ঐচ্ছিক)" 
+                    value={generalInfo.website} 
+                    onChange={(v: string) => setGeneralInfo(p => ({ ...p, website: v }))} 
+                    placeholder="https://institute.gov.bd"
+                  />
+               </div>
+
+               <button 
+                  type="submit"
+                  disabled={savingGeneral}
+                  className="w-full bg-[#6f42c1] text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:shadow-xl hover:shadow-purple-500/20 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+               >
+                  {savingGeneral ? <Loader2 className="w-5 h-5 animate-spin" /> : "সেভ করুন"}
+               </button>
+            </form>
+          </Card>
+        </div>
+
+        {/* Data Lists Management */}
+        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Classes Manager */}
+          <SettingsSection 
+            title="ক্লাস (Classes)" 
+            icon={GraduationCap} 
+            field="class" 
+            collectionName="classes"
+            placeholder="ক্লাসের নাম লিখুন (উদা: Class 10)"
+            items={tenant?.classes || []}
+          />
 
         {/* Departments Manager */}
         <SettingsSection 
@@ -257,6 +371,7 @@ export default function AdminSettingsPage() {
         />
 
       </div>
+    </div>
 
       {/* Instructional / Guidance Card */}
       <div className="bg-white border border-purple-100 p-8 rounded-[2rem] shadow-sm flex flex-col md:flex-row items-center gap-8 animate-in fade-in slide-in-from-bottom-2 duration-1000">
@@ -275,6 +390,23 @@ export default function AdminSettingsPage() {
 
       {/* Bottom Spacer for Mobile Nav */}
       <div className="h-10 lg:hidden" />
+    </div>
+  );
+}
+
+/** Helper Components */
+
+function InputGroup({ label, value, onChange, placeholder, type = "text" }: any) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">{label}</label>
+      <input 
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none transition-all font-bengali"
+      />
     </div>
   );
 }

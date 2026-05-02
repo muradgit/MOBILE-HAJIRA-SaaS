@@ -41,6 +41,8 @@ export interface Tenant {
   referral_link?: string;
   website?: string;
   phone?: string;
+  address?: string;
+  academicLevels?: string[];
   attendance_app_link?: string;
   attendance_app_pin?: string;
   owner_email?: string;

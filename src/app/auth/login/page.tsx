@@ -37,16 +37,19 @@ export default function LoginPage() {
 
       // Hybrid Login Logic: If identifier doesn't contain '@', it's a username
       if (!email.includes("@")) {
-        const { collection, query, where, getDocs, limit } = await import("firebase/firestore");
-        const q = query(collection(db, "users"), where("username", "==", email), limit(1));
-        const querySnapshot = await getDocs(q);
+        const resolveRes = await fetch("/api/auth/resolve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: email }),
+        });
         
-        if (querySnapshot.empty) {
-          throw new Error("এই ইউজার আইডিটি খুঁজে পাওয়া যায়নি।");
+        if (!resolveRes.ok) {
+          const errData = await resolveRes.json();
+          throw new Error(errData.message || "এই ইউজার আইডিটি খুঁজে পাওয়া যায়নি।");
         }
         
-        const userData = querySnapshot.docs[0].data() as UserData;
-        finalEmail = userData.email || `${email}_${userData.tenant_id}@internal.com`.toLowerCase();
+        const { email: resolvedEmail } = await resolveRes.json();
+        finalEmail = resolvedEmail;
       }
 
       const result = await signInWithEmailAndPassword(auth, finalEmail, password);

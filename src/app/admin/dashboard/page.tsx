@@ -168,9 +168,41 @@ export default function AdminDashboard() {
     { name: "সেটিংস", desc: "Institute Profile", icon: Settings, path: "/admin/settings", color: "bg-gray-50 text-gray-600" },
   ];
 
+  const isOnboardingPending = !tenant?.googleSheetId || !tenant?.eiin;
+
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-10 animate-in fade-in zoom-in duration-500 pb-20">
       
+      {/* 0. Onboarding Alert */}
+      <AnimatePresence>
+        {isOnboardingPending && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-amber-600 text-white p-6 sm:p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl shadow-amber-900/10">
+              <div className="flex items-center gap-5">
+                <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0">
+                  <AlertCircle className="w-8 h-8 text-white" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-xl font-black font-bengali">অনবোর্ডিং অসম্পূর্ণ!</h3>
+                  <p className="text-xs font-medium text-amber-50 font-bengali opacity-90">আপনার প্রতিষ্ঠানের EIIN এবং গুগল শীট আইডি সেটআপ করা হয়নি। সিস্টেম সচল করতে এগুলো দ্রুত সেটআপ করুন।</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => router.push("/admin/settings")}
+                className="whitespace-nowrap px-8 py-4 bg-white text-amber-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-amber-50 transition-all flex items-center gap-2 group"
+              >
+                অনবোর্ডিং সম্পূর্ণ করুন <ArrowUpRight className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 1. Hero Welcome Section */}
       <div className="bg-[#6f42c1] rounded-[3rem] p-10 sm:p-14 text-white relative overflow-hidden shadow-2xl shadow-purple-900/15">
         <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-[80px] -mr-32 -mt-32 shrink-0 pointer-events-none" />

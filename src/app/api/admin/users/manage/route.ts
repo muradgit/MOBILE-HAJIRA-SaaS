@@ -183,6 +183,14 @@ export async function PUT(req: NextRequest) {
       delete updates.password;
     }
 
+    // 2. Update Custom Claims if role changed
+    if (updates.role) {
+      await adminAuth.setCustomUserClaims(user_id, {
+        role: normalizeRole(updates.role),
+        tenant_id: tenant_id,
+      });
+    }
+
     let collectionName = "students";
     if (normalizedTargetRole === "teacher") collectionName = "teachers";
     if (normalizedTargetRole === "institute_admin") collectionName = "admins";
