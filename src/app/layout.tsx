@@ -28,8 +28,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${notoBengali.variable} ${montserrat.variable}`}>
-      <body className="font-bengali antialiased">
+    <html lang="en" className={`${notoBengali.variable} ${montserrat.variable}`} suppressHydrationWarning>
+      <body className="font-bengali antialiased" suppressHydrationWarning>
         <ClientLayout>{children}</ClientLayout>
         <Toaster position="top-center" richColors />
       </body>
