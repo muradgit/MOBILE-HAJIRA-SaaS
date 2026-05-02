@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
       await queueGoogleSheetSync(tenant_id, profileData, syncType).catch(e => console.error("Sheet sync failed", e));
     }
 
-    return successResponse({ success: true, user_id: userRecord.uid });
+    return successResponse({ success: true, user_id: userRecord.uid, requiresRefresh: true });
   } catch (error: any) {
     console.error("[Admin User Manage] POST Error:", error);
     return errorResponse(error.message, 500);

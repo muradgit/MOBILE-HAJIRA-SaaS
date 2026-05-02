@@ -29,7 +29,7 @@ service cloud.firestore {
       return isSignedIn() && (isSuperAdmin() || getTenantId() == tenantId);
     }
 
-    function isInstituteAdmin(tenantId) {
+    function isInstitutionAdmin(tenantId) {
       return isSuperAdmin() || (isMemberOfTenant(tenantId) && getRole() == "institute_admin");
     }
 

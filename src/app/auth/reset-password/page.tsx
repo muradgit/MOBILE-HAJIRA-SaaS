@@ -23,7 +23,6 @@ function ResetPasswordForm() {
   React.useEffect(() => {
     // Fallback URL parsing: Absolute source of truth
     const code = new URLSearchParams(window.location.search).get('oobCode');
-    console.log("oobCode detected:", code);
     setOobCode(code);
     setIsInitializing(false);
   }, []);
@@ -111,12 +110,6 @@ function ResetPasswordForm() {
         </div>
 
         <Card className="p-8 border-none shadow-2xl shadow-purple-500/5 bg-white/80 backdrop-blur-xl rounded-3xl">
-          {/* Debug Box (only shown when oobCode exists for testing) */}
-          {oobCode && (
-            <div className="mb-4 p-2 bg-gray-100 rounded text-[9px] font-mono text-gray-500 text-left break-all">
-              <strong>DEBUG oobCode:</strong> {oobCode}
-            </div>
-          )}
           {errorMsg ? (
             <div className="space-y-6 py-4">
               <div className="flex justify-center">
@@ -127,11 +120,6 @@ function ResetPasswordForm() {
               <div className="space-y-2">
                 <h2 className="text-xl font-bold text-gray-900">ভুল হয়েছে!</h2>
                 <p className="text-sm text-gray-500 font-bengali">{errorMsg}</p>
-                {firebaseError && (
-                  <div className="mt-2 p-2 bg-red-50 border border-red-100 rounded text-[10px] font-mono text-red-600 text-left break-all">
-                    <strong>Firebase Debug:</strong> {firebaseError}
-                  </div>
-                )}
               </div>
               <button 
                 onClick={() => {

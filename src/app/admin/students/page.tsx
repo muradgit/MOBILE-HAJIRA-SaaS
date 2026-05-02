@@ -108,6 +108,10 @@ export default function StudentsPage() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "শিক্ষার্থী যোগ করতে ব্যর্থ হয়েছে");
 
+      if (result.requiresRefresh) {
+        await auth.currentUser?.getIdToken(true);
+      }
+
       toast.success("শিক্ষার্থীর প্রোফাইল সফলভাবে তৈরি করা হয়েছে।");
       setIsAdding(false);
       setFormData({ name: "", identifier: "", identifierType: "email", password: "", class: "", section: "", phone: "", student_id: "" });

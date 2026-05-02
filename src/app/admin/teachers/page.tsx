@@ -95,6 +95,10 @@ export default function TeachersPage() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "শিক্ষক যোগ করতে ব্যর্থ হয়েছে");
 
+      if (result.requiresRefresh) {
+        await auth.currentUser?.getIdToken(true);
+      }
+
       toast.success("শিক্ষককে প্রোফাইল সফলভাবে তৈরি করা হয়েছে।");
       setIsAdding(false);
       setFormData({ name: "", identifier: "", identifierType: "email", password: "" });
