@@ -30,6 +30,22 @@
         "status": { "type": "string", "enum": ["approved", "pending", "blocked"] }
       },
       "required": ["user_id", "email", "role"]
+    },
+    "TeacherClass": {
+      "title": "TeacherClass",
+      "description": "Classes assigned to or created by a teacher",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "teacher_id": { "type": "string" },
+        "name": { "type": "string" },
+        "nameBN": { "type": "string" },
+        "section": { "type": "string" },
+        "studentCount": { "type": "number" },
+        "created_by": { "type": "string" },
+        "type": { "type": "string", "enum": ["assigned", "self-created"] }
+      },
+      "required": ["teacher_id", "name"]
     }
   },
   "firestore": {
@@ -48,6 +64,10 @@
     "/tenants/{tenantId}/students/{studentId}": {
       "schema": "User",
       "description": "Subcollection for student quick lookup"
+    },
+    "/tenants/{tenantId}/teacher_classes/{classId}": {
+      "schema": "TeacherClass",
+      "description": "Classes managed by teachers within a tenant"
     }
   }
 }

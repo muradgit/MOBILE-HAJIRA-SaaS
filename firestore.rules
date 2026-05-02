@@ -61,6 +61,13 @@ service cloud.firestore {
              data.name is string;
     }
 
+    function isValidTeacherClassSchema(data) {
+      return data.keys().hasAll(['teacher_id', 'name']) &&
+             data.teacher_id is string &&
+             data.name is string &&
+             data.name.size() <= 128;
+    }
+
     // ===============================================================
     // COLLECTION RULES
     // ===============================================================
@@ -78,6 +85,13 @@ service cloud.firestore {
       match /students/{id} { 
         allow read: if isMemberOfTenant(tenantId);
         allow write: if isInstitutionAdmin(tenantId) || isTeacher(tenantId);
+      }
+      
+      match /teacher_classes/{classId} {
+        allow read: if isMemberOfTenant(tenantId) && (isInstitutionAdmin(tenantId) || resource.data.teacher_id == request.auth.uid);
+        allow create: if isMemberOfTenant(tenantId) && (isInstitutionAdmin(tenantId) || isTeacher(tenantId)) && isValidTeacherClassSchema(request.resource.data);
+        allow update: if isMemberOfTenant(tenantId) && (isInstitutionAdmin(tenantId) || (resource.data.teacher_id == request.auth.uid && isValidTeacherClassSchema(request.resource.data)));
+        allow delete: if isMemberOfTenant(tenantId) && (isInstitutionAdmin(tenantId) || resource.data.teacher_id == request.auth.uid);
       }
       
       // Attendance & Data
