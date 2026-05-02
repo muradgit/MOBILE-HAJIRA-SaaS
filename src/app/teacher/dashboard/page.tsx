@@ -25,6 +25,7 @@ import { normalizeRole } from "@/src/lib/auth-utils";
 /**
  * Teacher Dashboard - MOBILE-HAJIRA SaaS
  * Main portal for teachers to manage classes, view stats, and take attendance.
+ * Refined for perfect responsiveness and no card overlapping.
  */
 
 // Mock stats - in a real-world scenario, these would be fetched based on teacher_id
@@ -65,7 +66,7 @@ const QUICK_ACTIONS = [
     subtitle: "Take Attendance",
     icon: PlusCircle,
     href: "/teacher/attendance",
-    color: "bg-[#6f42c1] text-white shadow-purple-200",
+    color: "bg-[#6f42c1] text-white shadow-purple-600/20",
   },
   {
     title: "আমার শিক্ষার্থী",
@@ -158,35 +159,36 @@ export default function TeacherDashboard() {
   const teacherName = userData.name || userData.nameBN || "সম্মানিত শিক্ষক";
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 font-bengali">
+    <div className="min-h-screen bg-gray-50 pb-24 font-bengali overflow-x-hidden">
       {/* Welcome Header */}
-      <div className="bg-[#6f42c1] text-white pt-12 pb-24 px-6 rounded-b-[3rem] shadow-2xl relative overflow-hidden">
-        {/* Background Decorations */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
-        <div className="absolute top-1/2 left-0 w-40 h-40 bg-purple-400/20 rounded-full blur-2xl -ml-20"></div>
+      <div className="bg-[#6f42c1] text-white pt-12 pb-32 px-6 rounded-b-[3.5rem] shadow-2xl relative overflow-hidden">
+        {/* Background Decorations - Lowered Z-index to ensure they stay back */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32 -z-0"></div>
+        <div className="absolute top-1/2 left-0 w-40 h-40 bg-purple-400/20 rounded-full blur-2xl -ml-20 -z-0"></div>
         
-        <div className="relative z-10 max-w-4xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2">
+        <div className="relative z-10 max-w-5xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+          <div className="space-y-3">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-md rounded-full border border-white/10"
             >
-              <Award className="w-4 h-4 text-yellow-300" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-purple-100">Verified Teacher</span>
+              <Award className="w-4 h-4 text-yellow-200" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-purple-100">Verified Educator</span>
             </motion.div>
-            <h1 className="text-3xl md:text-4xl font-black tracking-tight leading-tight">
-              স্বাগতম, <br className="md:hidden" />
-              <span className="text-purple-200">{teacherName}</span> {nActiveRole === 'teacher' ? 'স্যার' : ''}
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight leading-tight">
+              স্বাগতম, <br className="sm:hidden" />
+              <span className="text-purple-200 underline decoration-white/20 decoration-4 underline-offset-4">{teacherName}</span> {nActiveRole === 'teacher' ? 'স্যার' : ''}
             </h1>
-            <p className="text-purple-100 text-sm md:text-base opacity-80 font-medium">
-              আপনার ড্যাশবোর্ড এখন আপ-টু-ডেট। আজকের কাজগুলো শুরু করুন।
+            <p className="text-purple-100 text-sm md:text-lg opacity-90 font-medium max-w-lg">
+              মোবাইল-হাজিরায় আপনাকে স্বাগতম। আজকের উপস্থিতি এবং ক্লাসের তথ্যগুলো দ্রুত যাচাই করে নিন।
             </p>
           </div>
           
-          <div className="flex -space-x-3">
+          {/* Profile Section with better mobile layout */}
+          <div className="flex items-center -space-x-4">
              {userData.profile_image ? (
-                <div className="w-14 h-14 rounded-2xl border-4 border-[#6f42c1] overflow-hidden bg-white shadow-xl">
+                <div className="w-16 h-16 rounded-3xl border-4 border-[#6f42c1] overflow-hidden bg-white shadow-2xl">
                   <img 
                     src={userData.profile_image} 
                     alt="profile" 
@@ -194,8 +196,8 @@ export default function TeacherDashboard() {
                   />
                 </div>
              ) : (
-               [1,2,3,4].map(i => (
-                 <div key={i} className="w-12 h-12 rounded-2xl border-4 border-[#6f42c1] overflow-hidden bg-purple-200 shadow-xl">
+               [1,2,3].map(i => (
+                 <div key={i} className="w-12 h-12 md:w-14 md:h-14 rounded-3xl border-4 border-[#6f42c1] overflow-hidden bg-purple-200 shadow-xl">
                    <img 
                       src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${i * 123 + (userData.user_id || '')}`} 
                       alt="avatar" 
@@ -204,17 +206,18 @@ export default function TeacherDashboard() {
                  </div>
                ))
              )}
-             <div className="w-12 h-12 rounded-2xl border-4 border-[#6f42c1] bg-white flex items-center justify-center text-[#6f42c1] font-black text-xs shadow-xl">
+             <div className="w-12 h-12 md:w-14 md:h-14 rounded-3xl border-4 border-[#6f42c1] bg-white flex items-center justify-center text-[#6f42c1] font-black text-xs shadow-2xl relative z-10">
                {userData.teacher_id || "ID"}
              </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-6 -mt-12 space-y-8">
+      {/* Main Content - Improved spacing and responsive grids */}
+      <div className="max-w-5xl mx-auto px-6 -mt-20 space-y-12 relative z-20">
         
-        {/* Statistics Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Statistics Grid - Prevents overlap by using robust grid and padding */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {DASHBOARD_STATS.map((stat, index) => {
             const Icon = stat.icon;
             return (
@@ -223,24 +226,27 @@ export default function TeacherDashboard() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
+                className="h-full"
               >
-                <Card className="p-4 md:p-5 h-full flex flex-col justify-between border-transparent hover:border-purple-200 transition-all hover:shadow-xl hover:-translate-y-1">
-                  <div className="space-y-3">
-                    <div className={cn("p-3 rounded-2xl inline-flex", stat.color)}>
-                      <Icon className="w-5 h-5 md:w-6 md:h-6" />
+                <Card className="p-5 md:p-6 h-full flex flex-col justify-between border-none shadow-xl shadow-purple-900/5 hover:shadow-2xl hover:-translate-y-1 transition-all">
+                  <div className="space-y-4">
+                    <div className={cn("p-4 rounded-2xl inline-flex", stat.color)}>
+                      <Icon className="w-6 h-6" />
                     </div>
                     <div>
-                      <p className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest leading-tight">
+                      <p className="text-[10px] md:text-[11px] font-black text-gray-400 uppercase tracking-widest leading-tight">
                         {stat.label}
                       </p>
-                      <h3 className="text-xl md:text-2xl font-black text-gray-900 mt-0.5">
+                      <h3 className="text-2xl md:text-3xl font-black text-gray-900 mt-1">
                         {stat.value}
                       </h3>
                     </div>
                   </div>
-                  <div className="mt-3 pt-3 border-t border-gray-50 flex items-center gap-1.5">
-                    <TrendingUp className="w-3 h-3 text-emerald-500" />
-                    <span className="text-[9px] md:text-[10px] font-bold text-gray-400">
+                  <div className="mt-4 pt-4 border-t border-gray-50 flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-full bg-emerald-50 flex items-center justify-center">
+                      <TrendingUp className="w-3 h-3 text-emerald-500" />
+                    </div>
+                    <span className="text-[10px] md:text-[11px] font-bold text-gray-400">
                       {stat.trend}
                     </span>
                   </div>
@@ -248,41 +254,44 @@ export default function TeacherDashboard() {
               </motion.div>
             );
           })}
-        </div>
+        </section>
 
-        {/* Quick Actions */}
-        <section className="space-y-4">
-          <h2 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-            <ArrowUpRight className="w-4 h-4 text-purple-600" /> সরাসরি কাজ করুন
-          </h2>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Quick Actions - Larger touch targets and cleaner grid */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-6 bg-[#6f42c1] rounded-full"></div>
+            <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest">
+               সরাসরি কাজ করুন
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-6">
              {QUICK_ACTIONS.map((action, index) => {
                const Icon = action.icon;
                return (
-                 <Link href={action.href} key={action.title}>
+                 <Link href={action.href} key={action.title} className="block">
                     <motion.div
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       className={cn(
-                        "p-6 rounded-[2.5rem] flex flex-col items-center text-center gap-3 border-2 transition-all cursor-pointer h-full",
+                        "p-6 rounded-[2.5rem] flex flex-col items-center text-center gap-4 border-2 transition-all cursor-pointer h-full shadow-lg",
                         action.color
                       )}
                     >
                       <div className={cn(
-                        "p-4 rounded-2xl",
-                        action.href === "/teacher/attendance" ? "bg-white/20" : "bg-purple-50"
+                        "p-5 rounded-2xl transition-transform group-hover:scale-110",
+                        action.href === "/teacher/attendance" ? "bg-white/20" : "bg-purple-100/50"
                       )}>
-                         <Icon className="w-6 h-6" />
+                         <Icon className="w-7 h-7" />
                       </div>
-                      <div>
+                      <div className="space-y-1">
                         <h3 className={cn(
-                          "font-black text-sm whitespace-nowrap",
+                          "font-black text-base",
                           action.href === "/teacher/attendance" ? "text-white" : "text-gray-900"
                         )}>
                           {action.title}
                         </h3>
                         <p className={cn(
-                          "text-[9px] font-bold uppercase tracking-widest opacity-60",
+                          "text-[10px] font-bold uppercase tracking-widest opacity-70",
                           action.href === "/teacher/attendance" ? "text-purple-100" : "text-gray-400"
                         )}>
                           {action.subtitle}
@@ -295,47 +304,50 @@ export default function TeacherDashboard() {
           </div>
         </section>
 
-        {/* Middle Section: Recent Activity & Calendar */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Bottom Section: Activity & Tips */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           
-          {/* Recent Activity */}
-          <section className="lg:col-span-2 space-y-4">
+          {/* Recent Activity - Takes more space on desktop */}
+          <section className="lg:col-span-2 space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-purple-600" /> সাম্প্রতিক হাজিরা
-              </h2>
-              <Link href="/teacher/reports" className="text-[10px] font-black text-[#6f42c1] uppercase tracking-widest hover:underline">
-                সব দেখুন
+              <div className="flex items-center gap-2">
+                <div className="w-1 h-6 bg-[#6f42c1] rounded-full"></div>
+                <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest">
+                   সাম্প্রতিক হাজিরা
+                </h2>
+              </div>
+              <Link href="/teacher/reports" className="text-[11px] font-black text-[#6f42c1] uppercase tracking-widest hover:underline underline-offset-4">
+                সব রিপোর্ট দেখুন
               </Link>
             </div>
             
-            <div className="space-y-3">
+            <div className="space-y-4">
               {RECENT_ACTIVITY.map((activity) => (
-                <Card key={activity.id} className="p-4 border-transparent hover:bg-gray-50 transition-colors group">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-purple-50 flex items-center justify-center group-hover:bg-white transition-colors">
-                        <BookOpen className="w-6 h-6 text-[#6f42c1]" />
+                <Card key={activity.id} className="p-5 border-transparent shadow-sm hover:shadow-xl hover:bg-white transition-all group">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-5">
+                      <div className="w-14 h-14 rounded-2xl bg-purple-50 group-hover:bg-[#6f42c1] flex items-center justify-center transition-all">
+                        <BookOpen className="w-7 h-7 text-[#6f42c1] group-hover:text-white transition-colors" />
                       </div>
-                      <div>
-                        <h4 className="font-black text-gray-900 text-sm md:text-base leading-tight">
+                      <div className="space-y-1">
+                        <h4 className="font-black text-gray-900 text-base md:text-lg leading-tight">
                           {activity.class}
                         </h4>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] font-black text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded uppercase">
+                        <div className="flex items-center flex-wrap gap-2">
+                          <span className="text-[10px] font-black text-purple-600 bg-purple-100 px-2 py-1 rounded-md uppercase tracking-wider">
                             {activity.subject}
                           </span>
-                          <span className="text-[11px] text-gray-400 font-medium">
-                            {activity.date}
+                          <span className="text-[11px] text-gray-400 font-medium flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> {activity.date}
                           </span>
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                       <span className="block text-lg font-black text-gray-900 leading-none">
+                    <div className="flex sm:flex-col items-center sm:items-end justify-between bg-gray-50 sm:bg-transparent p-3 sm:p-0 rounded-xl">
+                       <span className="block text-2xl font-black text-gray-900 leading-none">
                          {activity.count}
                        </span>
-                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter shrink-0">Students</span>
+                       <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">শিক্ষার্থী</span>
                     </div>
                   </div>
                 </Card>
@@ -343,27 +355,30 @@ export default function TeacherDashboard() {
             </div>
           </section>
 
-          {/* Side Info/Card */}
-          <section className="space-y-4">
-            <h2 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-purple-600" /> গুরুত্বপূর্ণ টিপস
-            </h2>
-            <Card className="p-6 bg-gradient-to-br from-[#6f42c1] to-[#8a5fd6] border-none text-white overflow-hidden relative">
-               <div className="absolute -right-6 -bottom-6 opacity-10">
+          {/* Sidebar: Motivational / Info Card */}
+          <section className="space-y-6">
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-6 bg-[#6f42c1] rounded-full"></div>
+              <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest">
+                 গুরুত্বপূর্ণ টিপস
+              </h2>
+            </div>
+            <Card className="p-8 bg-gradient-to-br from-[#6f42c1] to-[#8a5fd6] border-none text-white overflow-hidden relative shadow-2xl shadow-purple-900/40">
+               <div className="absolute -right-6 -bottom-6 opacity-20 transform rotate-12">
                  <Award className="w-32 h-32" />
                </div>
-               <div className="relative z-10 space-y-4">
-                  <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-white" />
+               <div className="relative z-10 space-y-6">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10 shadow-inner">
+                    <TrendingUp className="w-6 h-6 text-white" />
                   </div>
-                  <div className="space-y-1">
-                    <h3 className="font-black text-lg leading-tight">ডিজিটাল আইডি কার্ড</h3>
-                    <p className="text-xs text-purple-100 font-medium leading-relaxed opacity-90">
-                      শিক্ষার্থীদের ডিজিটাল আইডি কার্ড ব্যবহার করে দ্রুত হাজিরা নিশ্চিত করুন। এতে ভুলের সম্ভাবনা একদমই নেই।
+                  <div className="space-y-2">
+                    <h3 className="font-black text-xl leading-tight">ডিজিটাল আইডি কার্ড</h3>
+                    <p className="text-sm text-purple-100 font-medium leading-relaxed opacity-90 font-bengali">
+                      শিক্ষার্থীদের ডিজিটাল আইডি কার্ড ব্যবহার করে দ্রুত হাজিরা নিশ্চিত করুন। এটি নির্ভুল এবং আধুনিক পদ্ধতি।
                     </p>
                   </div>
-                  <Link href="/teacher/id-cards" className="block w-full py-3 bg-white text-[#6f42c1] rounded-2xl font-black text-xs text-center uppercase tracking-widest shadow-xl shadow-purple-900/40 hover:bg-purple-50 transition-colors">
-                    তৈরি করুন
+                  <Link href="/teacher/id-cards" className="flex items-center justify-center w-full py-4 bg-white text-[#6f42c1] rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-purple-50 transition-all hover:scale-[1.02] active:scale-95">
+                    তৈরি করতে ক্লিক করুন
                   </Link>
                </div>
             </Card>
@@ -371,15 +386,15 @@ export default function TeacherDashboard() {
         </div>
       </div>
 
-      {/* Floating Action Button */}
-      <div className="fixed bottom-6 right-6 lg:hidden z-50">
+      {/* Floating Action Button for Mobile */}
+      <div className="fixed bottom-8 right-8 lg:hidden z-50">
          <Link href="/teacher/attendance">
            <motion.button
              whileHover={{ scale: 1.1 }}
              whileTap={{ scale: 0.9 }}
-             className="w-16 h-16 bg-[#6f42c1] text-white rounded-full flex items-center justify-center shadow-2xl shadow-purple-600/40"
+             className="w-18 h-18 bg-[#6f42c1] text-white rounded-full flex items-center justify-center shadow-2xl shadow-purple-900/40 border-4 border-white/20 backdrop-blur-sm"
            >
-             <PlusCircle className="w-8 h-8" />
+             <PlusCircle className="w-9 h-9" />
            </motion.button>
          </Link>
       </div>
