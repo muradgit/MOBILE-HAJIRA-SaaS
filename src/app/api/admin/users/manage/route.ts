@@ -101,6 +101,14 @@ export async function POST(req: NextRequest) {
 
     // 4. Save to Firestore (Atomic Batch Write)
     const batch = adminDb.batch();
+
+    // Extract common fields for easy access and root storage
+    const extra = extra_data || {};
+    const studentClass = extra.class || body.class || null;
+    const studentSection = extra.section || body.section || null;
+    const studentSession = extra.session || body.session || null;
+    const studentDepartment = extra.department || body.department || null;
+
     const profileData = {
       user_id: userRecord.uid,
       tenant_id,
@@ -113,7 +121,14 @@ export async function POST(req: NextRequest) {
       status: "approved",
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      extra_data: extra_data || {},
+      // Root level access for queries (Attendance etc)
+      class: studentClass,
+      section: studentSection,
+      session: studentSession,
+      department: studentDepartment,
+      phone: extra.phone || body.phone || null,
+      student_id: extra.student_id || body.student_id || null,
+      extra_data: extra,
     };
     
     // Global Reference
@@ -198,13 +213,25 @@ export async function PUT(req: NextRequest) {
     const globalRef = adminDb.collection("users").doc(user_id);
     const subRef = adminDb.collection("tenants").doc(tenant_id).collection(collectionName).doc(user_id);
 
+    // 2. Update Both Firestore Locations (Atomic Batch)
+    const batch = adminDb.batch();
+
+    const extra = updates.extra_data || {};
     const finalUpdates = {
       ...updates,
       updated_at: new Date().toISOString(),
+      // Ensure root level fields are synced if they exist in updates or extra_data
+      class: updates.class || extra.class || undefined,
+      section: updates.section || extra.section || undefined,
+      session: updates.session || extra.session || undefined,
+      department: updates.department || extra.department || undefined,
+      phone: updates.phone || extra.phone || undefined,
+      student_id: updates.student_id || extra.student_id || undefined,
     };
 
-    // 2. Update Both Firestore Locations (Atomic Batch)
-    const batch = adminDb.batch();
+    // Clean undefined
+    Object.keys(finalUpdates).forEach(key => finalUpdates[key] === undefined && delete finalUpdates[key]);
+
     batch.update(subRef, finalUpdates);
     batch.update(globalRef, finalUpdates);
     

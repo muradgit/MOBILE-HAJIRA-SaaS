@@ -13,9 +13,12 @@ import {
   Smartphone,
   BookOpen,
   Filter,
-  UserPlus
+  UserPlus,
+  Loader2,
+  Layers,
+  Calendar
 } from "lucide-react";
-import { collection, query, onSnapshot, where } from "firebase/firestore";
+import { collection, query, onSnapshot, where, doc } from "firebase/firestore";
 import { db, auth } from "@/src/lib/firebase";
 import { useUserStore } from "@/src/store/useUserStore";
 import { Card } from "@/src/components/ui/Card";
@@ -24,6 +27,7 @@ import { SlideOverForm } from "@/src/components/shared/SlideOverForm";
 import { toast } from "sonner";
 import { cn } from "@/src/lib/utils";
 import Image from "next/image";
+import { Tenant } from "@/src/lib/types";
 
 interface Student {
   user_id: string;
@@ -32,6 +36,8 @@ interface Student {
   email: string;
   class: string;
   section: string;
+  session: string;
+  department: string;
   phone: string;
   status: "pending" | "approved" | "deleted";
   created_at: string;
@@ -41,6 +47,7 @@ interface Student {
 export default function StudentsPage() {
   const { user, tenantId } = useUserStore();
   const [students, setStudents] = useState<Student[]>([]);
+  const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -50,10 +57,12 @@ export default function StudentsPage() {
   const [formData, setFormData] = useState({
     name: "",
     identifier: "",
-    identifierType: "email" as "email" | "username",
-    password: "", // Security: No hardcoded passwords
+    identifierType: "username" as "email" | "username",
+    password: "", 
     class: "",
     section: "",
+    session: "",
+    department: "",
     phone: "",
     student_id: "",
   });
@@ -61,23 +70,38 @@ export default function StudentsPage() {
   useEffect(() => {
     if (!tenantId) return;
 
+    // 1. Fetch Students
     const q = query(
       collection(db, "users"),
       where("tenant_id", "==", tenantId),
-      where("role", "==", "student") // SSOT Role
+      where("role", "==", "student") 
     );
 
-    const unsub = onSnapshot(q, (snap) => {
-      const docs = snap.docs.map(d => d.data() as Student);
+    const unsubStudents = onSnapshot(q, (snap) => {
+      const docs = snap.docs.map(d => ({ user_id: d.id, ...d.data() } as Student));
       setStudents(docs.filter(s => s.status !== "deleted"));
       setLoading(false);
     });
 
-    return () => unsub();
+    // 2. Fetch Tenant Settings for dropdowns
+    const unsubTenant = onSnapshot(doc(db, "tenants", tenantId), (snap) => {
+      if (snap.exists()) {
+        setTenant(snap.data() as Tenant);
+      }
+    });
+
+    return () => {
+      unsubStudents();
+      unsubTenant();
+    };
   }, [tenantId]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!formData.class) return toast.error("ক্লাস নির্বাচন করুন");
+    if (!formData.session) return toast.error("সেশন নির্বাচন করুন");
+
     setSubmitting(true);
 
     try {
@@ -95,10 +119,12 @@ export default function StudentsPage() {
           name: formData.name,
           identifier: formData.identifier,
           identifierType: formData.identifierType,
-          password: formData.password,
+          password: formData.password || "123456", // Default password if empty
           extra_data: {
             class: formData.class,
             section: formData.section,
+            session: formData.session,
+            department: formData.department,
             phone: formData.phone,
             student_id: formData.student_id
           }
@@ -108,13 +134,20 @@ export default function StudentsPage() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "শিক্ষার্থী যোগ করতে ব্যর্থ হয়েছে");
 
-      if (result.requiresRefresh) {
-        await auth.currentUser?.getIdToken(true);
-      }
-
       toast.success("শিক্ষার্থীর প্রোফাইল সফলভাবে তৈরি করা হয়েছে।");
       setIsAdding(false);
-      setFormData({ name: "", identifier: "", identifierType: "email", password: "", class: "", section: "", phone: "", student_id: "" });
+      setFormData({ 
+        name: "", 
+        identifier: "", 
+        identifierType: "username", 
+        password: "", 
+        class: "", 
+        section: "", 
+        session: "",
+        department: "",
+        phone: "", 
+        student_id: "" 
+      });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -162,12 +195,25 @@ export default function StudentsPage() {
       )
     },
     {
-      header: "ক্লাস ও সেকশন",
+      header: "ক্লাস ও সেশন",
       accessorKey: "class",
       cell: (s: Student) => (
-        <div>
-          <p className="text-sm font-bold text-gray-700">{s.class || "N/A"}</p>
-          <p className="text-xs text-gray-400 font-medium">{s.section || "N/A"} Section</p>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-black uppercase tracking-widest border border-blue-100">
+              {s.class || "N/A"}
+            </span>
+            <span className="text-xs font-bold text-gray-700">{s.section ? `${s.section} সেকশন` : ""}</span>
+          </div>
+          <div className="flex items-center gap-2 text-[10px] text-gray-400 font-medium tracking-tight">
+            <Calendar className="w-3 h-3" /> {s.session || "N/A"} 
+            {s.department && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-gray-200" />
+                <Layers className="w-3 h-3 ml-1" /> {s.department}
+              </>
+            )}
+          </div>
         </div>
       )
     },
@@ -264,32 +310,73 @@ export default function StudentsPage() {
                   type="text" 
                   value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
-                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all"
+                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all font-bengali"
                   placeholder="যেমন: আরিয়ান আহমেদ"
                 />
               </div>
 
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ক্লাস</label>
-                <input 
+                <select 
                   required
-                  type="text" 
                   value={formData.class}
                   onChange={e => setFormData({...formData, class: e.target.value})}
-                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all"
-                  placeholder="যেমন: Six"
-                />
+                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all font-bengali appearance-none"
+                >
+                  <option value="">ক্লাস নির্বাচন করুন</option>
+                  {tenant?.classes?.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">বিভাগ / গ্রুপ</label>
+                <select 
+                  value={formData.department}
+                  onChange={e => setFormData({...formData, department: e.target.value})}
+                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all font-bengali appearance-none"
+                >
+                  <option value="">প্রযোজ্য নয়</option>
+                  {tenant?.departments?.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">সেকশন</label>
-                <input 
-                  type="text" 
+                <select 
                   value={formData.section}
                   onChange={e => setFormData({...formData, section: e.target.value})}
-                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all"
-                  placeholder="যেমন: A"
-                />
+                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all font-bengali appearance-none"
+                >
+                  <option value="">সেকশন নির্বাচন করুন</option>
+                  {["A", "B", "C", "D", "E"].map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                  {tenant?.shifts?.map(s => (
+                    <option key={s} value={s}>{s} Shift</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">সেশন</label>
+                <select 
+                  required
+                  value={formData.session}
+                  onChange={e => setFormData({...formData, session: e.target.value})}
+                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all font-bengali appearance-none"
+                >
+                  <option value="">সেশন নির্বাচন করুন</option>
+                  {tenant?.sessions?.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                  {!tenant?.sessions?.length && (
+                    <option value={new Date().getFullYear().toString()}>{new Date().getFullYear()}</option>
+                  )}
+                </select>
               </div>
 
               <div className="space-y-1">
@@ -299,7 +386,7 @@ export default function StudentsPage() {
                   type="text" 
                   value={formData.student_id}
                   onChange={e => setFormData({...formData, student_id: e.target.value})}
-                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all"
+                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all font-bengali"
                   placeholder="যেমন: 01"
                 />
               </div>
@@ -311,33 +398,33 @@ export default function StudentsPage() {
                   type="tel" 
                   value={formData.phone}
                   onChange={e => setFormData({...formData, phone: e.target.value})}
-                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all"
+                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all font-bengali"
                   placeholder="01712345678"
                 />
               </div>
 
               <div className="space-y-1 col-span-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">কিভাবে যুক্ত করবেন?</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">লগইন পদ্ধতি</label>
                 <div className="grid grid-cols-2 gap-2 bg-gray-100 p-1 rounded-xl">
                   <button
                     type="button"
-                    onClick={() => setFormData({ ...formData, identifierType: "email", identifier: "" })}
+                    onClick={() => setFormData({ ...formData, identifierType: "username" })}
                     className={cn(
-                      "py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                      "py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all font-bengali",
+                      formData.identifierType === "username" ? "bg-white text-blue-600 shadow-sm" : "text-gray-400"
+                    )}
+                  >
+                    আইডি দিয়ে
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, identifierType: "email" })}
+                    className={cn(
+                      "py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all font-bengali",
                       formData.identifierType === "email" ? "bg-white text-blue-600 shadow-sm" : "text-gray-400"
                     )}
                   >
                     ইমেইল দিয়ে
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, identifierType: "username", identifier: "" })}
-                    className={cn(
-                      "py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                      formData.identifierType === "username" ? "bg-white text-blue-600 shadow-sm" : "text-gray-400"
-                    )}
-                  >
-                    ইউজার আইডি দিয়ে
                   </button>
                 </div>
               </div>
@@ -351,8 +438,19 @@ export default function StudentsPage() {
                   type={formData.identifierType === "email" ? "email" : "text"} 
                   value={formData.identifier}
                   onChange={e => setFormData({...formData, identifier: e.target.value})}
-                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all"
+                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all font-bengali"
                   placeholder={formData.identifierType === "email" ? "student@institute.com" : "যেমন: student_001"}
+                />
+              </div>
+
+              <div className="space-y-1 col-span-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">পাসওয়ার্ড (ঐচ্ছিক)</label>
+                <input 
+                  type="password" 
+                  value={formData.password}
+                  onChange={e => setFormData({...formData, password: e.target.value})}
+                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none border-2 border-transparent focus:border-blue-600 transition-all font-bengali"
+                  placeholder="ডিফল্ট: 123456"
                 />
               </div>
            </div>
@@ -360,9 +458,14 @@ export default function StudentsPage() {
           <button 
             type="submit"
             disabled={submitting}
-            className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-blue-600/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
+            className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-blue-600/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-50 font-bengali"
           >
-            {submitting ? "প্রসেসিং..." : <Plus className="w-5 h-5" />} শিক্ষার্থী তৈরি করুন
+            {submitting ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <UserPlus className="w-5 h-5" />
+            )} 
+            শিক্ষার্থী তৈরি করুন
           </button>
         </form>
       </SlideOverForm>
