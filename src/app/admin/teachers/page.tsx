@@ -13,7 +13,8 @@ import {
   Mail,
   Shield,
   Clock,
-  ExternalLink
+  ExternalLink,
+  GraduationCap
 } from "lucide-react";
 import { collection, query, onSnapshot, doc, where } from "firebase/firestore";
 import { db, auth } from "@/src/lib/firebase";
@@ -24,6 +25,7 @@ import { SlideOverForm } from "@/src/components/shared/SlideOverForm";
 import { toast } from "sonner";
 import { cn } from "@/src/lib/utils";
 import Image from "next/image";
+import Link from "next/link";
 
 interface Teacher {
   user_id: string;
@@ -174,6 +176,14 @@ export default function TeachersPage() {
       accessorKey: "user_id",
       cell: (t: Teacher) => (
         <div className="flex items-center gap-2">
+           <Link 
+             href={`/admin/teachers/${t.user_id}/assign-classes`}
+             className="p-2 hover:bg-purple-50 text-gray-400 hover:text-purple-600 rounded-lg transition-colors flex items-center gap-1.5"
+             title="ক্লাস অ্যাসাইন করুন"
+           >
+             <GraduationCap className="w-4 h-4" />
+             <span className="text-[10px] font-black uppercase tracking-widest hidden lg:inline">Assign</span>
+           </Link>
            <button 
              onClick={() => handleDelete(t)}
              className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-colors"
