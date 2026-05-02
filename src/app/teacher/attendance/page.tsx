@@ -173,7 +173,10 @@ export default function AttendancePage() {
 
   const handleMethodClick = (methodName: string) => {
     if (!selectedClassId) {
-      toast.error("অনুগ্রহ করে আগে ক্লাস নির্বাচন করুন!");
+      toast.warning(`ক্লাস সিলেক্ট করুন (টেস্টিং মোড: ${methodName})`, {
+        description: "প্রোডাকশনে হাজিরা নিতে ক্লাস নির্বাচন বাধ্যতামূলক।",
+        duration: 3000,
+      });
       return;
     }
     toast.success(`${methodName} শুরু হচ্ছে...`);
@@ -182,6 +185,13 @@ export default function AttendancePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 font-bengali">
+      {/* Demo Mode Indicator (Only if no class selected) */}
+      {!selectedClassId && !loading && (
+        <div className="bg-amber-500 text-white text-[10px] font-black uppercase tracking-[0.2em] py-1.5 text-center sticky top-0 z-[100] shadow-sm">
+          Demo / Testing Mode Active
+        </div>
+      )}
+
       {/* Header Section */}
       <div className="bg-[#6f42c1] text-white pt-10 pb-16 px-6 rounded-b-[3rem] shadow-2xl shadow-purple-900/10 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
@@ -272,21 +282,19 @@ export default function AttendancePage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    whileHover={{ scale: selectedClassId ? 1.02 : 1 }}
-                    whileTap={{ scale: selectedClassId ? 0.98 : 1 }}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => handleMethodClick(method.title)}
                     className={cn(
-                      "group text-left p-5 rounded-[2rem] bg-white border-2 border-transparent transition-all relative overflow-hidden",
-                      selectedClassId 
-                        ? "shadow-sm hover:shadow-xl hover:border-[#6f42c1]/20 active:bg-gray-50 cursor-pointer" 
-                        : "opacity-60 grayscale cursor-not-allowed"
+                      "group text-left p-5 rounded-[2rem] bg-white border-2 border-transparent transition-all relative overflow-hidden shadow-sm hover:shadow-xl hover:border-[#6f42c1]/20 active:bg-gray-50 cursor-pointer",
+                      !selectedClassId && "opacity-90"
                     )}
                   >
                     <div className="flex items-start gap-4">
                       <div className={cn(
                         "p-4 rounded-2xl transition-colors shrink-0",
                         method.color,
-                        selectedClassId && `group-hover:${method.hoverColor.replace('hover:', '')} group-hover:text-white`
+                        "group-hover:bg-purple-600 group-hover:text-white"
                       )}>
                         <Icon className="w-6 h-6" />
                       </div>
