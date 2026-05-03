@@ -304,27 +304,46 @@ export async function DELETE(req: NextRequest) {
       updated_at: new Date().toISOString(),
     };
 
-    // Soft delete in both locations (Atomic Batch)
+    // 1. If Super Admin, Hard Delete from Firebase Auth
+    // This allows the identifier (email/username) to be reused immediately.
+    let authDeleted = false;
+    if (creatorRole === "super_admin") {
+      try {
+        await adminAuth.deleteUser(user_id);
+        authDeleted = true;
+      } catch (authErr: any) {
+        console.error("[Admin User Delete] Auth Deletion Failed:", authErr);
+        // If user not found in auth, we continue to cleanup Firestore
+        if (authErr.code !== "auth/user-not-found") {
+          return errorResponse("ইউজার অথেনটিকেশন থেকে ডিলিট করতে ব্যর্থ হয়েছে।", 500);
+        }
+      }
+    }
+
+    // 2. Soft delete in both Firestore locations (Atomic Batch)
     const batch = adminDb.batch();
     batch.update(subRef, deleteUpdates);
     batch.update(globalRef, deleteUpdates);
     
     await batch.commit().catch(async (err) => {
       if (err.code === 5 || err.message.includes("NOT_FOUND")) {
-        await subRef.update(deleteUpdates);
+        await subRef.update(deleteUpdates).catch(() => null);
       } else {
         throw err;
       }
     });
 
-    // Sync status update to sheet
+    // 3. Sync status update to sheet
     const updatedDoc = await subRef.get();
     const syncType = normalizedTargetRole === "teacher" ? "TEACHER" : (normalizedTargetRole === "student" ? "STUDENT" : null);
-    if (syncType) {
+    if (syncType && updatedDoc.exists) {
       await queueGoogleSheetSync(tenant_id, updatedDoc.data(), syncType).catch(e => console.error("Sheet sync failed", e));
     }
 
-    return successResponse({ success: true });
+    return successResponse({ 
+      success: true, 
+      message: authDeleted ? "ইউজারটি স্থায়ীভাবে ডিলিট করা হয়েছে।" : "ইউজারটিকে সফলভাবে ইনঅ্যাক্টিভ করা হয়েছে।" 
+    });
   } catch (error: any) {
     console.error("[Admin User Manage] DELETE Error:", error);
     return errorResponse(error.message, 500);

@@ -201,10 +201,24 @@ export default function UserManagement() {
     
     const toastId = toast.loading("ইউজার ডিলিট হচ্ছে...");
     try {
-      await deleteDoc(doc(db, "users", user.user_id));
-      toast.success("ইউজার স্থায়ীভাবে সরিয়ে ফেলা হয়েছে", { id: toastId });
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("অনুগ্রহ করে আবার লগইন করুন");
+
+      const res = await fetch(`/api/admin/users/manage?tenant_id=${user.tenant_id}&user_id=${user.user_id}&role=${user.role}`, {
+        method: "DELETE",
+        headers: { 
+          "Authorization": `Bearer ${token}`
+        }
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "ইউজার ডিলিট করতে ব্যর্থ হয়েছে");
+
+      toast.success(result.message || "ইউজার স্থায়ীভাবে সরিয়ে ফেলা হয়েছে", { id: toastId });
+      setIsDrawerOpen(false);
+      setSelectedUser(null);
     } catch (error: any) {
-      toast.error("ডিলিট ব্যর্থ: " + error.message, { id: toastId });
+      toast.error(error.message, { id: toastId });
     }
   };
 
