@@ -34,10 +34,10 @@ export default function LandingPage() {
         <div className="space-y-4 animate-in fade-in slide-in-from-top-10 duration-1000">
           <div className="inline-flex items-center gap-2 bg-purple-100/50 text-[#6f42c1] px-4 py-2 rounded-full border border-purple-200">
              <Zap className="w-4 h-4 fill-[#6f42c1]" />
-             <span className="text-[10px] font-black uppercase tracking-widest">রেজিস্ট্রেশনে ১০০ ক্রেডিট বোনাস!</span>
+             <span className="text-[10px] font-black uppercase tracking-widest">রেজিস্ট্রেশন করলেই ৩০ দিন ফ্রি এটেনডেন্স নিন</span>
           </div>
           <h1 className="text-4xl md:text-7xl font-black text-gray-900 font-bengali leading-[1.1] tracking-tight">
-            খাতা-কলমের যুগ শেষ, এক ক্লিকেই <span className="text-[#6f42c1]">স্মার্ট হাজিরা!</span>
+            খাতা-কলমের যুগ শেষ, এক <br /> ক্লিকেই <span className="text-[#6f42c1]">স্মার্ট হাজিরা!</span>
           </h1>
           <p className="text-lg md:text-xl text-gray-500 font-medium max-w-2xl mx-auto leading-relaxed font-bengali">
             মাত্র ২ মিনিটে ক্লাসের হাজিরা নিন, অটোমেটিক রিপোর্ট তৈরি করুন এবং জিরো-কস্ট স্টোরেজে ডাটা ব্যাকআপ রাখুন।

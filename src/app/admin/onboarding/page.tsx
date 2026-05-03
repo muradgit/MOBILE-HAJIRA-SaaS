@@ -20,8 +20,8 @@ import { useUserStore } from "@/src/store/useUserStore";
  * Specifically for setting up the Google Sheet backup.
  */
 export default function OnboardingPage() {
-  const { userData, loading: authLoading, tenant } = useAuth();
-  const { user, setUser } = useUserStore();
+  const { user: authUser, userData, loading: authLoading, tenant } = useAuth();
+  const { user: storeUser, setUser } = useUserStore();
   const router = useRouter();
   const [onboarding, setOnboarding] = useState(false);
 
@@ -33,15 +33,25 @@ export default function OnboardingPage() {
   }, [authLoading, tenant, router]);
 
   const handleSetupSystem = async () => {
-    if (!userData?.tenant_id || !userData?.email) return;
+    if (!userData?.tenant_id || !userData?.email) {
+      console.warn("[Onboarding] Missing user data:", { tenant_id: userData?.tenant_id, email: userData?.email });
+      toast.error("ইউজার ডাটা পাওয়া যায়নি। অনুগ্রহ করে আবার লগইন করুন।");
+      return;
+    }
     
     setOnboarding(true);
     const toastId = toast.loading("সিস্টেম সেটআপ হচ্ছে... গুগল শীট তৈরি করা হচ্ছে।");
     
     try {
+      const token = await authUser?.getIdToken();
+      if (!token) throw new Error("অনুগ্রহ করে আবার লগইন করুন (টোকেন পাওয়া যায়নি)");
+
       const response = await fetch("/api/onboarding/setup-sheet", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ 
           tenantId: userData.tenant_id, 
           adminEmail: userData.email 
@@ -52,8 +62,8 @@ export default function OnboardingPage() {
       
       if (response.ok) {
         // Manually update store to prevent hydration/stale data issues in dashboard
-        if (user) {
-          setUser({ ...user, googleSheetId: result.googleSheetId });
+        if (storeUser) {
+          setUser({ ...storeUser, googleSheetId: result.googleSheetId });
         }
         
         toast.success("অভিনন্দন! আপনার সিস্টেম এখন প্রস্তুত।", { id: toastId });
@@ -64,11 +74,12 @@ export default function OnboardingPage() {
         // Use a slight delay to ensure store and cache are synced
         setTimeout(() => {
           router.push("/admin/settings");
-        }, 100);
+        }, 500);
       } else {
         throw new Error(result.error || "সেটআপ ব্যর্থ হয়েছে");
       }
     } catch (error: any) {
+      console.error("[Onboarding] Error:", error);
       toast.error(error.message, { id: toastId });
     } finally {
       setOnboarding(false);
