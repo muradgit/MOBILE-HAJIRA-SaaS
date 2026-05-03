@@ -310,7 +310,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
               <div className="flex items-center gap-2 sm:gap-4">
                 <div className="hidden sm:flex flex-col text-right">
                   <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">
-                    নমস্কার
+                    স্বাগতম
                   </span>
                   <h2 className="text-sm font-black text-gray-900 truncate">
                     {userData.nameBN || userData.name}
