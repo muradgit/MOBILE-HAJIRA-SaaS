@@ -191,8 +191,9 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
       // 2. Redirect from Landing/Auth pages to Dashboard if already logged in and onboarding done
       if ((isLandingPage || isAuthPage) && (!isInstituteAdmin || !hasNoSheet)) {
+        const isPrivileged = ["super_admin", "institute_admin"].includes(nRole);
         const status = userData?.status?.toLowerCase() || "";
-        const isAllowed = ["active", "approved"].includes(status);
+        const isAllowed = isPrivileged || ["active", "approved"].includes(status);
         
         if (isAllowed) {
           const target = getDashboardRoute(activeRole);

@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Determine Email & Verification Status
     let finalEmail = identifier;
-    let emailVerified = false;
+    let emailVerified = true; // ALL admin-created users are auto-verified to prevent login blocks
 
     const isExplicitUsername = identifierType === "username";
     const isImplicitUsername = !identifierType && !identifier.includes("@");
@@ -72,7 +72,6 @@ export async function POST(req: NextRequest) {
     if (isExplicitUsername || isImplicitUsername) {
       // Shadow Email Pattern: identifier_tenantId@internal.com
       finalEmail = `${identifier}_${tenant_id}@internal.com`.toLowerCase();
-      emailVerified = true; // Auto-verify shadow emails
     }
 
     // Check if user already exists in auth

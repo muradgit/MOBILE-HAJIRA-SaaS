@@ -179,7 +179,17 @@ export default function UserManagement() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "ইউজার তৈরি ব্যর্থ");
 
-      toast.success("নতুন ইউজার তৈরি সফল হয়েছে", { id: toastId });
+      toast.success(
+        <div className="flex flex-col gap-2">
+          <span className="font-bold">সফলভাবে তৈরি হয়েছে!</span>
+          <div className="text-[10px] bg-white/10 p-2 rounded border border-white/20 space-y-1">
+            <p>ID: {createData.identifier}</p>
+            <p>Pass: {createData.password}</p>
+          </div>
+          <p className="text-[9px]">এই তথ্যগুলো ইউজারকে দিয়ে দিন।</p>
+        </div>,
+        { id: toastId, duration: 10000 }
+      );
       setIsCreateDrawerOpen(false);
       setCreateData({ 
         name: "", 
