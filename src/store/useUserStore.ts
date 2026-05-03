@@ -32,18 +32,34 @@ export const useUserStore = create<UserStoreState>((set) => ({
   setUser: (user) => set((state) => {
     const isSameUser = state.user?.user_id === user?.user_id;
     const normalizedRole = normalizeRole(user?.role);
+    
+    // Attempt to recover activeRole from localStorage if it's the same user or first load
+    let persistedActiveRole = null;
+    if (typeof window !== "undefined") {
+      persistedActiveRole = localStorage.getItem(`activeRole_${user?.user_id}`);
+    }
+
+    const nextActiveRole = isSameUser 
+      ? (state.activeRole || persistedActiveRole || normalizedRole) 
+      : (persistedActiveRole || normalizedRole);
+
     return { 
       user: user ? { ...user, role: normalizedRole } : null, 
       userRole: normalizedRole, 
-      // Only set activeRole from user.role if it's a new user login or was null
-      activeRole: isSameUser ? (state.activeRole || normalizedRole) : normalizedRole,
+      activeRole: nextActiveRole,
       tenantId: user?.tenant_id || null,
       isInitialized: true 
     };
   }),
 
   setRole: (role) => set({ userRole: normalizeRole(role) }),
-  setActiveRole: (activeRole) => set({ activeRole: normalizeRole(activeRole) }),
+  setActiveRole: (activeRole) => set((state) => {
+    const role = normalizeRole(activeRole);
+    if (typeof window !== "undefined" && state.user?.user_id) {
+       localStorage.setItem(`activeRole_${state.user.user_id}`, role || "");
+    }
+    return { activeRole: role };
+  }),
 
   setTenant: (tenantId) => set({ tenantId }),
 

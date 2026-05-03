@@ -309,7 +309,19 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                    <Bell className="w-5 h-5" />
                    <div className="absolute top-2 right-2 w-2 h-2 bg-[#6f42c1] rounded-full" />
                 </div>
-                <div className="relative profile-menu-container">
+                <div className="relative profile-menu-container flex items-center gap-2 sm:gap-4">
+                  {isDualRole && (
+                    <button 
+                      onClick={handleRoleSwitch}
+                      className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-purple-50 text-purple-600 rounded-xl border border-purple-100 hover:bg-purple-100 transition-all font-bengali"
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
+                        {activeRole === "teacher" ? "Teacher Mode" : "Admin Mode"}
+                      </span>
+                    </button>
+                  )}
+
                   <button 
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
                     className="flex items-center gap-2"
@@ -373,7 +385,9 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             <div className="p-8 pb-4 flex items-center justify-between border-b border-gray-50">
                <div className="flex flex-col">
                   <h3 className="text-lg font-black text-[#6f42c1] leading-none mb-1">MOBILE-HAJIRA</h3>
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{userData.role?.replace("_", " ")} Menu</span>
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    {(activeRole || userData.role)?.replace("_", " ")} Menu
+                  </span>
                </div>
                <button 
                  onClick={() => setIsSidebarOpen(false)}

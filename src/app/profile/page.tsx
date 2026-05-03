@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import Image from "next/image";
 import { useUserStore } from "@/src/store/useUserStore";
 import { normalizeRole } from "@/src/lib/auth-utils";
+import { motion } from "motion/react";
 
 export default function ProfilePage() {
   const { userData, user, loading } = useAuth();
@@ -235,38 +236,60 @@ export default function ProfilePage() {
 
                {/* Dual Role Assignment (For Admins Only) */}
                {canBeTeacher && !isAlreadyTeacher && (
-                 <div className="mt-4 pt-4 border-t border-gray-50">
+                 <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-6 pt-6 border-t border-gray-100"
+                 >
                     <button 
                       onClick={handleAssignAsTeacher}
                       disabled={promoting}
-                      className="w-full flex items-center justify-between p-4 bg-purple-50 hover:bg-purple-100 rounded-2xl group transition-all"
+                      className="w-full flex items-center justify-between p-5 bg-purple-50 hover:bg-purple-100 rounded-[2rem] group transition-all border border-purple-100 shadow-sm hover:shadow-md"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-white rounded-xl text-purple-600 shadow-sm">
-                          <Users className="w-4 h-4" />
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 bg-white rounded-2xl text-purple-600 shadow-sm border border-purple-50 group-hover:scale-110 transition-transform">
+                          <Users className="w-5 h-5" />
                         </div>
                         <div className="text-left">
-                          <p className="text-xs font-black text-gray-900">নিজেকে শিক্ষক হিসেবে যুক্ত করুন</p>
-                          <p className="text-[10px] text-gray-500 font-medium">Assign yourself to Teacher list</p>
+                          <p className="text-sm font-black text-gray-900">নিজেকে শিক্ষক হিসেবে যুক্ত করুন</p>
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Assign yourself to Teacher list</p>
                         </div>
                       </div>
-                      {promoting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-all" />}
+                      {promoting ? <Loader2 className="w-5 h-5 animate-spin text-purple-600" /> : <ChevronRight className="w-5 h-5 text-purple-400 group-hover:translate-x-1 transition-all" />}
                     </button>
-                 </div>
+                    <div className="mt-3 px-2 flex items-start gap-2">
+                       <AlertCircle className="w-3 h-3 text-purple-400 mt-0.5" />
+                       <p className="text-[10px] text-gray-400 font-medium">এটি আপনাকে এডমিন থাকা অবস্থায় ক্লাস হাজিরা নেয়ার সুবিধা দিবে।</p>
+                    </div>
+                 </motion.div>
                )}
 
                {isAlreadyTeacher && (
-                 <div className="mt-4 pt-4 border-t border-gray-50">
-                   <div className="flex items-center gap-3 p-4 bg-green-50 rounded-2xl">
-                     <div className="p-2 bg-white rounded-xl text-green-600 shadow-sm">
-                       <ShieldCheck className="w-4 h-4" />
-                     </div>
-                     <div className="text-left">
-                       <p className="text-xs font-black text-gray-900">আপনি একজন শিক্ষক হিসেবে যুক্ত আছেন</p>
-                       <p className="text-[10px] text-green-600 font-bold uppercase tracking-widest">Active Dual Role</p>
-                     </div>
-                   </div>
-                 </div>
+                 <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="mt-6 pt-6 border-t border-gray-100"
+                 >
+                    <div className="flex items-center gap-4 p-5 bg-emerald-50 rounded-[2rem] border border-emerald-100">
+                      <div className="p-3 bg-white rounded-2xl text-emerald-600 shadow-sm border border-emerald-50">
+                        <ShieldCheck className="w-5 h-5" />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-black text-gray-900">আপনি একজন শিক্ষক হিসেবে যুক্ত আছেন</p>
+                        <p className="text-[10px] text-emerald-600 font-black uppercase tracking-[0.2em] mt-1">Active Dual Role</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const nextRole = normalizedRole === "teacher" ? (userData?.role || "institute_admin") : "teacher";
+                        setActiveRole(nextRole);
+                        toast.success(`আপনি এখন ${nextRole === "teacher" ? "শিক্ষক" : "এডমিন"} ভিউতে আছেন`);
+                      }}
+                      className="w-full mt-3 py-3 px-4 bg-white border border-gray-100 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
+                    >
+                      <KeyRound className="w-3 h-3" /> সুইচ রোল (Switch Role)
+                    </button>
+                 </motion.div>
                )}
             </div>
           </Card>
