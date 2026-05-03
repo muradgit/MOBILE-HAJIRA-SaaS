@@ -63,7 +63,7 @@ export default function OnboardingPage() {
         
         // Use a slight delay to ensure store and cache are synced
         setTimeout(() => {
-          router.push("/admin/dashboard");
+          router.push("/admin/settings");
         }, 100);
       } else {
         throw new Error(result.error || "সেটআপ ব্যর্থ হয়েছে");

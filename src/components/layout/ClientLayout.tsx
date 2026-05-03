@@ -176,21 +176,33 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     return "/";
   };
 
-  // Maintenance: Handle redirect from root or auth pages to dashboard if logged in
+  // Navigation Guard & Onboarding Redirect
   useEffect(() => {
-    if (!loading && auth.currentUser && (isLandingPage || isAuthPage)) {
-      // Check if user is blocked or pending
-      const status = userData?.status?.toLowerCase() || "";
-      const isAllowed = ["active", "approved"].includes(status);
-      
-      if (isAllowed) {
-        const target = getDashboardRoute(activeRole);
-        if (target !== "/" && target !== pathname) {
-          router.replace(target);
+    if (!loading && auth.currentUser) {
+      const nRole = normalizeRole(userData?.role || activeRole);
+      const isInstituteAdmin = nRole === "institute_admin";
+      const hasNoSheet = isInstituteAdmin && !tenant?.googleSheetId;
+
+      // 1. If Institute Admin and no Google Sheet -> Force Onboarding
+      if (isInstituteAdmin && hasNoSheet && pathname !== "/admin/onboarding") {
+        router.replace("/admin/onboarding");
+        return;
+      }
+
+      // 2. Redirect from Landing/Auth pages to Dashboard if already logged in and onboarding done
+      if ((isLandingPage || isAuthPage) && (!isInstituteAdmin || !hasNoSheet)) {
+        const status = userData?.status?.toLowerCase() || "";
+        const isAllowed = ["active", "approved"].includes(status);
+        
+        if (isAllowed) {
+          const target = getDashboardRoute(activeRole);
+          if (target !== "/" && target !== pathname) {
+            router.replace(target);
+          }
         }
       }
     }
-  }, [loading, userData, isLandingPage, isAuthPage, router, pathname, activeRole]);
+  }, [loading, userData, tenant, isLandingPage, isAuthPage, router, pathname, activeRole]);
 
   // Logout Handler
   const handleLogout = async () => {
@@ -242,7 +254,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     <div className="h-screen w-full flex flex-col overflow-hidden bg-[#F8F9FA]">
       
       {/* 1. TOP HEADER (Professional Overlay) */}
-      <header className="sticky top-0 h-20 bg-white border-b border-gray-100 flex items-center justify-between px-6 sm:px-10 z-[100] shrink-0">
+      <header className="sticky top-0 h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-6 sm:px-10 z-[100] shrink-0">
           {!userData ? (
             /* LOGGED OUT HEADER */
             <>

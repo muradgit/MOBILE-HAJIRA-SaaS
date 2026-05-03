@@ -16,73 +16,75 @@ export function useAuth() {
 
   useEffect(() => {
     let unsubUser: (() => void) | null = null;
+    let unsubTenant: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       setUserAuth(firebaseUser);
       
-      // Clean up previous user listener if any
-      if (unsubUser) {
-        unsubUser();
-        unsubUser = null;
-      }
+      // Clean up previous listeners
+      if (unsubUser) { unsubUser(); unsubUser = null; }
+      if (unsubTenant) { unsubTenant(); unsubTenant = null; }
 
       if (firebaseUser) {
         const userDocRef = doc(db, "users", firebaseUser.uid);
         
-        // Initial check for existence (handling race with registration)
-        try {
-          const userDoc = await getDoc(userDocRef);
-          if (!userDoc.exists()) {
-             // Handle automatic creation if missing
-             const pendingDataStr = typeof window !== "undefined" ? localStorage.getItem("pendingRegistration") : null;
-             const pendingData = pendingDataStr ? JSON.parse(pendingDataStr) : {};
-             
-             // If we have pending registration data, use that role. Otherwise default.
-             const role = normalizeRole(pendingData.role || "student");
-             const isInstituteAdmin = role === "institute_admin";
-             const tenant_id = isInstituteAdmin ? `tenant_${firebaseUser.uid}` : (pendingData.tenant_id || null);
+        // Initial setup for missing docs (handling race with registration)
+        const checkUserDoc = async () => {
+          try {
+            const userDoc = await getDoc(userDocRef);
+            if (!userDoc.exists()) {
+              const pendingDataStr = typeof window !== "undefined" ? localStorage.getItem("pendingRegistration") : null;
+              const pendingData = pendingDataStr ? JSON.parse(pendingDataStr) : {};
+              
+              const role = normalizeRole(pendingData.role || "student");
+              const isInstituteAdmin = role === "institute_admin";
+              const tenant_id = isInstituteAdmin ? `tenant_${firebaseUser.uid}` : (pendingData.tenant_id || null);
 
-             await setDoc(userDocRef, {
-                user_id: firebaseUser.uid,
-                email: firebaseUser.email,
-                name: pendingData.name || firebaseUser.displayName || "New User",
-                nameBN: pendingData.nameBN || "নতুন ইউজার",
-                role,
-                tenant_id,
-                status: (isInstituteAdmin || role === "super_admin") ? "approved" : "pending",
-                created_at: new Date().toISOString()
-             }, { merge: true });
+              await setDoc(userDocRef, {
+                  user_id: firebaseUser.uid,
+                  email: firebaseUser.email,
+                  name: pendingData.name || firebaseUser.displayName || "New User",
+                  nameBN: pendingData.nameBN || "নতুন ইউজার",
+                  role,
+                  tenant_id,
+                  status: (isInstituteAdmin || role === "super_admin") ? "approved" : "pending",
+                  created_at: new Date().toISOString()
+              }, { merge: true });
+            }
+          } catch (e) {
+            console.error("Auth check error:", e);
           }
-        } catch (e) {
-          console.error("Auth check error:", e);
-        }
+        };
 
-        // Setup snapshot listener for real-time sync
+        checkUserDoc();
+
         unsubUser = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data() as UserData;
-            
-            // CRITICAL: Resolve Role - Prioritize stored role, fallback to super_admin if email matches
             const normalizedRole = normalizeRole(data.role || (verifySuperAdmin(firebaseUser.email) ? "super_admin" : ""));
-            
             const resolvedUserData = { ...data, role: normalizedRole };
             setUser(resolvedUserData);
             
             if (data.tenant_id) {
               setTenant(data.tenant_id);
-              const tenantDocRef = doc(db, "tenants", data.tenant_id);
-              getDoc(tenantDocRef).then((tenantSnap) => {
-                if (tenantSnap.exists()) {
-                  setLocalTenant(tenantSnap.data() as Tenant);
-                }
-              });
+              // Setup tenant listener if not already listening to this tenant
+              if (!unsubTenant) {
+                unsubTenant = onSnapshot(doc(db, "tenants", data.tenant_id), (tSnap) => {
+                  if (tSnap.exists()) {
+                    setLocalTenant(tSnap.data() as Tenant);
+                  }
+                  setLoading(false);
+                }, () => setLoading(false));
+              }
+            } else {
+              setLoading(false);
             }
           } else {
             setUser(null);
             setTenant(null);
             setLocalTenant(null);
+            setLoading(false);
           }
-          setLoading(false);
         }, (error) => {
           console.error("User snapshot error:", error);
           setLoading(false);
@@ -99,6 +101,7 @@ export function useAuth() {
     return () => {
       unsubscribeAuth();
       if (unsubUser) unsubUser();
+      if (unsubTenant) unsubTenant();
     };
   }, [setUser, setTenant]);
 
