@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Users, 
   QrCode, 
@@ -20,7 +20,9 @@ import {
   CheckSquare,
   Square,
   Save,
-  Clock
+  Clock,
+  FlipHorizontal,
+  Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useUserStore } from "@/src/store/useUserStore";
@@ -28,6 +30,7 @@ import { Card } from "@/src/components/ui/Card";
 import { toast } from "sonner";
 import { cn } from "@/src/lib/utils";
 import { db, auth } from "@/src/lib/firebase";
+import { Html5Qrcode } from "html5-qrcode";
 import { 
   collection, 
   query, 
@@ -174,6 +177,12 @@ export default function AttendancePage() {
   const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // QR Scanner State
+  const [scannerActive, setScannerActive] = useState(false);
+  const [lastScanned, setLastScanned] = useState<string | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const QR_SCANNER_ID = "qr-reader";
+
   const selectedClass = classes.find(c => c.id === selectedClassId);
 
   // Stats
@@ -185,8 +194,8 @@ export default function AttendancePage() {
 
   // Persistence
   useEffect(() => {
-    if (selectedClassId && attendanceMethod === "manual" && Object.keys(attendance).length > 0) {
-      const cacheKey = `att_cache_${selectedClassId}`;
+    if (selectedClassId && (attendanceMethod === "manual" || attendanceMethod === "qr") && Object.keys(attendance).length > 0) {
+      const cacheKey = `att_cache_${selectedClassId}_${attendanceMethod}`;
       localStorage.setItem(cacheKey, JSON.stringify({ 
         attendance, 
         studentNotes, 
@@ -195,6 +204,15 @@ export default function AttendancePage() {
       }));
     }
   }, [attendance, studentNotes, subject, selectedClassId, attendanceMethod]);
+
+  // QR Scanner Cleanup
+  useEffect(() => {
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(console.error);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     async function fetchAssignedClasses() {
@@ -235,13 +253,17 @@ export default function AttendancePage() {
 
     if (methodId === "manual") {
       setAttendanceMethod("manual");
-      await fetchStudentsForClass();
+      await fetchStudentsForClass(true);
+    } else if (methodId === "qr") {
+      setAttendanceMethod("qr");
+      await fetchStudentsForClass(false);
+      setTimeout(() => startQRScanner(), 500);
     } else {
       toast.success(`${methodName} শুরু হচ্ছে...`);
     }
   };
 
-  const fetchStudentsForClass = async () => {
+  const fetchStudentsForClass = async (defaultPresent: boolean = true) => {
     if (!tenantId || !selectedClass) return;
     
     setFetchingStudents(true);
@@ -283,8 +305,8 @@ export default function AttendancePage() {
 
       setStudents(fetchedStudents);
       
-      // Check for cached data
-      const cacheKey = `att_cache_${selectedClassId}`;
+      // Check for cached data (method specific)
+      const cacheKey = `att_cache_${selectedClassId}_${attendanceMethod || (defaultPresent ? 'manual' : 'qr')}`;
       const saved = localStorage.getItem(cacheKey);
       
       if (saved) {
@@ -298,10 +320,10 @@ export default function AttendancePage() {
           console.error("Cache parsing error:", e);
         }
       } else {
-        // Initialize all as present by default
+        // Initialize attendance
         const initialAttendance: Record<string, boolean> = {};
         fetchedStudents.forEach(s => {
-          initialAttendance[s.user_id] = true;
+          initialAttendance[s.user_id] = defaultPresent;
         });
         setAttendance(initialAttendance);
       }
@@ -310,6 +332,71 @@ export default function AttendancePage() {
       toast.error("শিক্ষার্থীদের তালিকা লোড করতে সমস্যা হয়েছে");
     } finally {
       setFetchingStudents(false);
+    }
+  };
+
+  const startQRScanner = async () => {
+    try {
+      const html5QrCode = new Html5Qrcode(QR_SCANNER_ID);
+      scannerRef.current = html5QrCode;
+      setScannerActive(true);
+
+      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+      
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        (decodedText) => {
+          handleQRScan(decodedText);
+        },
+        () => {
+          // Failure is ignored as it scans continuously
+        }
+      );
+    } catch (err: any) {
+      console.error("QR Scanner start error:", err);
+      toast.error("ক্যামেরা শুরু করতে সমস্যা হয়েছে: " + err.message);
+      setScannerActive(false);
+    }
+  };
+
+  const stopQRScanner = async () => {
+    if (scannerRef.current) {
+      try {
+        await scannerRef.current.stop();
+        scannerRef.current = null;
+        setScannerActive(false);
+      } catch (err) {
+        console.error("Stop scanner error:", err);
+      }
+    }
+  };
+
+  const handleQRScan = (decodedText: string) => {
+    // Look for matching student by user_id or student_id (Roll)
+    const matchedStudent = students.find(s => 
+      s.user_id === decodedText || 
+      s.student_id === decodedText
+    );
+
+    if (matchedStudent) {
+      if (attendance[matchedStudent.user_id]) {
+        // Already scanned, maybe show a subtler notification
+        return;
+      }
+
+      setAttendance(prev => ({ ...prev, [matchedStudent.user_id]: true }));
+      setLastScanned(matchedStudent.name);
+      toast.success(`${matchedStudent.name} (Roll: ${matchedStudent.student_id}) - উপস্থিত`, {
+        duration: 2000,
+        icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+      });
+
+      // Clear last scanned name after 3 seconds
+      setTimeout(() => setLastScanned(null), 3000);
+    } else {
+      // Not found in this class
+      toast.error("শিক্ষার্থী এই ক্লাসে অন্তর্ভুক্ত নয়!", { duration: 1500 });
     }
   };
 
@@ -376,10 +463,15 @@ export default function AttendancePage() {
       }
 
       // Clear cache on success
-      localStorage.removeItem(`att_cache_${selectedClassId}`);
+      localStorage.removeItem(`att_cache_${selectedClassId}_${attendanceMethod}`);
       
       toast.success(result.message || "হাজিরা সফলভাবে জমা দেওয়া হয়েছে!", { id: toastId });
       
+      // Stop scanner if active
+      if (attendanceMethod === "qr") {
+        stopQRScanner();
+      }
+
       // Delay reset for UX
       setTimeout(() => {
         setAttendanceMethod(null);
@@ -395,6 +487,8 @@ export default function AttendancePage() {
       setSubmitting(false);
     }
   };
+
+  const matchedAtClass = () => selectedClass?.nameBN || selectedClass?.name;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 font-bengali">
@@ -562,6 +656,135 @@ export default function AttendancePage() {
                 </div>
               )}
             </motion.div>
+          ) : attendanceMethod === "qr" ? (
+            <motion.div
+              key="qr-view"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="space-y-6 pb-40"
+            >
+              <div className="flex items-center justify-between">
+                <button 
+                  onClick={() => {
+                    stopQRScanner();
+                    setAttendanceMethod(null);
+                  }}
+                  className="flex items-center gap-2 text-gray-500 font-black text-xs uppercase tracking-widest hover:text-[#6f42c1] transition-colors font-bengali"
+                >
+                  <ArrowLeft className="w-4 h-4" /> ফিরে যান
+                </button>
+                <div className="flex items-center gap-2">
+                   <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                   <span className="text-[10px] font-black text-gray-400 tracking-[0.2em] uppercase">QR Scanner Mode</span>
+                </div>
+              </div>
+
+              {/* Scanner Interface */}
+              <Card className="relative overflow-hidden border-0 shadow-2xl rounded-[2.5rem] bg-black aspect-square max-w-sm mx-auto">
+                <div id={QR_SCANNER_ID} className="w-full h-full"></div>
+                
+                {/* Overlay UI */}
+                <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-between p-8">
+                  <div className="w-full flex justify-between">
+                     <div className="w-10 h-10 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl" />
+                     <div className="w-10 h-10 border-t-4 border-r-4 border-blue-500 rounded-tr-2xl" />
+                  </div>
+                  
+                  <div className="text-center space-y-2">
+                    <p className="text-white font-black text-sm font-bengali drop-shadow-lg">শিক্ষার্থীর আইডি কার্ডের QR কোড স্ক্যান করুন</p>
+                    <div className="w-24 h-1 bg-white/20 mx-auto rounded-full overflow-hidden">
+                       <motion.div 
+                          animate={{ x: ["-100%", "100%"] }}
+                          transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                          className="w-full h-full bg-blue-500" 
+                       />
+                    </div>
+                  </div>
+
+                  <div className="w-full flex justify-between">
+                     <div className="w-10 h-10 border-b-4 border-l-4 border-blue-500 rounded-bl-2xl" />
+                     <div className="w-10 h-10 border-b-4 border-r-4 border-blue-500 rounded-br-2xl" />
+                  </div>
+                </div>
+
+                {/* Successful Scanned Feedback */}
+                <AnimatePresence>
+                  {lastScanned && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      className="absolute inset-0 bg-emerald-500/90 flex flex-col items-center justify-center p-6 text-white text-center z-20 backdrop-blur-sm"
+                    >
+                      <CheckCircle2 className="w-16 h-16 mb-4" />
+                      <h3 className="text-2xl font-black font-bengali">{lastScanned}</h3>
+                      <p className="text-xs font-bold uppercase tracking-widest mt-2">{matchedAtClass()} - উপস্থিত</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {!scannerActive && !lastScanned && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-white gap-4">
+                     <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+                     <p className="text-xs font-black uppercase tracking-widest text-gray-400 font-bengali">ক্যামেরা চালু হচ্ছে...</p>
+                  </div>
+                )}
+              </Card>
+
+              {/* Scanned List */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-black text-gray-900 font-bengali flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" /> আজকের ক্লাসে যারা উপস্থিত ({presentCount})
+                  </h3>
+                  {presentCount > 0 && (
+                    <button 
+                      onClick={() => setAttendance({})}
+                      className="text-[10px] font-black text-red-500 uppercase tracking-widest"
+                    >
+                      Reset All
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  {students.filter(s => attendance[s.user_id]).length > 0 ? (
+                    students.filter(s => attendance[s.user_id])
+                    .reverse()
+                    .map((student) => (
+                      <motion.div
+                        key={student.user_id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-emerald-50 flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black text-xs">
+                             {student.name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-gray-900 font-bengali leading-tight">{student.name}</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Roll: {student.student_id}</p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => setAttendance(prev => ({ ...prev, [student.user_id]: false }))}
+                          className="p-2 text-gray-300 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </motion.div>
+                    ))
+                  ) : (
+                    <div className="p-10 text-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-[2rem] space-y-2">
+                       <QrCode className="w-8 h-8 text-gray-300 mx-auto" />
+                       <p className="text-xs font-bold text-gray-400 font-bengali">এখনো কেউ স্ক্যান করেনি</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
           ) : (
             <motion.div
               key="manual-view"
@@ -726,7 +949,7 @@ export default function AttendancePage() {
             exit={{ y: 100, opacity: 0 }}
             className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-md z-50 flex flex-col gap-4"
           >
-            {attendanceMethod === "manual" ? (
+            {attendanceMethod === "manual" || attendanceMethod === "qr" ? (
               <div className="bg-white/80 backdrop-blur-xl border border-white p-4 rounded-[2.5rem] shadow-2xl flex flex-col gap-4">
                  <div className="flex items-center justify-between px-2 pt-1">
                     <div className="flex items-center gap-3">
@@ -742,8 +965,8 @@ export default function AttendancePage() {
 
                  <button 
                   onClick={handleSubmitAttendance}
-                  disabled={submitting || fetchingStudents}
-                  className="w-full py-5 bg-[#6f42c1] text-white rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-purple-600/20 active:scale-95 hover:scale-[1.02] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:scale-100"
+                  disabled={submitting || (attendanceMethod === "manual" && fetchingStudents)}
+                  className="w-full py-5 bg-[#6f42c1] text-white rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-purple-600/20 active:scale-95 hover:scale-[1.02] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:scale-100 font-bengali"
                  >
                     {submitting ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
