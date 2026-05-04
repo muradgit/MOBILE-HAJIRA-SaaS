@@ -191,6 +191,15 @@ export default function AttendancePage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
 
+  // Camera Attendance State
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraVideoStream, setCameraVideoStream] = useState<MediaStream | null>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [capturedMedia, setCapturedMedia] = useState<{ url: string; type: "image" | "video" } | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
+
   // QR Scanner State
   const [scannerActive, setScannerActive] = useState(false);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
@@ -208,7 +217,7 @@ export default function AttendancePage() {
 
   // Persistence
   useEffect(() => {
-    if (selectedClassId && (attendanceMethod === "manual" || attendanceMethod === "qr" || attendanceMethod === "code" || attendanceMethod === "face") && Object.keys(attendance).length > 0) {
+    if (selectedClassId && (attendanceMethod === "manual" || attendanceMethod === "qr" || attendanceMethod === "code" || attendanceMethod === "face" || attendanceMethod === "camera") && Object.keys(attendance).length > 0) {
       const cacheKey = `att_cache_${selectedClassId}_${attendanceMethod}`;
       localStorage.setItem(cacheKey, JSON.stringify({ 
         attendance, 
@@ -231,6 +240,7 @@ export default function AttendancePage() {
         sessionUnsubscribe.current();
       }
       stopFaceScan();
+      stopCamera();
     };
   }, []);
 
@@ -240,6 +250,15 @@ export default function AttendancePage() {
       setFaceVideoStream(null);
     }
     setFaceScanActive(false);
+  };
+
+  const stopCamera = () => {
+    if (cameraVideoStream) {
+      cameraVideoStream.getTracks().forEach(track => track.stop());
+      setCameraVideoStream(null);
+    }
+    setCameraActive(false);
+    setIsRecording(false);
   };
 
   useEffect(() => {
@@ -291,6 +310,9 @@ export default function AttendancePage() {
       await fetchStudentsForClass(false);
     } else if (methodId === "face") {
       setAttendanceMethod("face");
+      await fetchStudentsForClass(false);
+    } else if (methodId === "camera") {
+      setAttendanceMethod("camera");
       await fetchStudentsForClass(false);
     } else {
       toast.success(`${methodName} শুরু হচ্ছে...`);
@@ -569,6 +591,69 @@ export default function AttendancePage() {
     }, 1500); // Simulated delay for scanning
   };
 
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment" },
+        audio: true
+      });
+      setCameraVideoStream(stream);
+      setCameraActive(true);
+      setCapturedMedia(null);
+      if (cameraVideoRef.current) {
+        cameraVideoRef.current.srcObject = stream;
+      }
+    } catch (error: any) {
+      console.error("Camera error:", error);
+      toast.error("ক্যামেরা চালু করতে সমস্যা হয়েছে");
+    }
+  };
+
+  const takePhoto = () => {
+    if (!cameraVideoRef.current) return;
+    
+    const canvas = document.createElement("canvas");
+    canvas.width = cameraVideoRef.current.videoWidth;
+    canvas.height = cameraVideoRef.current.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(cameraVideoRef.current, 0, 0);
+      const url = canvas.toDataURL("image/jpeg");
+      setCapturedMedia({ url, type: "image" });
+      stopCamera();
+      toast.success("ছবি তোলা হয়েছে!");
+    }
+  };
+
+  const startRecording = () => {
+    if (!cameraVideoStream) return;
+    
+    const recorder = new MediaRecorder(cameraVideoStream);
+    const chunks: Blob[] = [];
+    
+    recorder.ondataavailable = (e) => chunks.push(e.data);
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: "video/webm" });
+      const url = URL.createObjectURL(blob);
+      setVideoBlob(blob);
+      setCapturedMedia({ url, type: "video" });
+      stopCamera();
+    };
+    
+    recorder.start();
+    setMediaRecorder(recorder);
+    setIsRecording(true);
+    toast.info("রেকর্ডিং শুরু হয়েছে...");
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      toast.success("ভিডিও রেকর্ড করা হয়েছে!");
+    }
+  };
+
   const markAll = (status: boolean) => {
     const newBatch: Record<string, boolean> = {};
     students.forEach(s => {
@@ -635,6 +720,9 @@ export default function AttendancePage() {
       }
       if (attendanceMethod === "face") {
         stopFaceScan();
+      }
+      if (attendanceMethod === "camera") {
+        stopCamera();
       }
       if (sessionUnsubscribe.current) {
         sessionUnsubscribe.current();
@@ -955,6 +1043,187 @@ export default function AttendancePage() {
                       )}
                     </div>
                   </div>
+                </div>
+              )}
+            </motion.div>
+          ) : attendanceMethod === "camera" ? (
+            <motion.div
+              key="camera-view"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="space-y-6 pb-40"
+            >
+              <div className="flex items-center justify-between">
+                <button 
+                  onClick={() => {
+                    stopCamera();
+                    setAttendanceMethod(null);
+                    setCapturedMedia(null);
+                  }}
+                  className="flex items-center gap-2 text-gray-500 font-black text-xs uppercase tracking-widest hover:text-[#6f42c1] transition-colors font-bengali"
+                >
+                  <ArrowLeft className="w-4 h-4" /> ফিরে যান
+                </button>
+                <div className="flex items-center gap-2">
+                   <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                   <span className="text-[10px] font-black text-gray-400 tracking-[0.2em] uppercase font-bengali">Media Capture Station</span>
+                </div>
+              </div>
+
+              {!cameraActive && !capturedMedia ? (
+                <Card className="p-10 border-none shadow-2xl rounded-[3rem] bg-white flex flex-col items-center justify-center text-center gap-6">
+                   <div className="w-24 h-24 bg-rose-50 text-rose-600 rounded-[2.5rem] flex items-center justify-center">
+                      <Camera className="w-12 h-12" />
+                   </div>
+                   <div className="space-y-2">
+                      <h2 className="text-2xl font-black text-gray-900 font-bengali">ক্যামেরা হাজিরা</h2>
+                      <p className="text-sm text-gray-400 font-medium font-bengali">পুরো ক্লাসের একটি ছবি বা ভিডিও নিন। পরবর্তীতে সেখান থেকে হাজিরা নিশ্চিত করা হবে।</p>
+                   </div>
+                   <button 
+                    onClick={startCamera}
+                    className="w-full py-5 bg-rose-500 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-xl shadow-rose-600/20 active:scale-95 transition-all flex items-center justify-center gap-3 font-bengali"
+                   >
+                     <Camera className="w-5 h-5" /> ক্যামেরা চালু করুন
+                   </button>
+                </Card>
+              ) : cameraActive ? (
+                <div className="space-y-6">
+                   {/* Camera Preview */}
+                   <Card className="relative overflow-hidden border-0 shadow-2xl rounded-[3rem] bg-black aspect-video group">
+                      <video 
+                        ref={cameraVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover"
+                      />
+                      
+                      {/* Interaction Overlays */}
+                      <div className="absolute inset-x-0 bottom-0 p-8 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-center gap-8">
+                         {!isRecording ? (
+                           <>
+                             <button 
+                               onClick={takePhoto}
+                               className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-2xl shadow-rose-500/20"
+                               title="Take Photo"
+                             >
+                                <div className="w-14 h-14 rounded-full bg-white" />
+                             </button>
+                             <button 
+                               onClick={startRecording}
+                               className="w-16 h-16 rounded-full border-2 border-white/50 flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
+                               title="Record Video"
+                             >
+                                <div className="w-6 h-6 rounded-full bg-red-500" />
+                             </button>
+                           </>
+                         ) : (
+                           <button 
+                             onClick={stopRecording}
+                             className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center animate-pulse"
+                            title="Stop Recording"
+                           >
+                              <div className="w-8 h-8 bg-red-600 rounded-sm" />
+                           </button>
+                         )}
+                      </div>
+
+                      {/* Rec Indicator */}
+                      {isRecording && (
+                        <div className="absolute top-6 left-6 flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20">
+                           <div className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse" />
+                           <span className="text-[10px] font-black text-white uppercase tracking-widest">Recording</span>
+                        </div>
+                      )}
+                   </Card>
+
+                   <div className="text-center">
+                      <button 
+                        onClick={stopCamera}
+                        className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-red-500 transition-colors font-bengali"
+                      >
+                        ক্যামেরা বন্ধ করুন
+                      </button>
+                   </div>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                   {/* Captured Media Preview */}
+                   <Card className="relative overflow-hidden border-0 shadow-2xl rounded-[3rem] bg-gray-100 aspect-video group">
+                      {capturedMedia?.type === "image" ? (
+                        <img src={capturedMedia.url} alt="Captured Class" className="w-full h-full object-cover" />
+                      ) : (
+                        <video src={capturedMedia?.url} controls className="w-full h-full object-cover" />
+                      )}
+                      
+                      <button 
+                        onClick={() => {
+                          setCapturedMedia(null);
+                          startCamera();
+                        }}
+                        className="absolute top-4 right-4 p-3 bg-white/90 backdrop-blur-md rounded-2xl text-rose-500 shadow-xl hover:bg-rose-500 hover:text-white transition-all transform active:scale-90"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+
+                      <div className="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black/60 to-transparent">
+                         <div className="flex items-center gap-2">
+                            <div className="px-3 py-1 bg-white/20 backdrop-blur-md border border-white/30 rounded-lg">
+                               <p className="text-[10px] font-black text-white uppercase tracking-widest leading-none">
+                                 {capturedMedia?.type === "image" ? "Snapshot Captured" : "Video Recording Saved"}
+                               </p>
+                            </div>
+                         </div>
+                      </div>
+                   </Card>
+
+                   {/* Post-Capture Student Selection */}
+                   <div className="space-y-6">
+                      <div className="space-y-1 px-2">
+                        <h3 className="text-lg font-black text-gray-900 font-bengali">উপস্থিতি নিশ্চিত করুন</h3>
+                        <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest font-bengali">ক্যাপচার করা মিডিয়া দেখে উপস্থিত শিক্ষার্থীদের টিক দিন</p>
+                      </div>
+
+                      <Card className="bg-white p-6 border-none shadow-xl rounded-[2.5rem] space-y-4">
+                        <div className="relative group">
+                          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#6f42c1] transition-colors" />
+                          <input 
+                              type="text" 
+                              placeholder="শিক্ষার্থী খুঁজুন..."
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              className="w-full bg-gray-50 border-none rounded-2xl py-4 pl-12 pr-6 text-xs font-bold focus:ring-2 focus:ring-purple-200 outline-none transition-all placeholder:text-gray-300 font-bengali"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+                           {filteredStudents.map((student) => (
+                             <button
+                               key={student.user_id}
+                               onClick={() => toggleAttendance(student.user_id)}
+                               className={cn(
+                                 "flex items-center gap-3 p-3 rounded-2xl border-2 transition-all",
+                                 attendance[student.user_id]
+                                   ? "bg-rose-50 border-rose-500/20 text-rose-700"
+                                   : "bg-white border-transparent text-gray-400"
+                               )}
+                             >
+                               <div className={cn(
+                                 "w-8 h-8 rounded-xl flex items-center justify-center font-black text-[10px] shrink-0 border-2",
+                                 attendance[student.user_id] ? "bg-white border-rose-100" : "bg-gray-100 border-transparent"
+                               )}>
+                                 {student.name.charAt(0)}
+                               </div>
+                               <div className="text-left overflow-hidden">
+                                  <p className="text-[11px] font-black font-bengali truncate">{student.name}</p>
+                                  <p className="text-[9px] font-bold opacity-60">Roll: {student.student_id}</p>
+                               </div>
+                             </button>
+                           ))}
+                        </div>
+                      </Card>
+                   </div>
                 </div>
               )}
             </motion.div>
@@ -1419,7 +1688,7 @@ export default function AttendancePage() {
             exit={{ y: 100, opacity: 0 }}
             className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-md z-50 flex flex-col gap-4"
           >
-            {attendanceMethod === "manual" || attendanceMethod === "qr" || attendanceMethod === "code" || attendanceMethod === "face" ? (
+            {attendanceMethod === "manual" || attendanceMethod === "qr" || attendanceMethod === "code" || attendanceMethod === "face" || attendanceMethod === "camera" ? (
               <div className="bg-white/80 backdrop-blur-xl border border-white p-4 rounded-[2.5rem] shadow-2xl flex flex-col gap-4">
                  <div className="flex items-center justify-between px-2 pt-1">
                     <div className="flex items-center gap-3">
