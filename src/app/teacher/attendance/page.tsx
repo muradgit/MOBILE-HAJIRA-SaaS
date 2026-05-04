@@ -169,6 +169,8 @@ export default function AttendancePage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [fetchingStudents, setFetchingStudents] = useState(false);
   const [attendance, setAttendance] = useState<Record<string, boolean>>({});
+  const [studentNotes, setStudentNotes] = useState<Record<string, string>>({});
+  const [subject, setSubject] = useState("সাধারণ পাঠ");
   const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -178,8 +180,21 @@ export default function AttendancePage() {
   const presentCount = Object.values(attendance).filter(v => v).length;
   const filteredStudents = students.filter(s => 
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    s.student_id.toLowerCase().includes(searchQuery.toLowerCase())
+    (s.student_id && s.student_id.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  // Persistence
+  useEffect(() => {
+    if (selectedClassId && attendanceMethod === "manual" && Object.keys(attendance).length > 0) {
+      const cacheKey = `att_cache_${selectedClassId}`;
+      localStorage.setItem(cacheKey, JSON.stringify({ 
+        attendance, 
+        studentNotes, 
+        subject,
+        lastUpdated: new Date().toISOString()
+      }));
+    }
+  }, [attendance, studentNotes, subject, selectedClassId, attendanceMethod]);
 
   useEffect(() => {
     async function fetchAssignedClasses() {
@@ -231,43 +246,65 @@ export default function AttendancePage() {
     
     setFetchingStudents(true);
     try {
-      const constraints = [
-        where("tenant_id", "==", tenantId),
-        where("role", "==", "student"),
+      // First, try subcollection (preferred for per-tenant optimization)
+      let studentPath = `tenants/${tenantId}/students`;
+      let q = query(
+        collection(db, studentPath),
         where("class", "==", selectedClass.name),
         where("status", "==", "approved")
-      ];
+      );
 
-      if (selectedClass.section) {
-        constraints.push(where("section", "==", selectedClass.section));
+      let snapshot = await getDocs(q);
+      
+      // Fallback to global users collection if subcollection is empty
+      if (snapshot.empty) {
+        studentPath = "users";
+        q = query(
+          collection(db, studentPath),
+          where("tenant_id", "==", tenantId),
+          where("role", "==", "student"),
+          where("class", "==", selectedClass.name),
+          where("status", "==", "approved")
+        );
+        snapshot = await getDocs(q);
       }
 
-      const q = query(
-        collection(db, "users"),
-        ...constraints
-      );
-      
-      const snapshot = await getDocs(q);
       const fetchedStudents = snapshot.docs.map(doc => ({
         user_id: doc.id,
         ...doc.data()
       })) as Student[];
       
-      // Sort by student_id
+      // Sort by student_id (Roll)
       fetchedStudents.sort((a, b) => {
-        const idA = a.student_id || "";
-        const idB = b.student_id || "";
+        const idA = a.student_id || "999";
+        const idB = b.student_id || "999";
         return idA.localeCompare(idB, undefined, { numeric: true });
       });
 
       setStudents(fetchedStudents);
       
-      // Initialize all as present
-      const initialAttendance: Record<string, boolean> = {};
-      fetchedStudents.forEach(s => {
-        initialAttendance[s.user_id] = true;
-      });
-      setAttendance(initialAttendance);
+      // Check for cached data
+      const cacheKey = `att_cache_${selectedClassId}`;
+      const saved = localStorage.getItem(cacheKey);
+      
+      if (saved) {
+        try {
+          const { attendance: savedAtt, studentNotes: savedNotes, subject: savedSubject } = JSON.parse(saved);
+          setAttendance(savedAtt);
+          setStudentNotes(savedNotes || {});
+          setSubject(savedSubject || "সাধারণ পাঠ");
+          toast.info("পূর্বের ড্রাফট লোড করা হয়েছে");
+        } catch (e) {
+          console.error("Cache parsing error:", e);
+        }
+      } else {
+        // Initialize all as present by default
+        const initialAttendance: Record<string, boolean> = {};
+        fetchedStudents.forEach(s => {
+          initialAttendance[s.user_id] = true;
+        });
+        setAttendance(initialAttendance);
+      }
     } catch (error) {
       console.error("Error fetching students:", error);
       toast.error("শিক্ষার্থীদের তালিকা লোড করতে সমস্যা হয়েছে");
@@ -293,62 +330,67 @@ export default function AttendancePage() {
   };
 
   const handleSubmitAttendance = async () => {
-    if (!tenantId || !selectedClass || !user) return;
+    if (!tenantId || !selectedClass || !user || students.length === 0) return;
     
     setSubmitting(true);
-    try {
-      const logsPath = `tenants/${tenantId}/attendance_logs`;
-      const batchSize = Object.keys(attendance).length;
-      
-      if (batchSize === 0) {
-        toast.error("কোনো শিক্ষার্থী পাওয়া যায়নি");
-        return;
-      }
+    const toastId = toast.loading("হাজিরা জমা দেওয়া হচ্ছে...");
 
-      const timestamp = serverTimestamp();
+    try {
+      const token = await auth.currentUser?.getIdToken();
       
-      // We could use a Batch here, but for now we'll do it sequentially or in a simple way
-      // Ideally, one attendance session document, and logs as individual items or subcollection
-      
-      const sessionData = {
-        teacher_id: user.user_id,
-        teacher_name: user.name,
-        class_id: selectedClassId,
-        class_name: selectedClass.name,
+      const payload = {
+        tenant_id: tenantId,
+        classId: selectedClassId,
+        className: selectedClass.nameBN || selectedClass.name,
         section: selectedClass.section || "",
-        total_students: students.length,
-        present_count: presentCount,
-        absent_count: students.length - presentCount,
-        timestamp: timestamp,
-        method: "manual"
+        subject: subject,
+        teacherName: user.name,
+        totalPresent: presentCount,
+        totalAbsent: students.length - presentCount,
+        presentStudents: students.filter(s => attendance[s.user_id]).map(s => ({
+          id: s.user_id,
+          name: s.name,
+          roll: s.student_id,
+          note: studentNotes[s.user_id] || ""
+        })),
+        absentStudents: students.filter(s => !attendance[s.user_id]).map(s => ({
+          id: s.user_id,
+          name: s.name,
+          roll: s.student_id
+        }))
       };
 
-      // Create attendance session
-      const sessionRef = await addDoc(collection(db, `tenants/${tenantId}/attendance_sessions`), sessionData);
-
-      // Create individual logs
-      const logPromises = students.map(s => {
-        return addDoc(collection(db, logsPath), {
-          student_id: s.user_id,
-          student_name: s.name,
-          roll_id: s.student_id,
-          class_name: selectedClass.name,
-          section: selectedClass.section || "",
-          status: attendance[s.user_id] ? "present" : "absent",
-          timestamp: timestamp,
-          session_id: sessionRef.id,
-          teacher_id: user.user_id
-        });
+      const res = await fetch("/api/attendance/submit", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
       });
 
-      await Promise.all(logPromises);
+      const result = await res.json();
 
-      toast.success("হাজিরা সফলভাবে জমা দেওয়া হয়েছে!");
-      setAttendanceMethod(null);
-      setSelectedClassId(null);
-    } catch (error) {
+      if (!res.ok) {
+        throw new Error(result.error || "হাজিরা জমা দিতে ব্যর্থ হয়েছে");
+      }
+
+      // Clear cache on success
+      localStorage.removeItem(`att_cache_${selectedClassId}`);
+      
+      toast.success(result.message || "হাজিরা সফলভাবে জমা দেওয়া হয়েছে!", { id: toastId });
+      
+      // Delay reset for UX
+      setTimeout(() => {
+        setAttendanceMethod(null);
+        setSelectedClassId(null);
+        setAttendance({});
+        setStudentNotes({});
+      }, 1000);
+
+    } catch (error: any) {
       console.error("Error submitting attendance:", error);
-      toast.error("হাজিরা জমা দিতে সমস্যা হয়েছে");
+      toast.error(error.message || "সার্ভার এরর: হাজিরা জমা দেওয়া যায়নি", { id: toastId });
     } finally {
       setSubmitting(false);
     }
@@ -532,48 +574,62 @@ export default function AttendancePage() {
               <div className="flex items-center justify-between">
                 <button 
                   onClick={() => setAttendanceMethod(null)}
-                  className="flex items-center gap-2 text-gray-500 font-black text-xs uppercase tracking-widest hover:text-[#6f42c1] transition-colors"
+                  className="flex items-center gap-2 text-gray-500 font-black text-xs uppercase tracking-widest hover:text-[#6f42c1] transition-colors font-bengali"
                 >
                   <ArrowLeft className="w-4 h-4" /> ফিরে যান
                 </button>
                 <div className="flex items-center gap-2">
-                   <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                    <span className="text-[10px] font-black text-gray-400 tracking-[0.2em] uppercase">Manual Mode</span>
                 </div>
               </div>
 
-              <Card className="p-6 border-none shadow-xl shadow-purple-900/5 space-y-4">
+              <Card className="p-6 border-none shadow-xl shadow-purple-900/5 space-y-6 rounded-[2.5rem] bg-white">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1">
-                    <h2 className="text-xl font-black text-gray-900 font-bengali">শিক্ষার্থীদের তালিকা</h2>
-                    <p className="text-xs text-gray-400 font-medium">নিচের তালিকা থেকে উপস্থিত শিক্ষার্থীদের সবুজ সিলেক্ট করুন</p>
+                    <h2 className="text-xl font-black text-gray-900 font-bengali">শিক্ষার্থীদের তালিকা ({presentCount}/{students.length})</h2>
+                    <p className="text-xs text-gray-400 font-medium font-bengali">উপস্থিতি নিশ্চিত করতে শিক্ষার্থীর কার্ডে ক্লিক করুন</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button 
                       onClick={() => markAll(true)}
-                      className="px-3 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                      className="px-3 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all shadow-sm font-bengali border border-emerald-100"
                     >
                       সবাই উপস্থিত
                     </button>
                     <button 
                       onClick={() => markAll(false)}
-                      className="px-3 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                      className="px-3 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all shadow-sm font-bengali border border-red-100"
                     >
                       সবাই অনুপস্থিত
                     </button>
                   </div>
                 </div>
 
-                {/* Search Box */}
-                <div className="relative group">
-                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#6f42c1] transition-colors" />
-                   <input 
-                      type="text" 
-                      placeholder="নাম বা আইডি দিয়ে সার্চ করুন..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-gray-50 border-none rounded-2xl py-4 pl-12 pr-6 text-sm font-bold focus:ring-2 focus:ring-purple-200 outline-none transition-all placeholder:text-gray-300"
-                   />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Search Box */}
+                  <div className="relative group">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#6f42c1] transition-colors" />
+                    <input 
+                        type="text" 
+                        placeholder="নাম বা আইডি দিয়ে সার্চ..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-gray-50 border-none rounded-2xl py-4 pl-12 pr-6 text-xs font-bold focus:ring-2 focus:ring-purple-200 outline-none transition-all placeholder:text-gray-300 font-bengali"
+                    />
+                  </div>
+
+                  {/* Subject Input */}
+                  <div className="relative group">
+                    <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#6f42c1] transition-colors" />
+                    <input 
+                        type="text" 
+                        placeholder="বিষয় (যেমন: গণিত)"
+                        value={subject}
+                        onChange={(e) => setSubject(e.target.value)}
+                        className="w-full bg-gray-50 border-none rounded-2xl py-4 pl-12 pr-6 text-xs font-bold focus:ring-2 focus:ring-purple-200 outline-none transition-all placeholder:text-gray-300 font-bengali"
+                    />
+                  </div>
                 </div>
               </Card>
 
@@ -582,7 +638,7 @@ export default function AttendancePage() {
                 {fetchingStudents ? (
                   <div className="p-12 flex flex-col items-center justify-center text-center gap-4 bg-white rounded-[3rem]">
                       <Loader2 className="w-10 h-10 animate-spin text-[#6f42c1]" />
-                      <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Loading students list...</p>
+                      <p className="text-sm font-black text-gray-400 uppercase tracking-widest font-bengali">শিক্ষার্থী তালিকা লোড হচ্ছে...</p>
                   </div>
                 ) : filteredStudents.length > 0 ? (
                   filteredStudents.map((student, idx) => (
@@ -595,38 +651,64 @@ export default function AttendancePage() {
                       <button
                         onClick={() => toggleAttendance(student.user_id)}
                         className={cn(
-                          "w-full flex items-center justify-between p-5 rounded-3xl border-2 transition-all active:scale-[0.98]",
+                          "w-full flex flex-col p-5 rounded-[2rem] border-2 transition-all active:scale-[0.98]",
                           attendance[student.user_id] 
                             ? "bg-white border-emerald-500/20 shadow-lg shadow-emerald-500/5 ring-4 ring-emerald-500/5" 
                             : "bg-white border-transparent text-gray-400 opacity-60"
                         )}
                       >
-                        <div className="flex items-center gap-4">
-                          <div className={cn(
-                            "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 border-2",
-                            attendance[student.user_id] ? "bg-emerald-50 border-emerald-100 text-emerald-600" : "bg-gray-100 border-transparent text-gray-300"
-                          )}>
-                             {student.name.charAt(0)}
+                        <div className="w-full flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className={cn(
+                              "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 border-2",
+                              attendance[student.user_id] ? "bg-emerald-50 border-emerald-100 text-emerald-600" : "bg-gray-100 border-transparent text-gray-300"
+                            )}>
+                              {student.name.charAt(0)}
+                            </div>
+                            <div className="text-left">
+                              <h4 className={cn("font-black text-sm font-bengali", attendance[student.user_id] ? "text-gray-900" : "text-gray-400")}>{student.name}</h4>
+                              <p className="text-[10px] uppercase font-black tracking-widest text-gray-400">ID: {student.student_id}</p>
+                            </div>
                           </div>
-                          <div className="text-left">
-                            <h4 className={cn("font-black text-sm", attendance[student.user_id] ? "text-gray-900" : "text-gray-400")}>{student.name}</h4>
-                            <p className="text-[10px] uppercase font-black tracking-widest text-gray-400">ID: {student.student_id}</p>
+
+                          <div className={cn(
+                            "w-10 h-10 rounded-2xl flex items-center justify-center transition-all",
+                            attendance[student.user_id] ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30" : "bg-gray-100 text-gray-300"
+                          )}>
+                            {attendance[student.user_id] ? <CheckCircle2 className="w-6 h-6" /> : <Square className="w-6 h-6" />}
                           </div>
                         </div>
 
-                        <div className={cn(
-                          "w-10 h-10 rounded-2xl flex items-center justify-center transition-all",
-                          attendance[student.user_id] ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30" : "bg-gray-100 text-gray-300"
-                        )}>
-                           {attendance[student.user_id] ? <CheckSquare className="w-6 h-6" /> : <Square className="w-6 h-6" />}
-                        </div>
+                        {/* Optional Student Note */}
+                        <AnimatePresence>
+                          {attendance[student.user_id] && (
+                            <motion.div 
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="w-full mt-4"
+                            >
+                              <input 
+                                type="text"
+                                placeholder="এই শিক্ষার্থীর জন্য নোট লিখুন (ঐচ্ছিক)"
+                                value={studentNotes[student.user_id] || ""}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  setStudentNotes(prev => ({ ...prev, [student.user_id]: e.target.value }));
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-full bg-emerald-50/50 border-none rounded-xl py-3 px-4 text-[11px] font-bold text-emerald-900 placeholder:text-emerald-300 outline-none focus:ring-1 focus:ring-emerald-200 transition-all font-bengali"
+                              />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </button>
                     </motion.div>
                   ))
                 ) : (
                   <div className="p-12 text-center bg-white rounded-[3rem] border-2 border-dashed border-gray-100 space-y-3">
                      <AlertCircle className="w-10 h-10 text-gray-300 mx-auto" />
-                     <p className="text-gray-400 font-bold">কোনো শিক্ষার্থী পাওয়া যায়নি</p>
+                     <p className="text-gray-400 font-bold font-bengali">কোনো শিক্ষার্থী পাওয়া যায়নি</p>
                   </div>
                 )}
               </div>
