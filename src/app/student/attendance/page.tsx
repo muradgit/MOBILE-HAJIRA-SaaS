@@ -15,10 +15,12 @@ import {
   Clock,
   Camera,
   RefreshCw,
-  Info
+  Info,
+  WifiOff
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "@/src/hooks/useAuth";
+import { useOfflineSync } from "@/src/hooks/useOfflineSync";
 import { Card } from "@/src/components/ui/Card";
 import { toast } from "sonner";
 import { cn } from "@/src/lib/utils";
@@ -53,6 +55,8 @@ const QR_SCANNER_ID = "student-qr-scanner";
 export default function StudentAttendancePage() {
   const { userData, loading: authLoading, tenant } = useAuth();
   const router = useRouter();
+  const { addToQueue, isOffline, queue, syncQueue } = useOfflineSync();
+  const isOnline = !isOffline;
   
   const [activeSessions, setActiveSessions] = useState<AttendanceSession[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
@@ -254,20 +258,28 @@ export default function StudentAttendancePage() {
     
     setIsSubmitting(true);
     try {
+      const payload = {
+        tenant_id: userData.tenant_id,
+        classId: selectedSession.classId,
+        code: code,
+        attendance_method: method,
+        presentStudents: [{
+          id: userData.user_id,
+          name: userData.name,
+          roll: userData.student_id
+        }]
+      };
+
+      if (!isOnline) {
+        addToQueue(payload);
+        setAttendanceStep("success");
+        return;
+      }
+
       const res = await fetch("/api/attendance/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenant_id: userData.tenant_id,
-          classId: selectedSession.classId,
-          code: code,
-          attendance_method: method,
-          presentStudents: [{
-            id: userData.user_id,
-            name: userData.name,
-            roll: userData.student_id
-          }]
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json();
@@ -307,8 +319,25 @@ export default function StudentAttendancePage() {
             </button>
             <h1 className="font-bold text-gray-800 text-lg">ডিজিটাল হাজিরা</h1>
           </div>
-          <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-[#6f42c1] font-bold">
-            {userData?.name?.charAt(0).toUpperCase()}
+          <div className="flex items-center gap-3">
+            {isOnline && queue.length > 0 && (
+              <button 
+                onClick={() => syncQueue()}
+                className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-emerald-100"
+              >
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Sync {queue.length}
+              </button>
+            )}
+            {!isOnline && (
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-rose-50 text-rose-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-rose-100">
+                <WifiOff className="w-3 h-3" />
+                Offline
+              </div>
+            )}
+            <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-[#6f42c1] font-bold">
+              {userData?.name?.charAt(0).toUpperCase()}
+            </div>
           </div>
         </div>
       </header>

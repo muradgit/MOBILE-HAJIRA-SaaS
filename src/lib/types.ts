@@ -24,6 +24,7 @@ export interface Tenant {
   name: string;
   nameBN?: string;
   eiin: string;
+  credits?: number;
   credits_left: number;
   googleSheetId: string;
   promo_code: string;
@@ -35,6 +36,7 @@ export interface Tenant {
   total_credit_purchased?: number;
   last_reward_date?: string;
   created_at?: string;
+  updatedAt?: any;
   promo_code_claimed?: boolean;
   recharge_status?: string;
   last_recharge_date?: string;

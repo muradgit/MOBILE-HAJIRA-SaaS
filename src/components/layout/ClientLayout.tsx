@@ -27,7 +27,9 @@ import {
   ShieldCheck,
   LogIn,
   UserPlus,
-  GraduationCap
+  GraduationCap,
+  Wifi,
+  WifiOff
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 
@@ -149,6 +151,39 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
   const mobileNavItems = (userData && mobileNavMapping[menuKey]) || [];
 
+  const [isOnline, setIsOnline] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsOnline(navigator.onLine);
+      
+      const handleOnline = () => setIsOnline(true);
+      const handleOffline = () => setIsOnline(false);
+
+      window.addEventListener("online", handleOnline);
+      window.addEventListener("offline", handleOffline);
+
+      // Register Service Worker for PWA
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("/sw.js")
+            .then((registration) => {
+              console.log("SW registered:", registration);
+            })
+            .catch((error) => {
+              console.log("SW registration failed:", error);
+            });
+        });
+      }
+
+      return () => {
+        window.removeEventListener("online", handleOnline);
+        window.removeEventListener("offline", handleOffline);
+      };
+    }
+  }, []);
+
   /**
    * CreditBadge component for real-time credit monitoring
    */
@@ -162,17 +197,21 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       <div 
         className={cn(
           "flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all cursor-help",
-          isLow 
-            ? "bg-red-50 border-red-100 text-red-600 animate-pulse" 
-            : "bg-emerald-50 border-emerald-100 text-emerald-600",
+          !isOnline 
+            ? "bg-gray-100 border-gray-200 text-gray-500"
+            : isLow 
+              ? "bg-red-50 border-red-100 text-red-600 animate-pulse" 
+              : "bg-emerald-50 border-emerald-100 text-emerald-600",
           className
         )}
-        title="অবশিষ্ঠ ক্রেডিট"
+        title={isOnline ? "অবশিষ্ঠ ক্রেডিট" : "অফলাইন (ক্রেডিট সিঙ্ক স্থগিত)"}
       >
-        <CreditCard className="w-3.5 h-3.5" />
+        {isOnline ? <CreditCard className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
         <div className="flex flex-col -space-y-1">
-          <span className="text-[10px] font-black uppercase tracking-widest leading-none">Credits</span>
-          <span className="text-xs font-black">{credits}</span>
+          <span className="text-[10px] font-black uppercase tracking-widest leading-none">
+            {isOnline ? "Credits" : "Offline"}
+          </span>
+          <span className="text-xs font-black">{isOnline ? credits : "---"}</span>
         </div>
       </div>
     );

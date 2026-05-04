@@ -22,7 +22,9 @@ import {
   Save,
   Clock,
   FlipHorizontal,
-  Trash2
+  Trash2,
+  Wifi,
+  WifiOff
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useUserStore } from "@/src/store/useUserStore";
@@ -43,6 +45,8 @@ import {
   Timestamp,
   onSnapshot
 } from "firebase/firestore";
+
+import { useOfflineSync } from "@/src/hooks/useOfflineSync";
 
 /**
  * Teacher Attendance Page - MOBILE-HAJIRA SaaS
@@ -757,6 +761,43 @@ export default function AttendancePage() {
     toast.info(status ? "সবাইকে উপস্থিত করা হয়েছে" : "সবাইকে অনুপস্থিত করা হয়েছে");
   };
 
+  const { addToQueue, isOffline, queue, syncQueue } = useOfflineSync();
+  const isOnline = !isOffline;
+
+  const onSuccessCleanup = () => {
+    // Clear cache on success
+    localStorage.removeItem(`att_cache_${selectedClassId}_${attendanceMethod}`);
+    
+    // Stop scripts/listeners
+    if (attendanceMethod === "qr") {
+      stopQRScanner();
+    }
+    if (attendanceMethod === "face_scan") {
+      stopFaceScan();
+    }
+    if (attendanceMethod === "camera") {
+      stopCamera();
+    }
+    if (attendanceMethod === "geo") {
+      setGeoActive(false);
+      setTeacherLocation(null);
+    }
+    if (sessionUnsubscribe.current) {
+      sessionUnsubscribe.current();
+      sessionUnsubscribe.current = null;
+    }
+
+    // Delay reset for UX
+    setTimeout(() => {
+      setAttendanceMethod(null);
+      setSelectedClassId(null);
+      setAttendance({});
+      setStudentNotes({});
+      setGeoActive(false);
+      setTeacherLocation(null);
+    }, 1000);
+  };
+
   const handleSubmitAttendance = async () => {
     if (!tenantId || !selectedClass || !user || students.length === 0) return;
     
@@ -764,8 +805,6 @@ export default function AttendancePage() {
     const toastId = toast.loading("হাজিরা জমা দেওয়া হচ্ছে...");
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      
       const payload = {
         tenant_id: tenantId,
         classId: selectedClassId,
@@ -793,6 +832,16 @@ export default function AttendancePage() {
         }))
       };
 
+      // Offline Support
+      if (!navigator.onLine) {
+        addToQueue(payload);
+        toast.dismiss(toastId);
+        onSuccessCleanup();
+        return;
+      }
+
+      const token = await auth.currentUser?.getIdToken();
+
       const res = await fetch("/api/attendance/submit", {
         method: "POST",
         headers: { 
@@ -807,41 +856,9 @@ export default function AttendancePage() {
       if (!res.ok) {
         throw new Error(result.error || "হাজিরা জমা দিতে ব্যর্থ হয়েছে");
       }
-
-      // Clear cache on success
-      localStorage.removeItem(`att_cache_${selectedClassId}_${attendanceMethod}`);
-      
+ 
       toast.success(result.message || "হাজিরা সফলভাবে জমা দেওয়া হয়েছে!", { id: toastId });
-      
-      // Stop scripts/listeners
-      if (attendanceMethod === "qr") {
-        stopQRScanner();
-      }
-      if (attendanceMethod === "face_scan") {
-        stopFaceScan();
-      }
-      if (attendanceMethod === "camera") {
-        stopCamera();
-      }
-      if (attendanceMethod === "geo") {
-        setGeoActive(false);
-        setTeacherLocation(null);
-      }
-      if (sessionUnsubscribe.current) {
-        sessionUnsubscribe.current();
-        sessionUnsubscribe.current = null;
-      }
-
-      // Delay reset for UX
-      setTimeout(() => {
-        setAttendanceMethod(null);
-        setSelectedClassId(null);
-        setAttendance({});
-        setStudentNotes({});
-        setGeoActive(false);
-        setTeacherLocation(null);
-      }, 1000);
-
+      onSuccessCleanup();
     } catch (error: any) {
       console.error("Error submitting attendance:", error);
       toast.error(error.message || "সার্ভার এরর: হাজিরা জমা দেওয়া যায়নি", { id: toastId });
@@ -860,14 +877,43 @@ export default function AttendancePage() {
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-400/20 rounded-full blur-2xl -ml-10 -mb-10"></div>
         
         <div className="relative z-10 max-w-2xl mx-auto space-y-2">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl">
-              <Users className="w-6 h-6 text-white" />
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl">
+                <Users className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-black tracking-tight">হাজিরা নিন</h1>
+                <p className="text-purple-100 text-xs font-medium opacity-80 uppercase tracking-widest">Attendance Management Portal</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-black tracking-tight">হাজিরা নিন</h1>
-              <p className="text-purple-100 text-xs font-medium opacity-80 uppercase tracking-widest">Attendance Management Portal</p>
-            </div>
+            
+            {/* Offline/Sync Status Indicator */}
+            <AnimatePresence>
+              {!isOnline && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-rose-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-900/20"
+                >
+                  <WifiOff className="w-3 h-3" />
+                  Offline
+                </motion.div>
+              )}
+              {isOnline && queue.length > 0 && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  onClick={() => syncQueue()}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-900/20 cursor-pointer hover:bg-emerald-600 transition-colors"
+                >
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Syncing {queue.length}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           <p className="text-purple-50 text-sm leading-relaxed max-w-sm">
             ধন্যবাদ শিক্ষক! আজকের ক্লাসের হাজিরা নিতে নিচের পদ্ধতিগুলো থেকে একটি বেছে নিন।

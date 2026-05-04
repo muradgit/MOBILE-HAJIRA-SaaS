@@ -18,6 +18,13 @@ const montserrat = Montserrat({
 export const metadata: Metadata = {
   title: "Mobile Hajira",
   description: "Digital Attendance & Institution Management System",
+  manifest: "/manifest.json",
+  themeColor: "#6f42c1",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Mobile Hajira",
+  },
 };
 
 import { Toaster } from "sonner";
