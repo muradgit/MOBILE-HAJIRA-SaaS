@@ -34,7 +34,7 @@ import { motion } from "motion/react";
 
 export default function ProfilePage() {
   const { userData, user, loading } = useAuth();
-  const { setActiveRole } = useUserStore();
+  const { activeRole, setActiveRole } = useUserStore();
   const [submitting, setSubmitting] = useState(false);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [promoting, setPromoting] = useState(false);
@@ -281,7 +281,7 @@ export default function ProfilePage() {
                     </div>
                     <button 
                       onClick={() => {
-                        const nextRole = normalizedRole === "teacher" ? (userData?.role || "institute_admin") : "teacher";
+                        const nextRole = activeRole === "teacher" ? (userData?.role || "institute_admin") : "teacher";
                         setActiveRole(nextRole);
                         toast.success(`আপনি এখন ${nextRole === "teacher" ? "শিক্ষক" : "এডমিন"} ভিউতে আছেন`);
                       }}
