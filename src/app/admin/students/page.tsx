@@ -111,6 +111,7 @@ export default function StudentsPage() {
     const headers = [
       "Institute Name",
       "Academic Level (Class)",
+      "Section",
       "Department/Group",
       "Session",
       "Name (Student Full Name)",
@@ -127,7 +128,8 @@ export default function StudentsPage() {
     // Default values if possible
     const sampleRow = [
       tenant?.name || "", 
-      "", 
+      "Class 10", 
+      "A",
       "Science", 
       new Date().getFullYear().toString(), 
       "Abdur Rahman", 
@@ -136,9 +138,9 @@ export default function StudentsPage() {
       new Date().getFullYear().toString(), 
       "", 
       "01712345678", 
-      "", 
-      "", 
-      ""
+      "Kamal Ahmed", 
+      "Fatema Begum", 
+      "01812345678"
     ];
 
     const csvContent = "data:text/csv;charset=utf-8," + 
@@ -164,6 +166,7 @@ export default function StudentsPage() {
         // Map columns to our expected keys
         const mappedData = results.data.map((row: any) => ({
           academicLevel: row["Academic Level (Class)"] || row["Class"] || "",
+          section: row["Section"] || "",
           department: row["Department/Group"] || row["Department"] || row["Group"] || "",
           session: row["Session"] || "",
           name: row["Name (Student Full Name)"] || row["Name"] || "",

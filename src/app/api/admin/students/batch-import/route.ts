@@ -95,6 +95,7 @@ export async function POST(req: NextRequest) {
           // Extra Data
           class: String(s.academicLevel || s.class || ""),
           department: s.department || s.group || "",
+          section: s.section || "",
           session: String(s.session || ""),
           student_id: String(s.roll || ""),
           registration_no: String(s.registrationNo || ""),
@@ -119,8 +120,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Trigger Google Sheet Sync if possible (could be done via a separate background queue or just async here)
-    // We don't want to block the response for sheet sync
+    // Trigger Google Sheet Sync if any succeeded
+    if (results.success > 0) {
+      const { queueGoogleSheetSync } = await import("@/src/lib/qstash");
+      await queueGoogleSheetSync(tenantId, { importedCount: results.success }, "STUDENT");
+    }
     
     return NextResponse.json({ 
       message: "Bulk import completed", 
