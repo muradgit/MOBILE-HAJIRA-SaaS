@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { cn } from "@/src/lib/utils";
 import { db, auth } from "@/src/lib/firebase";
 import { Html5Qrcode } from "html5-qrcode";
+import QRCode from "qrcode";
 import { 
   collection, 
   query, 
@@ -39,7 +40,8 @@ import {
   orderBy, 
   addDoc, 
   serverTimestamp,
-  Timestamp 
+  Timestamp,
+  onSnapshot
 } from "firebase/firestore";
 
 /**
@@ -177,6 +179,12 @@ export default function AttendancePage() {
   const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Attendance by Code State
+  const [attendanceCode, setAttendanceCode] = useState<string | null>(null);
+  const [codeQrUrl, setCodeQrUrl] = useState<string | null>(null);
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+  const sessionUnsubscribe = useRef<(() => void) | null>(null);
+
   // QR Scanner State
   const [scannerActive, setScannerActive] = useState(false);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
@@ -194,22 +202,27 @@ export default function AttendancePage() {
 
   // Persistence
   useEffect(() => {
-    if (selectedClassId && (attendanceMethod === "manual" || attendanceMethod === "qr") && Object.keys(attendance).length > 0) {
+    if (selectedClassId && (attendanceMethod === "manual" || attendanceMethod === "qr" || attendanceMethod === "code") && Object.keys(attendance).length > 0) {
       const cacheKey = `att_cache_${selectedClassId}_${attendanceMethod}`;
       localStorage.setItem(cacheKey, JSON.stringify({ 
         attendance, 
         studentNotes, 
         subject,
+        attendanceCode,
+        codeQrUrl,
         lastUpdated: new Date().toISOString()
       }));
     }
-  }, [attendance, studentNotes, subject, selectedClassId, attendanceMethod]);
+  }, [attendance, studentNotes, subject, selectedClassId, attendanceMethod, attendanceCode, codeQrUrl]);
 
   // QR Scanner Cleanup
   useEffect(() => {
     return () => {
       if (scannerRef.current) {
         scannerRef.current.stop().catch(console.error);
+      }
+      if (sessionUnsubscribe.current) {
+        sessionUnsubscribe.current();
       }
     };
   }, []);
@@ -258,6 +271,9 @@ export default function AttendancePage() {
       setAttendanceMethod("qr");
       await fetchStudentsForClass(false);
       setTimeout(() => startQRScanner(), 500);
+    } else if (methodId === "code") {
+      setAttendanceMethod("code");
+      await fetchStudentsForClass(false);
     } else {
       toast.success(`${methodName} শুরু হচ্ছে...`);
     }
@@ -311,10 +327,15 @@ export default function AttendancePage() {
       
       if (saved) {
         try {
-          const { attendance: savedAtt, studentNotes: savedNotes, subject: savedSubject } = JSON.parse(saved);
+          const { attendance: savedAtt, studentNotes: savedNotes, subject: savedSubject, attendanceCode: savedCode, codeQrUrl: savedQr } = JSON.parse(saved);
           setAttendance(savedAtt);
           setStudentNotes(savedNotes || {});
           setSubject(savedSubject || "সাধারণ পাঠ");
+          if (savedCode) {
+             setAttendanceCode(savedCode);
+             listenForCodeAttendance(savedCode);
+          }
+          if (savedQr) setCodeQrUrl(savedQr);
           toast.info("পূর্বের ড্রাফট লোড করা হয়েছে");
         } catch (e) {
           console.error("Cache parsing error:", e);
@@ -400,6 +421,91 @@ export default function AttendancePage() {
     }
   };
 
+  const generateAttendanceCode = async () => {
+    if (!tenantId || !selectedClassId || !user) return;
+    
+    setIsGeneratingCode(true);
+    try {
+      const code = Math.floor(10 + Math.random() * 90).toString(); // 2-digit code
+      const qrData = JSON.stringify({
+        type: "attendance_code",
+        code: code,
+        classId: selectedClassId,
+        className: selectedClass?.name,
+        teacherId: user.user_id,
+        timestamp: Date.now()
+      });
+
+      const qrUrl = await QRCode.toDataURL(qrData, {
+        width: 400,
+        margin: 2,
+        color: {
+          dark: "#6f42c1",
+          light: "#ffffff"
+        }
+      });
+
+      setAttendanceCode(code);
+      setCodeQrUrl(qrUrl);
+
+      // Create a session in Firestore so students can "check-in"
+      const sessionPath = `tenants/${tenantId}/attendance_sessions`;
+      await addDoc(collection(db, sessionPath), {
+        classId: selectedClassId,
+        teacherId: user.user_id,
+        method: "code",
+        code: code,
+        active: true,
+        subject: subject,
+        createdAt: serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000) // 15 mins
+      });
+
+      listenForCodeAttendance(code);
+      toast.success("কোড জেনারেট করা হয়েছে!");
+    } catch (error) {
+      console.error("Code generation error:", error);
+      toast.error("কোড জেনারেট করতে সমস্যা হয়েছে");
+    } finally {
+      setIsGeneratingCode(false);
+    }
+  };
+
+  const listenForCodeAttendance = (code: string) => {
+    if (!tenantId || !selectedClassId || sessionUnsubscribe.current) return;
+
+    // Listen for student check-ins in the temporary entries for this session
+    const checkinPath = `tenants/${tenantId}/attendance_entries`;
+    const q = query(
+      collection(db, checkinPath),
+      where("classId", "==", selectedClassId),
+      where("code", "==", code),
+      where("createdAt", ">=", Timestamp.fromMillis(Date.now() - 3600000)) // Last 1 hour
+    );
+
+    sessionUnsubscribe.current = onSnapshot(q, (snapshot) => {
+      const newAttendance = { ...attendance };
+      let changed = false;
+
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.studentId && !newAttendance[data.studentId]) {
+          newAttendance[data.studentId] = true;
+          changed = true;
+          
+          const student = students.find(s => s.user_id === data.studentId);
+          if (student) {
+            toast.success(`${student.name} হাজিরা দিয়েছেন`, { icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" /> });
+          }
+        }
+      });
+
+      if (changed) {
+        setAttendance(newAttendance);
+      }
+    });
+  };
+
   const toggleAttendance = (studentId: string) => {
     setAttendance(prev => ({
       ...prev,
@@ -467,9 +573,13 @@ export default function AttendancePage() {
       
       toast.success(result.message || "হাজিরা সফলভাবে জমা দেওয়া হয়েছে!", { id: toastId });
       
-      // Stop scanner if active
+      // Stop scripts/listeners
       if (attendanceMethod === "qr") {
         stopQRScanner();
+      }
+      if (sessionUnsubscribe.current) {
+        sessionUnsubscribe.current();
+        sessionUnsubscribe.current = null;
       }
 
       // Delay reset for UX
@@ -653,6 +763,139 @@ export default function AttendancePage() {
                   <button className="flex items-center gap-2 text-[#6f42c1] font-black text-sm hover:underline">
                     <PlusCircle className="w-4 h-4" /> নতুন ক্লাস তৈরি করুন
                   </button>
+                </div>
+              )}
+            </motion.div>
+          ) : attendanceMethod === "code" ? (
+            <motion.div
+              key="code-view"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="space-y-6 pb-40"
+            >
+              <div className="flex items-center justify-between">
+                <button 
+                  onClick={() => {
+                    if (sessionUnsubscribe.current) sessionUnsubscribe.current();
+                    sessionUnsubscribe.current = null;
+                    setAttendanceMethod(null);
+                  }}
+                  className="flex items-center gap-2 text-gray-500 font-black text-xs uppercase tracking-widest hover:text-[#6f42c1] transition-colors font-bengali"
+                >
+                  <ArrowLeft className="w-4 h-4" /> ফিরে যান
+                </button>
+                <div className="flex items-center gap-2">
+                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                   <span className="text-[10px] font-black text-gray-400 tracking-[0.2em] uppercase font-bengali">Session Code Mode</span>
+                </div>
+              </div>
+
+              {!attendanceCode ? (
+                <Card className="p-10 border-none shadow-2xl rounded-[3rem] bg-white flex flex-col items-center justify-center text-center gap-6">
+                   <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-[2rem] flex items-center justify-center">
+                      <Hash className="w-10 h-10" />
+                   </div>
+                   <div className="space-y-2">
+                      <h2 className="text-2xl font-black text-gray-900 font-bengali">কোড জেনারেট করুন</h2>
+                      <p className="text-sm text-gray-400 font-medium font-bengali">একটি ২-সংখ্যার কোড তৈরি করুন যা শিক্ষার্থীরা তাদের ফোন থেকে সাবমিট করবে।</p>
+                   </div>
+                   <button 
+                    onClick={generateAttendanceCode}
+                    disabled={isGeneratingCode}
+                    className="w-full py-5 bg-[#6f42c1] text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-xl shadow-purple-600/20 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50 font-bengali"
+                   >
+                     {isGeneratingCode ? <Loader2 className="w-5 h-5 animate-spin" /> : <PlusCircle className="w-5 h-5" />}
+                     কোড তৈরি করুন
+                   </button>
+                </Card>
+              ) : (
+                <div className="space-y-6">
+                  {/* Digital Display Card */}
+                  <Card className="bg-white border-0 shadow-2xl rounded-[3rem] overflow-hidden">
+                    <div className="p-8 pb-4 text-center border-b border-gray-50">
+                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-2 font-bengali">বর্তমান সেশন কোড</p>
+                       <div className="flex items-center justify-center gap-4">
+                          <span className="text-8xl font-black text-[#6f42c1] tracking-tighter">{attendanceCode}</span>
+                       </div>
+                    </div>
+                    
+                    <div className="p-10 flex flex-col items-center justify-center gap-6 bg-gray-50/50">
+                       {codeQrUrl ? (
+                         <div className="p-6 bg-white rounded-[2.5rem] shadow-xl shadow-purple-900/5 relative group">
+                            <img src={codeQrUrl} alt="Session QR" className="w-48 h-48" />
+                            <div className="absolute inset-0 border-4 border-white/50 rounded-[2.5rem] transition-all" />
+                            <div className="mt-4 text-center">
+                               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center justify-center gap-2 font-bengali">
+                                  <QrCode className="w-3 h-3" /> স্ক্যান করে হাজিরা দিন
+                               </p>
+                            </div>
+                         </div>
+                       ) : (
+                         <div className="w-48 h-48 bg-white rounded-[2.5rem] animate-pulse flex items-center justify-center">
+                            <Loader2 className="w-8 h-8 animate-spin text-purple-200" />
+                         </div>
+                       )}
+                       
+                       <div className="space-y-1 text-center">
+                          <p className="text-sm font-black text-gray-900 font-bengali">শিক্ষার্থীদের এই কোডটি দিন</p>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest font-bengali">কোডটি ১৫ মিনিট সচল থাকবে</p>
+                       </div>
+
+                       <button 
+                        onClick={generateAttendanceCode}
+                        className="text-[10px] font-black text-purple-600 uppercase tracking-widest hover:underline font-bengali"
+                       >
+                         নতুন কোড তৈরি করুন
+                       </button>
+                    </div>
+                  </Card>
+
+                  {/* Real-time Attendees List */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between px-2">
+                      <h3 className="text-sm font-black text-gray-900 font-bengali flex items-center gap-2">
+                        <Users className="w-4 h-4 text-[#6f42c1]" /> উপস্থিত শিক্ষার্থী ({presentCount})
+                      </h3>
+                      <div className="flex items-center gap-1">
+                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                         <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest font-bengali">Live Updates</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3">
+                      {students.filter(s => attendance[s.user_id]).length > 0 ? (
+                        students.filter(s => attendance[s.user_id])
+                        .reverse()
+                        .map((student) => (
+                          <motion.div
+                            key={student.user_id}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-emerald-50 flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black text-xs">
+                                 {student.name.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="text-sm font-black text-gray-900 font-bengali leading-tight">{student.name}</p>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Roll: {student.student_id}</p>
+                              </div>
+                            </div>
+                            <div className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[9px] font-black uppercase tracking-widest font-bengali">
+                               হাজিরা দিয়েছে
+                            </div>
+                          </motion.div>
+                        ))
+                      ) : (
+                        <div className="p-12 text-center bg-white/50 border-2 border-dashed border-gray-100 rounded-[2.5rem] space-y-3">
+                           <Loader2 className="w-8 h-8 animate-spin text-gray-200 mx-auto" />
+                           <p className="text-[11px] font-bold text-gray-400 font-bengali uppercase tracking-widest">শিক্ষার্থীদের জন্য অপেক্ষা করা হচ্ছে...</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </motion.div>
@@ -949,7 +1192,7 @@ export default function AttendancePage() {
             exit={{ y: 100, opacity: 0 }}
             className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-md z-50 flex flex-col gap-4"
           >
-            {attendanceMethod === "manual" || attendanceMethod === "qr" ? (
+            {attendanceMethod === "manual" || attendanceMethod === "qr" || attendanceMethod === "code" ? (
               <div className="bg-white/80 backdrop-blur-xl border border-white p-4 rounded-[2.5rem] shadow-2xl flex flex-col gap-4">
                  <div className="flex items-center justify-between px-2 pt-1">
                     <div className="flex items-center gap-3">
@@ -965,7 +1208,7 @@ export default function AttendancePage() {
 
                  <button 
                   onClick={handleSubmitAttendance}
-                  disabled={submitting || (attendanceMethod === "manual" && fetchingStudents)}
+                  disabled={submitting || (attendanceMethod === "manual" && fetchingStudents) || (attendanceMethod === "code" && !attendanceCode)}
                   className="w-full py-5 bg-[#6f42c1] text-white rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-purple-600/20 active:scale-95 hover:scale-[1.02] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:scale-100 font-bengali"
                  >
                     {submitting ? (
