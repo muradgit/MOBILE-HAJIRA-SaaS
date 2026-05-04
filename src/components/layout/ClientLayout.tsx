@@ -95,6 +95,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       { label: "ড্যাশবোর্ড", href: "/admin/dashboard", icon: LayoutDashboard },
       { label: "শিক্ষক", href: "/admin/teachers", icon: Users },
       { label: "শিক্ষার্থী", href: "/admin/students", icon: UserPlus },
+      { label: "ID কার্ড সমূহ", href: "/admin/id-cards", icon: CreditCard },
       { label: "প্রোফাইল", href: "/profile", icon: User },
       { label: "সেটিংস", href: "/admin/settings", icon: Settings },
     ],
@@ -102,6 +103,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       { label: "ড্যাশবোর্ড", href: "/teacher/dashboard", icon: LayoutDashboard },
       { label: "হাজিরা প্যানেল", href: "/teacher/attendance", icon: ClipboardCheck },
       { label: "আমার শিক্ষার্থী", href: "/teacher/students", icon: GraduationCap },
+      { label: "ID কার্ড", href: "/teacher/id-cards", icon: CreditCard },
       { label: "প্রোফাইল", href: "/profile", icon: User },
     ],
     student: [
@@ -131,13 +133,13 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     institute_admin: [
       { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
       { label: "Teachers", href: "/admin/teachers", icon: Users },
-      { label: "Students", href: "/admin/students", icon: UserPlus },
+      { label: "ID Cards", href: "/admin/id-cards", icon: CreditCard },
       { label: "Settings", href: "/admin/settings", icon: Settings },
     ],
     teacher: [
       { label: "Dashboard", href: "/teacher/dashboard", icon: LayoutDashboard },
       { label: "Attendance", href: "/teacher/attendance", icon: ClipboardCheck },
-      { label: "Students", href: "/teacher/students", icon: GraduationCap },
+      { label: "ID Cards", href: "/teacher/id-cards", icon: CreditCard },
     ],
     student: [
       { label: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
