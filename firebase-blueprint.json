@@ -27,9 +27,26 @@
         "name": { "type": "string" },
         "role": { "type": "string", "enum": ["super_admin", "institute_admin", "teacher", "student"] },
         "tenant_id": { "type": "string" },
-        "status": { "type": "string", "enum": ["approved", "pending", "blocked"] }
+        "status": { "type": "string", "enum": ["approved", "pending", "blocked"] },
+        "fcmToken": { "type": "string" }
       },
       "required": ["user_id", "email", "role"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A notification sent to a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "type": { "type": "string" },
+        "status": { "type": "string", "enum": ["unread", "read"] },
+        "link": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user_id", "title", "body", "createdAt"]
     },
     "TeacherClass": {
       "title": "TeacherClass",
@@ -132,6 +149,10 @@
     "/tenants/{tenantId}/attendance_entries/{entryId}": {
       "schema": "AttendanceEntry",
       "description": "Student check-in entries"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications"
     }
   }
 }

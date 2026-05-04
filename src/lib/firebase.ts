@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { initializeFirestore } from "firebase/firestore";
+import { getMessaging, isSupported } from "firebase/messaging";
 import firebaseConfigData from "../../firebase-applet-config.json";
 
 const firebaseConfig = {
@@ -20,3 +21,8 @@ const databaseId = process.env.FIREBASE_DATABASE_ID || firebaseConfigData.firest
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true
 }, databaseId);
+
+export const messaging = async () => {
+  const supported = await isSupported();
+  return supported ? getMessaging(app) : null;
+};

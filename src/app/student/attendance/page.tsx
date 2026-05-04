@@ -21,6 +21,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useOfflineSync } from "@/src/hooks/useOfflineSync";
+import { triggerNotification } from "@/src/lib/notifications";
 import { Card } from "@/src/components/ui/Card";
 import { toast } from "sonner";
 import { cn } from "@/src/lib/utils";
@@ -291,6 +292,16 @@ export default function StudentAttendancePage() {
       if (data.success) {
         if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate([100, 30, 100]);
         toast.success("হাজিরা সফলভাবে জমা হয়েছে!");
+        
+        // Notify student of success
+        triggerNotification({
+          userId: userData.user_id,
+          title: "হাজিরা সফল",
+          body: `${selectedSession.className || "ক্লাস"} এর হাজিরা সফলভাবে জমা হয়েছে।`,
+          type: "attendance",
+          link: "/student/dashboard"
+        });
+
         setAttendanceStep("success");
       } else {
         toast.error(data.error || "হাজিরা জমা হয়নি");

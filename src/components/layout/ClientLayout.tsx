@@ -36,6 +36,7 @@ import { cn } from "@/src/lib/utils";
 
 import { useUserStore } from "@/src/store/useUserStore";
 import { normalizeRole, verifySuperAdmin } from "@/src/lib/auth-utils";
+import { useNotifications } from "@/src/hooks/useNotifications";
 
 /**
  * Professional Overlay UI for MOBILE-HAJIRA-SaaS
@@ -47,11 +48,23 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  const { permission, requestPermission, unreadCount } = useNotifications();
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
+
+  // Automate notification permission request after 3 seconds if not asked yet
+  useEffect(() => {
+    if (userData && permission === "default") {
+      const timer = setTimeout(() => {
+        requestPermission();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [userData, permission]);
 
   // Strict hydration check
   useEffect(() => {
@@ -472,10 +485,19 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                 
                 <CreditBadge className="hidden md:flex" />
 
-                <div className="p-2.5 bg-gray-50 rounded-full text-gray-400 hover:text-[#6f42c1] cursor-pointer relative hidden sm:block">
+                <button 
+                  onClick={() => router.push("/notifications")}
+                  className="p-2.5 bg-gray-50 rounded-full text-gray-400 hover:text-[#6f42c1] cursor-pointer relative transition-colors"
+                >
                    <Bell className="w-5 h-5" />
-                   <div className="absolute top-2 right-2 w-2 h-2 bg-[#6f42c1] rounded-full" />
-                </div>
+                   {unreadCount > 0 ? (
+                     <div className="absolute top-2 right-2 w-4 h-4 bg-[#6f42c1] text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                     </div>
+                   ) : permission !== "granted" && (
+                     <div className="absolute top-2.5 right-2.5 w-2 h-2 bg-amber-400 rounded-full border-2 border-white" />
+                   )}
+                </button>
                 <div className="relative profile-menu-container flex items-center gap-2 sm:gap-4">
                   {isDualRole && (
                     <div className="hidden md:flex bg-gray-100 p-1 rounded-2xl border border-gray-200">

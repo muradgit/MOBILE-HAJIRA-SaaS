@@ -145,6 +145,8 @@ export async function POST(req: NextRequest) {
         updatedAt: FieldValue.serverTimestamp()
       });
 
+      const newCredits = currentCredits - 2;
+
       // C. Log Credit History
       const historyRef = tenantRef.collection("credit_history").doc();
       transaction.set(historyRef, {
@@ -153,14 +155,39 @@ export async function POST(req: NextRequest) {
         description: `Attendance Submission: ${className || 'Class'} (${subject || 'No Subject'})`,
         timestamp: FieldValue.serverTimestamp(),
         previous_balance: currentCredits,
-        new_balance: currentCredits - 2,
+        new_balance: newCredits,
         reference_id: logRef.id
       });
 
-      return { logId: logRef.id, googleSheetId, dateStr, teacherName: attendanceLog.teacherName };
+      return { logId: logRef.id, googleSheetId, dateStr, teacherName: attendanceLog.teacherName, newCredits, ownerEmail: tenantData?.owner_email };
     });
 
-    const { logId, googleSheetId, dateStr, teacherName: logTeacherName } = result;
+    const { logId, googleSheetId, dateStr, teacherName: logTeacherName, newCredits, ownerEmail } = result;
+
+    // 4. Handle Notifications (Low Credit Alert)
+    if (newCredits < 20 && ownerEmail) {
+      try {
+        const owners = await adminDb.collection("users").where("email", "==", ownerEmail).limit(1).get();
+        if (!owners.empty) {
+          const ownerId = owners.docs[0].id;
+          
+          // Use internal fetch to trigger notification
+          await fetch(`${new URL(req.url).origin}/api/notifications/send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: ownerId,
+              title: "লো ক্রেডিট সর্তকতা!",
+              body: `আপনার প্রতিষ্ঠানের ক্রেডিট শেষ হয়ে যাচ্ছে (মাত্র ${newCredits} অবশিষ্ঠ)। দ্রুত রিচার্জ করুন।`,
+              type: "alert",
+              link: "/admin/dashboard"
+            }),
+          });
+        }
+      } catch (e) {
+        console.error("Failed to send low credit notification:", e);
+      }
+    }
 
     // 5. Queue Background Sync (Google Sheets)
     if (googleSheetId) {

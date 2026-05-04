@@ -28,6 +28,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { triggerNotification } from "@/src/lib/notifications";
 import { useUserStore } from "@/src/store/useUserStore";
 import { Card } from "@/src/components/ui/Card";
 import { toast } from "sonner";
@@ -593,6 +594,22 @@ export default function AttendancePage() {
 
       setAttendanceCode(code);
       setCodeQrUrl(qrUrl);
+
+      // Notify students of this class
+      if (students.length > 0) {
+        // We notify them asynchronously
+        students.forEach(student => {
+          if (student.user_id) {
+            triggerNotification({
+              userId: student.user_id,
+              title: "হাজিরা শুরু হয়েছে",
+              body: `${selectedClass?.nameBN || selectedClass?.name} ক্লাসের হাজিরা শুরু হয়েছে। দ্রুত অংশগ্রহণ করুন।`,
+              type: "attendance",
+              link: "/student/attendance"
+            });
+          }
+        });
+      }
 
       // Create a session in Firestore so students can "check-in"
       const sessionPath = `tenants/${tenantId}/attendance_sessions`;

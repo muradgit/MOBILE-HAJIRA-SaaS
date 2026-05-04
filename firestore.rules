@@ -55,6 +55,14 @@ service cloud.firestore {
              data.role is string;
     }
 
+    function isValidNotificationSchema(data) {
+      return data.keys().hasAll(['user_id', 'title', 'body', 'createdAt']) &&
+             data.user_id is string &&
+             data.title is string &&
+             data.body is string &&
+             data.createdAt is timestamp;
+    }
+
     function isValidTenantSchema(data) {
       return data.keys().hasAll(['tenant_id', 'name']) &&
              data.tenant_id is string &&
@@ -111,6 +119,14 @@ service cloud.firestore {
       allow create: if isSuperAdmin() || (isSignedIn() && request.auth.uid == userId && isValidUserSchema(request.resource.data));
       allow update: if isSuperAdmin() || (request.auth.uid == userId) || (isSignedIn() && isInstitutionAdmin(resource.data.tenant_id));
       allow delete: if isSuperAdmin();
+    }
+
+    // Notifications
+    match /notifications/{id} {
+      allow read: if isSignedIn() && resource.data.user_id == request.auth.uid;
+      allow create: if isSuperAdmin(); // Usually created via API/Server
+      allow update: if isSignedIn() && resource.data.user_id == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+      allow delete: if isSignedIn() && resource.data.user_id == request.auth.uid;
     }
 
     // System Config
