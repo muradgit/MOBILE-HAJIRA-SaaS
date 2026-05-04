@@ -1,11 +1,13 @@
 {
-  "name": "Mobile-Hajira",
+  "name": "Mobile-Hajira SaaS",
   "short_name": "Hajira",
-  "description": "Smart Student Attendance & ID Card System",
+  "description": "Smart Student Attendance & ID Card System for Bangladesh",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#6f42c1",
+  "orientation": "portrait-primary",
+  "categories": ["education", "productivity"],
   "icons": [
     {
       "src": "icons/icon-192x192.png",
@@ -18,6 +20,14 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Attendance",
+      "short_name": "Attendance",
+      "url": "/teacher/attendance",
+      "icons": [{ "src": "icons/icon-192x192.png", "sizes": "192x192" }]
     }
   ]
 }

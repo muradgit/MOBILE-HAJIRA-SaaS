@@ -64,6 +64,14 @@ export default function TeacherReportsPage() {
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [classes, setClasses] = useState<TeacherClass[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  const handleRefresh = async () => {
+    if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(10);
+    setIsRefreshing(true);
+    await fetchData();
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
   
   // Filters
   const [selectedClassId, setSelectedClassId] = useState<string>("all");
@@ -345,10 +353,10 @@ export default function TeacherReportsPage() {
               </div>
 
               <button 
-                onClick={fetchData}
+                onClick={handleRefresh}
                 className="flex items-center gap-2 text-sm font-bold text-[#6f42c1] hover:bg-purple-50 px-4 py-2 rounded-xl transition-all"
               >
-                <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} /> ডেটা রিফ্রেশ করুন
+                <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} /> ডেটা রিফ্রেশ করুন
               </button>
            </div>
         </div>

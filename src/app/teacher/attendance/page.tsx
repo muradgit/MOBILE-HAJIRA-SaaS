@@ -24,7 +24,8 @@ import {
   FlipHorizontal,
   Trash2,
   Wifi,
-  WifiOff
+  WifiOff,
+  RefreshCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useUserStore } from "@/src/store/useUserStore";
@@ -179,6 +180,13 @@ export default function AttendancePage() {
   const [fetchingStudents, setFetchingStudents] = useState(false);
   const [attendance, setAttendance] = useState<Record<string, boolean>>({});
   const [studentNotes, setStudentNotes] = useState<Record<string, string>>({});
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchStudentsForClass(true);
+    setTimeout(() => setIsRefreshing(false), 1000);
+  };
   const [subject, setSubject] = useState("সাধারণ পাঠ");
   const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -645,6 +653,9 @@ export default function AttendancePage() {
   };
 
   const toggleAttendance = (studentId: string) => {
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      navigator.vibrate(10);
+    }
     setAttendance(prev => ({
       ...prev,
       [studentId]: !prev[studentId]
@@ -836,6 +847,12 @@ export default function AttendancePage() {
       if (!navigator.onLine) {
         addToQueue(payload);
         toast.dismiss(toastId);
+        
+        // Haptic Feedback for Success
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+           navigator.vibrate([100, 30, 100]);
+        }
+        
         onSuccessCleanup();
         return;
       }
@@ -858,6 +875,12 @@ export default function AttendancePage() {
       }
  
       toast.success(result.message || "হাজিরা সফলভাবে জমা দেওয়া হয়েছে!", { id: toastId });
+      
+      // Haptic Feedback for Success
+      if (typeof navigator !== "undefined" && navigator.vibrate) {
+         navigator.vibrate([100, 30, 100]);
+      }
+
       onSuccessCleanup();
     } catch (error: any) {
       console.error("Error submitting attendance:", error);
@@ -899,6 +922,20 @@ export default function AttendancePage() {
                 >
                   <WifiOff className="w-3 h-3" />
                   Offline
+                </motion.div>
+              )}
+              {isOnline && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  onClick={handleRefresh}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-purple-900/10 cursor-pointer hover:bg-white/30 transition-colors",
+                    isRefreshing && "animate-pulse"
+                  )}
+                >
+                  <RefreshCw className={cn("w-3 h-3", isRefreshing && "animate-spin")} />
+                  {isRefreshing ? "Refreshing..." : "Refresh"}
                 </motion.div>
               )}
               {isOnline && queue.length > 0 && (

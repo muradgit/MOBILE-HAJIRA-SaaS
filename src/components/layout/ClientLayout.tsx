@@ -31,6 +31,7 @@ import {
   Wifi,
   WifiOff
 } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/src/lib/utils";
 
 import { useUserStore } from "@/src/store/useUserStore";
@@ -49,11 +50,37 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
 
   // Strict hydration check
   useEffect(() => {
     setIsMounted(true);
+
+    // Listen for beforeinstallprompt
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      // Show install banner if user hasn't seen it recently
+      const hasDismissed = localStorage.getItem("hajira_install_dismissed");
+      if (!hasDismissed) {
+        setShowInstallBanner(true);
+      }
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
   }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+      setShowInstallBanner(false);
+    }
+    setDeferredPrompt(null);
+  };
 
   // Close menus when route changes
   useEffect(() => {
@@ -328,6 +355,57 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-screen w-full flex flex-col overflow-hidden bg-[#F8F9FA]">
       
+      {/* 0. OFFLINE & INSTALL BANNERS */}
+      <AnimatePresence>
+        {!isOnline && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="bg-rose-600 text-white text-[10px] sm:text-xs font-black uppercase tracking-widest py-2 px-4 shadow-xl flex items-center justify-center gap-2 z-[200] font-bengali"
+          >
+            <WifiOff className="w-3.5 h-3.5" />
+            আপনি এখন বর্তমানে অফলাইনে আছেন। কিছু ফিচার জদাবস্থায় সীমিত থাকতে পারে।
+          </motion.div>
+        )}
+        
+        {showInstallBanner && isOnline && (
+          <motion.div 
+            initial={{ y: -100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -100, opacity: 0 }}
+            className="fixed top-24 left-4 right-4 bg-white border border-purple-100 rounded-2xl shadow-2xl p-4 flex items-center justify-between z-[150] sm:max-w-md sm:mx-auto"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600">
+                <Home className="w-6 h-6" />
+              </div>
+              <div className="flex flex-col">
+                <p className="text-xs font-black text-gray-900 font-bengali">সহজে ব্যবহারের জন্য অ্যাপ যুক্ত করুন</p>
+                <p className="text-[10px] font-bold text-gray-400">Add Mobile-Hajira to your Home Screen</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => {
+                  setShowInstallBanner(false);
+                  localStorage.setItem("hajira_install_dismissed", "true");
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={handleInstallClick}
+                className="bg-[#6f42c1] text-white text-[10px] font-black uppercase px-4 py-2 rounded-lg shadow-lg shadow-purple-500/20"
+              >
+                Install
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 1. TOP HEADER (Professional Overlay) */}
       <header className="sticky top-0 h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-6 sm:px-10 z-[100] shrink-0">
           {!userData ? (
@@ -630,25 +708,41 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
       {/* --- MOBILE BOTTOM NAV --- */}
       {userData && (
-        <nav className="fixed bottom-0 left-0 right-0 h-20 bg-white border-t border-gray-100 px-6 flex items-center justify-between lg:hidden z-50">
+        <nav className="fixed bottom-0 left-0 right-0 h-20 bg-white/90 backdrop-blur-md border-t border-gray-100 px-6 flex items-center justify-between lg:hidden z-50 rounded-t-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
            {mobileNavItems.map((item) => {
              const isActive = pathname === item.href;
              return (
                <button
                  key={item.href}
-                 onClick={() => router.push(item.href)}
+                 onClick={() => {
+                   router.push(item.href);
+                   // Haptic feedback simulation
+                   if (typeof navigator !== "undefined" && navigator.vibrate) {
+                     navigator.vibrate(10);
+                   }
+                 }}
                  className={cn(
-                   "flex flex-col items-center gap-1 transition-all",
-                   isActive ? "text-[#6f42c1]" : "text-gray-400"
+                   "relative flex flex-col items-center gap-1 transition-all flex-1",
+                   isActive ? "text-[#6f42c1]" : "text-gray-400 hover:text-gray-600"
                  )}
                >
+                 {isActive && (
+                   <motion.div 
+                     layoutId="mobile-nav-pill"
+                     className="absolute -top-1 w-8 h-1 bg-[#6f42c1] rounded-full"
+                     transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                   />
+                 )}
                  <div className={cn(
                    "w-12 h-8 flex items-center justify-center rounded-2xl transition-all",
-                   isActive ? "bg-purple-100" : ""
+                   isActive ? "bg-purple-100/50" : "group-hover:bg-gray-100"
                  )}>
-                   <item.icon className="w-5 h-5" />
+                   <item.icon className={cn(
+                     "w-5 h-5 transition-transform",
+                     isActive && "scale-110"
+                   )} />
                  </div>
-                 <span className="text-[9px] font-black uppercase tracking-widest">{item.label}</span>
+                 <span className="text-[9px] font-black uppercase tracking-widest leading-none mt-1">{item.label}</span>
                </button>
              );
            })}

@@ -32,6 +32,24 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Push Notification Support
+self.addEventListener('push', (event) => {
+  const data = event.data?.json() || { title: 'Mobile Hajira', body: 'নতুন একটি নোটিফিকেশন এসেছে' };
+  const options = {
+    body: data.body,
+    icon: '/icons/icon-192x192.png',
+    badge: '/icons/icon-192x192.png',
+    vibrate: [100, 50, 100],
+    data: { url: data.url || '/' }
+  };
+  event.waitUntil(self.registration.showNotification(data.title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(clients.openWindow(event.notification.data.url));
+});
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
@@ -58,9 +76,25 @@ self.addEventListener('fetch', (event) => {
   if (
     url.searchParams.has('_rsc') || 
     url.pathname.startsWith('/api/') || 
-    url.pathname.includes('/_next/data/')
+    url.pathname.includes('/_next/data/') ||
+    event.request.headers.get('RSC') === '1'
   ) {
-    return; // Let browser handle it normally
+    // For RSC, try network first, then return a fallback if offline to avoid the "Failed to fetch RSC payload" error
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        // Return a 200 OK empty response or a cached version if possible
+        // but for RSC, sometimes returning an error is better handled by Next.js if we can't provide a valid payload.
+        // However, to satisfy the browser and avoid console spam:
+        return caches.match(event.request).then(cachedResponse => {
+            if (cachedResponse) return cachedResponse;
+            // If it's the home page payload, we might have it cached as index.html
+            // but for specific RSC paths, returning null/empty might break things.
+            // Still, a response is better than a fetch error.
+            return new Response('', { status: 503, statusText: 'Service Unavailable (Offline)' });
+        });
+      })
+    );
+    return;
   }
 
   // 4. Cache-first strategy for static assets

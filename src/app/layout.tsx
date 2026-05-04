@@ -25,6 +25,13 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Mobile Hajira",
   },
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+    viewportFit: "cover",
+  },
 };
 
 import { Toaster } from "sonner";

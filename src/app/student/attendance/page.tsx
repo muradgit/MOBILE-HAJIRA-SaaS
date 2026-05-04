@@ -159,6 +159,7 @@ export default function StudentAttendancePage() {
   };
 
   const handleQRResult = async (text: string) => {
+    if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(50);
     try {
       const data = JSON.parse(text);
       if (data.type === "attendance_code" && data.code) {
@@ -190,9 +191,11 @@ export default function StudentAttendancePage() {
     if (value && index === 0) {
       const nextInput = document.getElementById("code-1");
       nextInput?.focus();
+      if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(10);
     }
 
     if (value && index === 1) {
+       if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(10);
        const finalCode = newCode.join("");
        submitAttendance(finalCode, "code");
     }
@@ -272,6 +275,7 @@ export default function StudentAttendancePage() {
 
       if (!isOnline) {
         addToQueue(payload);
+        if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate([100, 30, 100]);
         setAttendanceStep("success");
         return;
       }
@@ -285,6 +289,7 @@ export default function StudentAttendancePage() {
       const data = await res.json();
 
       if (data.success) {
+        if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate([100, 30, 100]);
         toast.success("হাজিরা সফলভাবে জমা হয়েছে!");
         setAttendanceStep("success");
       } else {

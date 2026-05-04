@@ -13,6 +13,19 @@ interface AttendanceQueueItem {
 export function useOfflineSync() {
   const [queue, setQueue] = useState<AttendanceQueueItem[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
+
+  // Update offline status
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   // Load queue from localStorage
   useEffect(() => {
@@ -112,6 +125,6 @@ export function useOfflineSync() {
     addToQueue,
     syncQueue,
     isSyncing,
-    isOffline: typeof navigator !== "undefined" ? !navigator.onLine : false,
+    isOffline,
   };
 }
