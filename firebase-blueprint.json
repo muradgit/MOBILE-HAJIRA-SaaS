@@ -115,9 +115,45 @@
         "code": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       }
+    },
+    "MacrodroidPayment": {
+      "title": "MacrodroidPayment",
+      "description": "Payment confirmations received from Macrodroid",
+      "type": "object",
+      "properties": {
+        "trx_id": { "type": "string" },
+        "amount": { "type": "number" },
+        "sender_number": { "type": "string" },
+        "raw_message": { "type": "string" },
+        "status": { "type": "string", "enum": ["unused", "used"] },
+        "claimed_by": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "CreditHistory": {
+      "title": "CreditHistory",
+      "description": "Log of credit balance changes",
+      "type": "object",
+      "properties": {
+        "tenant_id": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["purchase", "usage", "refund", "manual_injection"] },
+        "description": { "type": "string" },
+        "previous_balance": { "type": "number" },
+        "new_balance": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "firestore": {
+    "/macrodroid_payments/{paymentId}": {
+      "schema": "MacrodroidPayment",
+      "description": "Global pool of payments waiting to be claimed"
+    },
+    "/tenants/{tenantId}/credit_history/{logId}": {
+      "schema": "CreditHistory",
+      "description": "Credit history for a specific tenant"
+    },
     "/tenants/{tenantId}": {
       "schema": "Tenant",
       "description": "Collection of all tenants (institutes)"

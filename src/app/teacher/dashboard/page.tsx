@@ -12,9 +12,10 @@ import {
   CreditCard,
   TrendingUp,
   Award,
-  Loader2
+  Loader2,
+  Zap
 } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useUserStore } from "@/src/store/useUserStore";
@@ -159,6 +160,7 @@ export default function TeacherDashboard() {
   const teacherName = userData.name || userData.nameBN || "সম্মানিত শিক্ষক";
   const { tenant } = useAuth();
   const credits = tenant?.credits_left ?? 0;
+  const isCreditLow = credits < 50;
 
   // Enhance Dashboard Stats with real credit data
   const dynamicStats = [
@@ -174,6 +176,21 @@ export default function TeacherDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 font-bengali overflow-x-hidden">
+      
+      {/* Low Credit Alert for Teachers */}
+      <AnimatePresence>
+        {isCreditLow && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            className="bg-amber-500 text-white px-6 py-3 text-center text-xs font-black uppercase tracking-widest shadow-lg flex items-center justify-center gap-3"
+          >
+            <Zap className="w-4 h-4 animate-pulse" />
+            প্রতিষ্ঠানের ক্রেডিট শেষ হয়ে যাচ্ছে! হাজিরা বন্ধ হওয়ার আগে এডমিনকে জানান।
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Welcome Header */}
       <div className="bg-[#6f42c1] text-white pt-12 pb-32 px-6 rounded-b-[3.5rem] shadow-2xl relative overflow-hidden">
         {/* Background Decorations - Lowered Z-index to ensure they stay back */}

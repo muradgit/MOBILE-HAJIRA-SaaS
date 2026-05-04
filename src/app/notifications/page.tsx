@@ -32,7 +32,7 @@ interface AppNotification {
 
 export default function NotificationsPage() {
   const router = useRouter();
-  const { userData } = useUserStore();
+  const { user: userData } = useUserStore();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
 

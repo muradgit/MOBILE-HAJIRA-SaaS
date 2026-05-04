@@ -6,7 +6,7 @@ import { useUserStore } from "@/src/store/useUserStore";
 import { toast } from "sonner";
 
 export function useNotifications() {
-  const { userData } = useUserStore();
+  const { user: userData } = useUserStore();
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [unreadCount, setUnreadCount] = useState(0);
   

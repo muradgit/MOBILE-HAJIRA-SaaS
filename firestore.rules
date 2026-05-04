@@ -84,7 +84,7 @@ service cloud.firestore {
     match /tenants/{tenantId} {
       allow read: if isMemberOfTenant(tenantId);
       allow create: if isSuperAdmin() || (isSignedIn() && isValidTenantSchema(request.resource.data));
-      allow update: if isInstitutionAdmin(tenantId);
+      allow update: if isSuperAdmin() || (isInstitutionAdmin(tenantId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'nameBN', 'eiin', 'googleSheetId', 'academicLevels', 'recharge_status', 'last_active_date', 'website', 'phone', 'address', 'admin_name', 'admin_mobile', 'classes', 'departments', 'sessions', 'shifts', 'institutionType', 'updatedAt']));
       allow delete: if isSuperAdmin();
 
       // Subcollections
@@ -111,6 +111,15 @@ service cloud.firestore {
         allow update, delete: if isTeacher(tenantId) || isInstitutionAdmin(tenantId);
       }
       match /settings/{id} { allow read, write: if isInstitutionAdmin(tenantId); }
+      match /credit_history/{id} { 
+        allow read: if isInstitutionAdmin(tenantId);
+        allow write: if false; // Only via API
+      }
+    }
+
+    // Macrodroid Payments
+    match /macrodroid_payments/{id} {
+      allow read, write: if isSuperAdmin();
     }
 
     // Global User Profiles

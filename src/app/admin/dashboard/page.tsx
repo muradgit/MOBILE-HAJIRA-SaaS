@@ -164,43 +164,73 @@ export default function AdminDashboard() {
     { name: "শিক্ষার্থীবৃন্দ", desc: "Student Directory", icon: GraduationCap, path: "/admin/students", color: "bg-blue-50 text-blue-600" },
     { name: "হাজিরা রিপোর্ট", desc: "Attendance History", icon: FileText, path: "/admin/users", color: "bg-emerald-50 text-emerald-600" },
     { name: "SMS প্যানেল", desc: "Parent Communication", icon: MessageSquare, path: "/admin/sms", color: "bg-orange-50 text-orange-600" },
-    { name: "ক্রেডিট ও বিলিং", desc: "Account Balance", icon: CreditCard, path: "/admin/billing", color: "bg-indigo-50 text-indigo-600" },
+    { name: "ক্রেডিট ও বিলিং", desc: "Account Balance", icon: CreditCard, path: "/admin/credits/topup", color: "bg-indigo-50 text-indigo-600" },
     { name: "সেটিংস", desc: "Institute Profile", icon: Settings, path: "/admin/settings", color: "bg-gray-50 text-gray-600" },
   ];
 
   const isOnboardingPending = !tenant?.googleSheetId || !tenant?.eiin;
+  const isCreditLow = stats.credits < 50;
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-10 animate-in fade-in zoom-in duration-500 pb-20">
       
-      {/* 0. Onboarding Alert */}
+      {/* 0. Critical Alerts Stack */}
       <AnimatePresence>
-        {isOnboardingPending && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="bg-amber-600 text-white p-6 sm:p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl shadow-amber-900/10">
-              <div className="flex items-center gap-5">
-                <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0">
-                  <AlertCircle className="w-8 h-8 text-white" />
+        <div className="space-y-4">
+          {isOnboardingPending && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="bg-amber-600 text-white p-6 sm:p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl shadow-amber-900/10">
+                <div className="flex items-center gap-5">
+                  <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0">
+                    <AlertCircle className="w-8 h-8 text-white" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-xl font-black font-bengali">অনবোর্ডিং অসম্পূর্ণ!</h3>
+                    <p className="text-xs font-medium text-amber-50 font-bengali opacity-90">আপনার প্রতিষ্ঠানের EIIN এবং গুগল শীট আইডি সেটআপ করা হয়নি। সিস্টেম সচল করতে এগুলো দ্রুত সেটআপ করুন।</p>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <h3 className="text-xl font-black font-bengali">অনবোর্ডিং অসম্পূর্ণ!</h3>
-                  <p className="text-xs font-medium text-amber-50 font-bengali opacity-90">আপনার প্রতিষ্ঠানের EIIN এবং গুগল শীট আইডি সেটআপ করা হয়নি। সিস্টেম সচল করতে এগুলো দ্রুত সেটআপ করুন।</p>
-                </div>
+                <button 
+                  onClick={() => router.push("/admin/settings")}
+                  className="whitespace-nowrap px-8 py-4 bg-white text-amber-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-amber-50 transition-all flex items-center gap-2 group"
+                >
+                  অনবোর্ডিং সম্পূর্ণ করুন <ArrowUpRight className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                </button>
               </div>
-              <button 
-                onClick={() => router.push("/admin/settings")}
-                className="whitespace-nowrap px-8 py-4 bg-white text-amber-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-amber-50 transition-all flex items-center gap-2 group"
-              >
-                অনবোর্ডিং সম্পূর্ণ করুন <ArrowUpRight className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-              </button>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
+
+          {isCreditLow && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="bg-rose-600 text-white p-6 sm:p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl shadow-rose-900/10">
+                <div className="flex items-center gap-5">
+                  <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0">
+                    <Zap className="w-8 h-8 text-white" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-xl font-black font-bengali">ক্রেডিট শেষ হয়ে যাচ্ছে!</h3>
+                    <p className="text-xs font-medium text-rose-50 font-bengali opacity-90">আপনার বর্তমান ব্যালেন্স {stats.credits}। অটোমেটিক হাজিরা সিস্টেম সচল রাখতে রিচার্জ করুন।</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => router.push("/admin/credits/topup")}
+                  className="whitespace-nowrap px-8 py-4 bg-white text-rose-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center gap-2 group"
+                >
+                  রিচার্জ করুন <ArrowUpRight className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </div>
       </AnimatePresence>
 
       {/* 1. Hero Welcome Section */}
@@ -228,7 +258,7 @@ export default function AdminDashboard() {
 
           <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
             <button 
-              onClick={() => router.push("/admin/billing")}
+              onClick={() => router.push("/admin/credits/topup")}
               className="group bg-white text-[#6f42c1] px-10 py-5 rounded-3xl font-black text-sm uppercase tracking-widest shadow-2xl shadow-white/10 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3"
             >
               <Zap className="w-5 h-5 group-hover:animate-bounce" /> ক্রেডিট রিচার্জ
@@ -249,10 +279,10 @@ export default function AdminDashboard() {
             title="অবশিষ্ট ক্রেডিট" 
             value={stats.credits} 
             icon={Zap} 
-            color="text-amber-500" 
-            bgColor="bg-amber-50"
-            trend="+5% from last month"
-            onClick={() => router.push("/admin/billing")}
+            color={stats.credits < 50 ? "text-rose-500" : "text-amber-500"} 
+            bgColor={stats.credits < 50 ? "bg-rose-50" : "bg-amber-50"}
+            trend={stats.credits < 50 ? "ব্যালেন্স শেষ পর্যায়" : "+৫% এই মাসে"}
+            onClick={() => router.push("/admin/credits/topup")}
           />
           <StatBox 
             title="আজকের হাজিরা" 

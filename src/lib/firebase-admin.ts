@@ -1,5 +1,7 @@
 import * as admin from "firebase-admin";
 
+export { admin };
+
 const getAdminApp = () => {
   if (admin.apps.length > 0) {
     return admin.apps[0]!;

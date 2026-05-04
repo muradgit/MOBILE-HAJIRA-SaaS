@@ -108,13 +108,28 @@ export interface AttendanceRecord {
   status: "present" | "absent";
 }
 
-export interface Transaction {
+export interface MacrodroidPayment {
+  id?: string;
   trx_id: string;
   amount: number;
   sender_number: string;
+  raw_message: string;
   status: "unused" | "used";
-  claimed_by_tenant: string;
-  timestamp: string;
+  claimed_by?: string; // tenant_id
+  claimed_at?: any;
+  timestamp: any;
+}
+
+export interface CreditHistory {
+  id?: string;
+  tenant_id: string;
+  amount: number;
+  type: "purchase" | "usage" | "refund" | "manual_injection";
+  description: string;
+  timestamp: any;
+  previous_balance: number;
+  new_balance: number;
+  reference_id?: string; // e.g. trx_id or attendance_log_id
 }
 
 export interface Broadcast {

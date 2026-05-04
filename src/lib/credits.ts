@@ -31,18 +31,18 @@ export async function deductCredits(tenantId: string, amount: number = 2, descri
         };
       }
 
-      // Deduct Credits - standardized to 'credits' field
+      // Deduct Credits
       transaction.update(tenantRef, {
-        credits: FieldValue.increment(-amount),
-        credits_left: FieldValue.increment(-amount), // Keep both updated for now
+        credits_left: FieldValue.increment(-amount),
         updatedAt: FieldValue.serverTimestamp()
       });
 
       // Log History
       const historyRef = tenantRef.collection("credit_history").doc();
       transaction.set(historyRef, {
+        tenant_id: tenantId,
         amount: -amount,
-        type: "deduction",
+        type: "usage",
         description,
         timestamp: FieldValue.serverTimestamp(),
         previous_balance: currentCredits,
