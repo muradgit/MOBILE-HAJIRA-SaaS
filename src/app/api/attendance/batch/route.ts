@@ -20,30 +20,46 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Fetch googleSheetId and check credits in a transaction
-    const tenantRef = adminDb.collection("tenants").doc(tenant_id);
-    let googleSheetId = "";
-
-    await adminDb.runTransaction(async (transaction) => {
+    const result = await adminDb.runTransaction(async (transaction) => {
+      const tenantRef = adminDb.collection("tenants").doc(tenant_id);
       const tenantDoc = await transaction.get(tenantRef);
       if (!tenantDoc.exists) throw new Error("Institution not found");
       
       const tenantData = tenantDoc.data();
       if (!tenantData) throw new Error("Invalid institution data");
       
-      if (tenantData.credits_left < 1) {
-        throw new Error("Insufficient credits to perform this operation");
+      const currentCredits = tenantData.credits ?? tenantData.credits_left ?? 0;
+      if (currentCredits < 2) {
+        throw new Error("Insufficient credits to perform this operation (Requires 2 credits)");
       }
 
-      googleSheetId = tenantData.googleSheetId;
-      if (!googleSheetId) {
+      const gSheetId = tenantData.googleSheetId;
+      if (!gSheetId) {
         throw new Error("Google Sheet ID is not configured for this institution");
       }
 
-      // Decrement credits (e.g., 1 credit per batch submission)
+      // Decrement credits (Standardized 2 credits per submission)
       transaction.update(tenantRef, {
-        credits_left: admin.firestore.FieldValue.increment(-1)
+        credits: admin.firestore.FieldValue.increment(-2),
+        credits_left: admin.firestore.FieldValue.increment(-2),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
+
+      // Log History
+      const historyRef = tenantRef.collection("credit_history").doc();
+      transaction.set(historyRef, {
+        amount: -2,
+        type: "deduction",
+        description: `Batch Attendance Submission (${student_ids.length} students)`,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        previous_balance: currentCredits,
+        new_balance: currentCredits - 2
+      });
+
+      return gSheetId;
     });
+
+    const googleSheetId = result;
 
     // 2. Authenticate with Google Sheets API
     const auth = new google.auth.GoogleAuth({

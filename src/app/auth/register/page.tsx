@@ -171,10 +171,22 @@ export default function RegisterPage() {
           owner_email: user.email,
           admin_name: data.name,
           phone: data.phone,
+          credits: 100,
           credits_left: 100, // Bonus credits for new institute
           status: "active",
           created_at: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         }, { merge: true });
+
+        // Create initial credit history for the bonus
+        await setDoc(doc(db, "tenants", finalTenantId, "credit_history", "welcome_bonus"), {
+          amount: 100,
+          type: "bonus",
+          description: "Welcome Bonus: New Account Registration",
+          timestamp: serverTimestamp(),
+          previous_balance: 0,
+          new_balance: 100
+        });
       }
 
       // 2. Create User Profile 

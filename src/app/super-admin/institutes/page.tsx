@@ -97,8 +97,11 @@ export default function InstitutionManagement() {
       const tenantData = {
         tenant_id: tenantId,
         ...formData,
+        credits: formData.credits_left, // Sync both
+        credits_left: formData.credits_left,
         status: editingTenant?.status || "active",
         created_at: editingTenant?.created_at || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
 
       await setDoc(doc(db, "tenants", tenantId), tenantData, { merge: true });
@@ -119,7 +122,7 @@ export default function InstitutionManagement() {
       institutionType: tenant.institutionType || "School",
       owner_email: tenant.owner_email || "",
       phone: tenant.phone || "",
-      credits_left: tenant.credits_left || 0,
+      credits_left: tenant.credits ?? tenant.credits_left ?? 0,
     });
     setIsDrawerOpen(true);
   };

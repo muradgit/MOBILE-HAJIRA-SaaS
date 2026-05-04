@@ -41,6 +41,7 @@ export default function BillingPage() {
   const [activeTenantId, setActiveTenantId] = useState<string | null>(null);
   const [tenantData, setTenantData] = useState<Tenant | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [creditHistory, setCreditHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // 1. Resolve Tenant ID
@@ -71,26 +72,38 @@ export default function BillingPage() {
     });
 
     // Fetch Payment History
-    const q = query(
+    const qPayments = query(
       collection(db, "payments"),
       where("tenant_id", "==", activeTenantId),
       orderBy("created_at", "desc")
     );
 
-    const unsubPayments = onSnapshot(q, (snapshot) => {
+    const unsubPayments = onSnapshot(qPayments, (snapshot) => {
       setPayments(snapshot.docs.map(doc => ({ ...doc.data(), payment_id: doc.id } as Payment)));
+    });
+
+    // Fetch Credit Usage History (Standardized)
+    const qCredits = query(
+      collection(db, "tenants", activeTenantId, "credit_history"),
+      orderBy("timestamp", "desc")
+    );
+
+    const unsubCredits = onSnapshot(qCredits, (snapshot) => {
+      setCreditHistory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
     }, (err) => {
-      console.error("Payments Fetch Error:", err);
-      // Fallback if index missing
+      console.warn("Credit history listener failed (likely empty subcoll):", err);
       setLoading(false);
     });
 
     return () => {
       unsubTenant();
       unsubPayments();
+      unsubCredits();
     };
   }, [activeTenantId, userData, authLoading]);
+
+  const [activeTab, setActiveTab] = useState<"payments" | "credits">("payments");
 
   // Auth/Role Protection
   if (authLoading || (loading && activeTenantId)) {
@@ -193,73 +206,141 @@ export default function BillingPage() {
       </Card>
 
       {/* Transaction History Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-           <div className="flex items-center gap-2">
-             <History className="w-5 h-5 text-gray-400" />
-             <h2 className="text-lg font-black text-gray-900 font-bengali">পেমেন্ট হিস্ট্রি</h2>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2">
+           <div className="flex items-center bg-gray-100 p-1 rounded-2xl w-fit">
+              <button 
+                onClick={() => setActiveTab("payments")}
+                className={cn(
+                  "px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all font-bengali",
+                  activeTab === "payments" ? "bg-white text-[#6f42c1] shadow-sm" : "text-gray-400 hover:text-gray-600"
+                )}
+              >
+                পেমেন্ট ইতিহাস
+              </button>
+              <button 
+                onClick={() => setActiveTab("credits")}
+                className={cn(
+                  "px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all font-bengali",
+                  activeTab === "credits" ? "bg-white text-[#6f42c1] shadow-sm" : "text-gray-400 hover:text-gray-600"
+                )}
+              >
+                ক্রেডিট ব্যবহার
+              </button>
            </div>
            <button className="text-[10px] font-black uppercase text-purple-600 flex items-center gap-1 hover:underline">
              Download Reports <Download className="w-3 h-3" />
            </button>
         </div>
 
-        <div className="bg-white border border-gray-100 rounded-3xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-gray-50/50 border-b border-gray-50">
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 font-bengali">তারিখ ও সময়</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 font-bengali">মেথড / ট্রানজেকশন</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 font-bengali">পরিমান</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 font-bengali">অবস্থা</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {payments.map((p) => (
-                  <tr key={p.payment_id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <p className="text-sm font-bold text-gray-900">{new Date(p.created_at).toLocaleDateString()}</p>
-                      <p className="text-[10px] text-gray-400 font-bold">{new Date(p.created_at).toLocaleTimeString()}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
+        <div className="bg-white border border-gray-100 rounded-[2.5rem] overflow-hidden shadow-sm">
+          <div className="overflow-x-auto no-scrollbar">
+            {activeTab === "payments" ? (
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-gray-50/50 border-b border-gray-50">
+                    <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400 font-bengali">তারিখ ও সময়</th>
+                    <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400 font-bengali">মেথড / ট্রানজেকশন</th>
+                    <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400 font-bengali">পরিমান</th>
+                    <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400 font-bengali">অবস্থা</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {payments.map((p) => (
+                    <tr key={p.payment_id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <p className="text-sm font-bold text-gray-900">{new Date(p.created_at).toLocaleDateString()}</p>
+                        <p className="text-[10px] text-gray-400 font-bold">{new Date(p.created_at).toLocaleTimeString()}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-widest",
+                            p.method === "bKash" ? "bg-pink-50 text-pink-600" : "bg-orange-50 text-orange-600"
+                          )}>
+                            {p.method}
+                          </span>
+                          <span className="text-[10px] font-bold text-gray-400 font-mono tracking-tighter">{p.transaction_id}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-sm font-black text-gray-900">৳{p.amount}</p>
+                        {p.credits_added && (
+                          <p className="text-[10px] text-emerald-600 font-black tracking-widest">+{p.credits_added} Credits</p>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
                         <span className={cn(
-                          "px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-widest",
-                          p.method === "bKash" ? "bg-pink-50 text-pink-600" : "bg-orange-50 text-orange-600"
+                          "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
+                          p.status === "approved" ? "bg-emerald-50 text-emerald-600" : 
+                          p.status === "pending" ? "bg-amber-50 text-amber-600" : "bg-red-50 text-red-600"
                         )}>
-                          {p.method}
+                          {p.status}
                         </span>
-                        <span className="text-[10px] font-bold text-gray-400 font-mono tracking-tighter">{p.transaction_id}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm font-black text-gray-900">৳{p.amount}</p>
-                      {p.credits_added && (
-                        <p className="text-[10px] text-emerald-600 font-bold tracking-widest">+{p.credits_added} Credits</p>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={cn(
-                        "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
-                        p.status === "approved" ? "bg-emerald-50 text-emerald-600" : 
-                        p.status === "pending" ? "bg-amber-50 text-amber-600" : "bg-red-50 text-red-600"
-                      )}>
-                        {p.status}
-                      </span>
-                    </td>
+                      </td>
+                    </tr>
+                  ))}
+                  {payments.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-24 text-center">
+                         <History className="w-12 h-12 text-gray-100 mx-auto mb-4" />
+                         <p className="text-xs font-black text-gray-400 uppercase tracking-widest font-bengali">এখনো কোনো পেমেন্ট রেকর্ড পাওয়া যায়নি</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            ) : (
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-gray-50/50 border-b border-gray-50">
+                    <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400 font-bengali">সময়</th>
+                    <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400 font-bengali">বিবরণ</th>
+                    <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400 font-bengali">পরিবর্তন</th>
+                    <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400 font-bengali">ব্যালেন্স</th>
                   </tr>
-                ))}
-                {payments.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-20 text-center">
-                       <History className="w-10 h-10 text-gray-200 mx-auto mb-4" />
-                       <p className="text-xs font-bold text-gray-400 uppercase tracking-widest font-bengali">এখনো কোনো ট্রানজেকশন করা হয়নি</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {creditHistory.map((h) => (
+                    <tr key={h.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <p className="text-xs font-bold text-gray-900">
+                          {h.timestamp?.toDate ? h.timestamp.toDate().toLocaleDateString() : new Date(h.timestamp).toLocaleDateString()}
+                        </p>
+                        <p className="text-[10px] text-gray-400 font-bold">
+                           {h.timestamp?.toDate ? h.timestamp.toDate().toLocaleTimeString() : new Date(h.timestamp).toLocaleTimeString()}
+                        </p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-black text-gray-700 font-bengali">{h.description}</span>
+                          <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest">{h.type}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                         <span className={cn(
+                           "text-sm font-black",
+                           h.amount > 0 ? "text-emerald-500" : "text-rose-500"
+                         )}>
+                           {h.amount > 0 ? `+${h.amount}` : h.amount}
+                         </span>
+                      </td>
+                      <td className="px-6 py-4 font-black text-gray-400 text-xs">
+                        {h.new_balance || "N/A"}
+                      </td>
+                    </tr>
+                  ))}
+                  {creditHistory.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-24 text-center">
+                         <Zap className="w-12 h-12 text-gray-100 mx-auto mb-4" />
+                         <p className="text-xs font-black text-gray-400 uppercase tracking-widest font-bengali">ক্রেডিট ব্যবহারের কোনো রেকর্ড পাওয়া যায়নি</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>

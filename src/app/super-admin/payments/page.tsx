@@ -117,8 +117,20 @@ export default function PaymentsCreditsPage() {
       // 2. Increment Tenant Credits
       // CRITICAL: Master Rule - Check credit balance in Firestore using increment()
       batch.update(doc(db, "tenants", payment.tenant_id), {
+        credits: increment(creditsToAdd),
         credits_left: increment(creditsToAdd),
-        total_credit_purchased: increment(creditsToAdd)
+        total_credit_purchased: increment(creditsToAdd),
+        updatedAt: new Date().toISOString()
+      });
+
+      // 3. Log Credit History
+      const historyRef = doc(collection(db, `tenants/${payment.tenant_id}/credit_history`));
+      batch.set(historyRef, {
+        amount: creditsToAdd,
+        type: "recharge",
+        description: `Payment Approved (Ref: ${payment.payment_id})`,
+        timestamp: new Date(),
+        reference_id: payment.payment_id
       });
 
       await batch.commit();
@@ -149,7 +161,18 @@ export default function PaymentsCreditsPage() {
       
       // Update tenant
       batch.update(doc(db, "tenants", manualCredit.tenant_id), {
-        credits_left: increment(manualCredit.amount)
+        credits: increment(manualCredit.amount),
+        credits_left: increment(manualCredit.amount),
+        updatedAt: new Date().toISOString()
+      });
+
+      // Log to Credit History
+      const creditHistoryRef = doc(collection(db, `tenants/${manualCredit.tenant_id}/credit_history`));
+      batch.set(creditHistoryRef, {
+        amount: manualCredit.amount,
+        type: "adjustment",
+        description: manualCredit.reason || "Manual Credit Adjustment",
+        timestamp: new Date()
       });
 
       // Log the manual adjustment in a sub-collection or separate log

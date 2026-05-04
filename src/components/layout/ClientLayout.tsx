@@ -148,6 +148,36 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   };
 
   const mobileNavItems = (userData && mobileNavMapping[menuKey]) || [];
+
+  /**
+   * CreditBadge component for real-time credit monitoring
+   */
+  const CreditBadge = ({ className }: { className?: string }) => {
+    if (!tenant || userData?.role === "super_admin") return null;
+    
+    const credits = tenant.credits_left ?? 0;
+    const isLow = credits < 50;
+    
+    return (
+      <div 
+        className={cn(
+          "flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all cursor-help",
+          isLow 
+            ? "bg-red-50 border-red-100 text-red-600 animate-pulse" 
+            : "bg-emerald-50 border-emerald-100 text-emerald-600",
+          className
+        )}
+        title="অবশিষ্ঠ ক্রেডিট"
+      >
+        <CreditCard className="w-3.5 h-3.5" />
+        <div className="flex flex-col -space-y-1">
+          <span className="text-[10px] font-black uppercase tracking-widest leading-none">Credits</span>
+          <span className="text-xs font-black">{credits}</span>
+        </div>
+      </div>
+    );
+  };
+
   const SUPER_ADMIN_EMAILS = ["hello@muradkhank31.com", "muradkhan31@gmail.com"];
 
   // Helper for robust role-based redirection
@@ -323,6 +353,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                   </h2>
                 </div>
                 
+                <CreditBadge className="hidden md:flex" />
+
                 <div className="p-2.5 bg-gray-50 rounded-full text-gray-400 hover:text-[#6f42c1] cursor-pointer relative hidden sm:block">
                    <Bell className="w-5 h-5" />
                    <div className="absolute top-2 right-2 w-2 h-2 bg-[#6f42c1] rounded-full" />
@@ -421,9 +453,17 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             <div className="p-8 pb-4 flex items-center justify-between border-b border-gray-50">
                <div className="flex flex-col">
                   <h3 className="text-lg font-black text-[#6f42c1] leading-none mb-1">MOBILE-HAJIRA</h3>
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                    {(activeRole || userData.role)?.replace("_", " ")} Menu
-                  </span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">
+                      {(activeRole || userData.role)?.replace("_", " ")} Menu
+                    </span>
+                    {tenant && userData.role !== 'super_admin' && (
+                      <div className={cn(
+                        "w-1.5 h-1.5 rounded-full",
+                        (tenant.credits_left ?? 0) < 50 ? "bg-red-500 animate-pulse" : "bg-emerald-500"
+                      )} />
+                    )}
+                  </div>
                </div>
                <button 
                  onClick={() => setIsSidebarOpen(false)}
@@ -463,6 +503,18 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                     ))}
                   </div>
                </div>
+            )}
+
+            {/* Credit Status for Mobile/Sidebar */}
+            {!isDualRole && tenant && userData?.role !== 'super_admin' && (
+              <div className="px-8 py-4 border-b border-gray-50">
+                <CreditBadge className="w-full justify-center" />
+              </div>
+            )}
+            {isDualRole && tenant && (
+              <div className="px-8 pb-4">
+                <CreditBadge className="w-full justify-center" />
+              </div>
             )}
 
             {/* Menu List */}

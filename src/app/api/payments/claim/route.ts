@@ -21,15 +21,33 @@ export async function POST(req: NextRequest) {
       }
 
       const amount = trxDoc.data()?.amount || 0;
-      let credits = amount;
-      if (amount >= 500) credits += amount * 0.1;
+      const tenantDoc = await transaction.get(tenantRef);
+      const currentCredits = tenantDoc.data()?.credits ?? tenantDoc.data()?.credits_left ?? 0;
+      
+      let creditsToAdd = amount;
+      // Bonus: 10% for packages >= 500 BDT
+      if (amount >= 500) creditsToAdd += Math.floor(amount * 0.1);
 
       transaction.update(trxRef, { status: "used", claimed_by_tenant: tenant_id });
       transaction.update(tenantRef, {
-        credits_left: admin.firestore.FieldValue.increment(credits)
+        credits: admin.firestore.FieldValue.increment(creditsToAdd),
+        credits_left: admin.firestore.FieldValue.increment(creditsToAdd),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      return { credits };
+      // Log Credit History
+      const historyRef = tenantRef.collection("credit_history").doc();
+      transaction.set(historyRef, {
+        amount: creditsToAdd,
+        type: "recharge",
+        description: `Credit Recharge (TrxID: ${trx_id})`,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        previous_balance: currentCredits,
+        new_balance: currentCredits + creditsToAdd,
+        reference_id: trx_id
+      });
+
+      return { credits: creditsToAdd };
     });
 
     return successResponse({ success: true, creditsAdded: result.credits });

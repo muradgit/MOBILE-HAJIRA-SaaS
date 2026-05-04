@@ -157,6 +157,20 @@ export default function TeacherDashboard() {
   }
 
   const teacherName = userData.name || userData.nameBN || "সম্মানিত শিক্ষক";
+  const { tenant } = useAuth();
+  const credits = tenant?.credits_left ?? 0;
+
+  // Enhance Dashboard Stats with real credit data
+  const dynamicStats = [
+    ...DASHBOARD_STATS.slice(0, 3),
+    {
+      label: "প্রতিষ্ঠানের ক্রেডিট",
+      value: credits.toString(),
+      icon: CreditCard,
+      color: credits < 50 ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600",
+      trend: credits < 50 ? "রিচার্জ প্রয়োজন" : "পর্যাপ্ত আছে",
+    }
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 font-bengali overflow-x-hidden">
@@ -218,7 +232,7 @@ export default function TeacherDashboard() {
         
         {/* Statistics Grid - Prevents overlap by using robust grid and padding */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {DASHBOARD_STATS.map((stat, index) => {
+          {dynamicStats.map((stat, index) => {
             const Icon = stat.icon;
             return (
               <motion.div

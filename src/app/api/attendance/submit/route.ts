@@ -84,84 +84,83 @@ export async function POST(req: NextRequest) {
 
     // --- FROM HERE: TEACHER SUBMISSION LOGIC ---
 
-    // 2. Fetch tenant data and check credits
-    const tenantDoc = await adminDb.collection("tenants").doc(tenant_id).get();
-    if (!tenantDoc.exists) {
-      return errorResponse("প্রতিষ্ঠানটি খুঁজে পাওয়া যায়নি।", 404);
-    }
-    
-    const tenantData = tenantDoc.data();
-    const googleSheetId = tenantData?.googleSheetId;
-    const creditsLeft = tenantData?.credits_left ?? 0;
-
-    if (creditsLeft <= 0) {
-      return errorResponse("আপনার প্রতিষ্ঠানের ক্রেডিট শেষ হয়ে গেছে। দয়া করে ক্রেডিট টপ-আপ করুন।", 403);
-    }
-
-    // 3. Prepare Firestore Data
-    const dateStr = new Date().toISOString().split('T')[0];
-    
-    // Duplicate prevention (check if attendance for this class/subject/date was just submitted)
-    const recentQuery = await adminDb.collection(`tenants/${tenant_id}/attendance_logs`)
-      .where("classId", "==", classId)
-      .where("subject", "==", subject)
-      .where("date", "==", dateStr)
-      .orderBy("createdAt", "desc")
-      .limit(1)
-      .get();
-
-    if (!recentQuery.empty) {
-      const mostRecent = recentQuery.docs[0].data();
-      const createdAt = mostRecent.createdAt?.toDate();
-      // If submitted within last 2 minutes, prevent duplicate
-      if (createdAt && (Date.now() - createdAt.getTime()) < 120000) {
-          return errorResponse("এই বিষয়ের হাজিরা ইতিপূর্বেই জমা দেওয়া হয়েছে। অনুগ্রহ করে ২ মিনিট পর চেষ্টা করুন।", 400);
+    // 2. Fetch tenant data and check credits within a transaction
+    const result = await adminDb.runTransaction(async (transaction) => {
+      const tenantRef = adminDb.collection("tenants").doc(tenant_id);
+      const tenantDoc = await transaction.get(tenantRef);
+      
+      if (!tenantDoc.exists) {
+        throw new Error("প্রতিষ্ঠানটি খুঁজে পাওয়া যায়নি।");
       }
-    }
+      
+      const tenantData = tenantDoc.data();
+      const currentCredits = tenantData?.credits ?? tenantData?.credits_left ?? 0;
+      const googleSheetId = tenantData?.googleSheetId;
 
-    const logRef = adminDb.collection(`tenants/${tenant_id}/attendance_logs`).doc();
-    
-    const attendanceMap: Record<string, boolean> = {};
-    presentStudents.forEach((s: any) => attendanceMap[s.id] = true);
-    absentStudents.forEach((s: any) => attendanceMap[s.id] = false);
+      if (currentCredits < 2) {
+        throw new Error("যথেষ্ট ক্রেডিট নেই। দয়া করে রিচার্জ করুন।");
+      }
 
-    const attendanceLog = {
-      id: logRef.id,
-      tenantId: tenant_id,
-      classId,
-      className: className || "Unknown Class",
-      academicLevel: academicLevel || "",
-      session: session || "",
-      section: section || "",
-      teacherId: teacher_id || user.uid,
-      teacherName: teacherName || user.name || "Unknown Teacher",
-      subject: subject || "No Subject",
-      date: dateStr,
-      method: finalMethod,
-      stats: {
-        present: totalPresent,
-        absent: totalAbsent,
-        total: totalPresent + totalAbsent
-      },
-      attendance: attendanceMap,
-      presentStudents,
-      absentStudents,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    };
+      // Prepare Logic
+      const dateStr = new Date().toISOString().split('T')[0];
+      const logRef = adminDb.collection(`tenants/${tenant_id}/attendance_logs`).doc();
+      
+      const attendanceMap: Record<string, boolean> = {};
+      presentStudents.forEach((s: any) => attendanceMap[s.id] = true);
+      absentStudents.forEach((s: any) => attendanceMap[s.id] = false);
 
-    // 4. Batch Execution
-    const batch = adminDb.batch();
-    
-    // A. Log Entry
-    batch.set(logRef, attendanceLog);
-    
-    // B. Deduct Credit (2 credits per submission as per requirements)
-    batch.update(adminDb.collection("tenants").doc(tenant_id), {
-      credits_left: FieldValue.increment(-2)
+      const attendanceLog = {
+        id: logRef.id,
+        tenantId: tenant_id,
+        classId,
+        className: className || "Unknown Class",
+        academicLevel: academicLevel || "",
+        session: session || "",
+        section: section || "",
+        teacherId: teacher_id || user.uid,
+        teacherName: teacherName || user.name || "Unknown Teacher",
+        subject: subject || "No Subject",
+        date: dateStr,
+        method: finalMethod,
+        stats: {
+          present: totalPresent,
+          absent: totalAbsent,
+          total: totalPresent + totalAbsent
+        },
+        attendance: attendanceMap,
+        presentStudents,
+        absentStudents,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      // Execution in transaction
+      // A. Log Entry
+      transaction.set(logRef, attendanceLog);
+      
+      // B. Deduct Credit (2 credits per submission)
+      transaction.update(tenantRef, {
+        credits: FieldValue.increment(-2),
+        credits_left: FieldValue.increment(-2),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+
+      // C. Log Credit History
+      const historyRef = tenantRef.collection("credit_history").doc();
+      transaction.set(historyRef, {
+        amount: -2,
+        type: "deduction",
+        description: `Attendance Submission: ${className || 'Class'} (${subject || 'No Subject'})`,
+        timestamp: FieldValue.serverTimestamp(),
+        previous_balance: currentCredits,
+        new_balance: currentCredits - 2,
+        reference_id: logRef.id
+      });
+
+      return { logId: logRef.id, googleSheetId, dateStr, teacherName: attendanceLog.teacherName };
     });
 
-    await batch.commit();
+    const { logId, googleSheetId, dateStr, teacherName: logTeacherName } = result;
 
     // 5. Queue Background Sync (Google Sheets)
     if (googleSheetId) {
@@ -170,7 +169,7 @@ export async function POST(req: NextRequest) {
         className,
         section,
         subject,
-        teacherName: attendanceLog.teacherName,
+        teacherName: logTeacherName,
         date: dateStr,
         totalPresent,
         totalAbsent,
@@ -184,7 +183,7 @@ export async function POST(req: NextRequest) {
 
     return successResponse({ 
       success: true, 
-      id: logRef.id,
+      id: logId,
       message: "হাজিরা সফলভাবে জমা দেওয়া হয়েছে এবং ডাটাবেসে সেভ হয়েছে।" 
     });
 

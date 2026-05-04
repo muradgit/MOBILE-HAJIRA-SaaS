@@ -136,10 +136,12 @@ export default function SMSManagementPage() {
 
       // Update Credits
       await updateDoc(doc(db, "tenants", activeTenantId!), {
-        credits_left: increment(-cost)
+        credits: increment(-cost),
+        credits_left: increment(-cost),
+        updatedAt: new Date()
       });
 
-      // Log to History
+      // Log to SMS History
       await addDoc(collection(db, "sms_history"), {
         tenant_id: activeTenantId,
         type: "Manual",
@@ -148,6 +150,16 @@ export default function SMSManagementPage() {
         cost: cost,
         created_at: new Date().toISOString(),
         status: "sent"
+      });
+
+      // Log to Credit History
+      await addDoc(collection(db, "tenants", activeTenantId!, "credit_history"), {
+        amount: -cost,
+        type: "deduction",
+        description: `SMS Sending (Recipient: ${mockRecipientCount})`,
+        timestamp: new Date(),
+        previous_balance: credits,
+        new_balance: credits - cost
       });
 
       toast.success(`সফলভাবে ${mockRecipientCount} টি SMS পাঠানো হয়েছে`, { id: toastId });
@@ -182,7 +194,9 @@ export default function SMSManagementPage() {
       await new Promise(r => setTimeout(r, 2000));
 
       await updateDoc(doc(db, "tenants", activeTenantId!), {
-        credits_left: increment(-cost)
+        credits: increment(-cost),
+        credits_left: increment(-cost),
+        updatedAt: new Date()
       });
 
       await addDoc(collection(db, "sms_history"), {
@@ -193,6 +207,16 @@ export default function SMSManagementPage() {
         cost: cost,
         created_at: new Date().toISOString(),
         status: "sent"
+      });
+
+      // Log to Credit History
+      await addDoc(collection(db, "tenants", activeTenantId!, "credit_history"), {
+        amount: -cost,
+        type: "deduction",
+        description: `SMS Attendance Alert (${absenteeCount} students)`,
+        timestamp: new Date(),
+        previous_balance: credits,
+        new_balance: credits - cost
       });
 
       toast.success("অভিভাবকদের সফলভাবে অবয় করা হয়েছে", { id: toastId });
