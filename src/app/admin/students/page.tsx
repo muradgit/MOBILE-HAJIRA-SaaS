@@ -16,7 +16,11 @@ import {
   UserPlus,
   Loader2,
   Layers,
-  Calendar
+  Calendar,
+  FileDown,
+  FileUp,
+  X,
+  AlertCircle
 } from "lucide-react";
 import { collection, query, onSnapshot, where, doc } from "firebase/firestore";
 import { db, auth } from "@/src/lib/firebase";
@@ -28,6 +32,7 @@ import { toast } from "sonner";
 import { cn } from "@/src/lib/utils";
 import Image from "next/image";
 import { Tenant } from "@/src/lib/types";
+import Papa from "papaparse";
 
 interface Student {
   user_id: string;
@@ -52,6 +57,12 @@ export default function StudentsPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [filterClass, setFilterClass] = useState("all");
+
+  // CSV Import State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importData, setImportData] = useState<any[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
 
 // Form State
   const [formData, setFormData] = useState({
@@ -95,6 +106,123 @@ export default function StudentsPage() {
       unsubTenant();
     };
   }, [tenantId]);
+
+  const downloadTemplate = () => {
+    const headers = [
+      "Institute Name",
+      "Academic Level (Class)",
+      "Department/Group",
+      "Session",
+      "Name (Student Full Name)",
+      "Roll",
+      "Registration No",
+      "Year",
+      "Email",
+      "Mobile",
+      "Father Name",
+      "Mother Name",
+      "Guardian Mobile"
+    ];
+    
+    // Default values if possible
+    const sampleRow = [
+      tenant?.name || "", 
+      "", 
+      "Science", 
+      new Date().getFullYear().toString(), 
+      "Abdur Rahman", 
+      "01", 
+      "12345678", 
+      new Date().getFullYear().toString(), 
+      "", 
+      "01712345678", 
+      "", 
+      "", 
+      ""
+    ];
+
+    const csvContent = "data:text/csv;charset=utf-8," + 
+      [headers, sampleRow].map(e => e.join(",")).join("\n");
+      
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `student_import_template_${tenantId}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results: Papa.ParseResult<any>) => {
+        // Map columns to our expected keys
+        const mappedData = results.data.map((row: any) => ({
+          academicLevel: row["Academic Level (Class)"] || row["Class"] || "",
+          department: row["Department/Group"] || row["Department"] || row["Group"] || "",
+          session: row["Session"] || "",
+          name: row["Name (Student Full Name)"] || row["Name"] || "",
+          roll: row["Roll"] || row["ID"] || "",
+          registrationNo: row["Registration No"] || "",
+          year: row["Year"] || "",
+          email: row["Email"] || "",
+          mobile: row["Mobile"] || row["Phone"] || "",
+          fatherName: row["Father Name"] || "",
+          motherName: row["Mother Name"] || "",
+          guardianMobile: row["Guardian Mobile"] || ""
+        }));
+
+        setImportData(mappedData.filter((d: any) => d.name));
+        setIsImportModalOpen(true);
+      },
+      error: (err: Error) => {
+        toast.error("CSV ফাইল পড়তে সমস্যা হয়েছে: " + err.message);
+      }
+    });
+
+    // Reset input
+    e.target.value = "";
+  };
+
+  const processImport = async () => {
+    if (importData.length === 0) return;
+    
+    setImporting(true);
+    const toastId = toast.loading(`${importData.length} জন শিক্ষার্থী যোগ করা হচ্ছে...`);
+    
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch("/api/admin/students/batch-import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ students: importData })
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "ইমপোর্ট ব্যর্থ হয়েছে");
+
+      toast.success(`সাফল্য: ${result.results.success}, ব্যর্থ: ${result.results.failed}`, { id: toastId });
+      
+      if (result.results.errors.length > 0) {
+        console.error("Import Errors:", result.results.errors);
+      }
+
+      setIsImportModalOpen(false);
+      setImportData([]);
+    } catch (err: any) {
+      toast.error(err.message, { id: toastId });
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -258,14 +386,33 @@ export default function StudentsPage() {
           <h1 className="text-3xl font-black text-gray-900 flex items-center gap-2 mb-1">
             <GraduationCap className="w-8 h-8 text-blue-600" /> শিক্ষার্থী ম্যানেজমেন্ট
           </h1>
-          <p className="text-gray-500 font-medium">শিক্ষার্থীদের প্রোফাইল, ক্লাস এবং হাজিরা রিপোর্ট নিয়ন্ত্রণ করুন।</p>
+          <p className="text-gray-500 font-medium font-bengali">শিক্ষার্থীদের প্রোফাইল, ক্লাস এবং হাজিরা রিপোর্ট নিয়ন্ত্রণ করুন।</p>
         </div>
-        <button 
-          onClick={() => setIsAdding(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-blue-600/20 transition-all hover:scale-105 active:scale-95"
-        >
-          <UserPlus className="w-5 h-5" /> শিক্ষার্থী যোগ করুন
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button 
+            onClick={downloadTemplate}
+            className="bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 px-4 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 whitespace-nowrap"
+          >
+            <FileDown className="w-4 h-4 text-blue-600" /> টেমপ্লেট
+          </button>
+
+          <label className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-purple-600/20 transition-all hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap">
+            <FileUp className="w-4 h-4" /> CSV ইমপোর্ট
+            <input 
+              type="file" 
+              accept=".csv" 
+              className="hidden" 
+              onChange={handleCSVUpload} 
+            />
+          </label>
+
+          <button 
+            onClick={() => setIsAdding(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-blue-600/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
+          >
+            <UserPlus className="w-5 h-5" /> শিক্ষার্থী যোগ
+          </button>
+        </div>
       </div>
 
       {/* Class Filters */}
@@ -469,6 +616,91 @@ export default function StudentsPage() {
           </button>
         </form>
       </SlideOverForm>
+
+      {/* CSV Import Modal */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 font-bengali">
+          <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col bg-white border-0 shadow-2xl rounded-[2.5rem]">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-purple-50/50">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-purple-600 rounded-2xl text-white">
+                  <FileUp className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-gray-900">শিক্ষার্থী ইমপোর্ট প্রিভিউ</h2>
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">{importData.length} জন শিক্ষার্থী পাওয়া গেছে</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsImportModalOpen(false)}
+                className="p-3 hover:bg-white rounded-2xl text-gray-400 transition-all"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-0">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead className="sticky top-0 bg-gray-50 z-10 border-b border-gray-100">
+                  <tr>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">নাম</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">ক্লাস</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">রোল</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">মোবাইল</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">ইমেইল</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {importData.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-purple-50/30 transition-colors">
+                      <td className="px-6 py-4 font-bold text-gray-900">{row.name}</td>
+                      <td className="px-6 py-4 text-xs font-bold">
+                        <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded border border-blue-100 uppercase">
+                          {row.academicLevel}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-xs font-black text-purple-600">{row.roll}</td>
+                      <td className="px-6 py-4 text-xs text-gray-500">{row.mobile}</td>
+                      <td className="px-6 py-4 text-[10px] text-gray-400">{row.email || "Shadow Email (Auto)"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {importData.length === 0 && (
+                <div className="flex flex-col items-center justify-center p-20 text-center space-y-4">
+                  <div className="p-5 bg-red-50 rounded-full text-red-500">
+                    <AlertCircle className="w-10 h-10" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900">কোন ডাটা পাওয়া যায়নি</h3>
+                  <p className="text-gray-500 max-w-xs">আপনার CSV ফাইলটি টেম্পলেট অনুযায়ী সঠিক কিনা যাচাই করুন।</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+              <button
+                onClick={() => setIsImportModalOpen(false)}
+                className="px-6 py-3 rounded-2xl text-xs font-black text-gray-400 uppercase tracking-widest hover:bg-gray-100 transition-all font-bengali"
+              >
+                বাতিল করুন
+              </button>
+              <button
+                disabled={importing || importData.length === 0}
+                onClick={processImport}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-10 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-purple-600/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-2 disabled:opacity-50 font-bengali"
+              >
+                {importing ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-5 h-5" />
+                )}
+                ইমপোর্ট শুরু করুন
+              </button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
