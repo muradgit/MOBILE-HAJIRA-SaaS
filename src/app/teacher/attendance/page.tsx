@@ -200,6 +200,12 @@ export default function AttendancePage() {
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
 
+  // Geo-Location State
+  const [geoActive, setGeoActive] = useState(false);
+  const [radius, setRadius] = useState(50); // Feet
+  const [teacherLocation, setTeacherLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+
   // QR Scanner State
   const [scannerActive, setScannerActive] = useState(false);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
@@ -217,7 +223,7 @@ export default function AttendancePage() {
 
   // Persistence
   useEffect(() => {
-    if (selectedClassId && (attendanceMethod === "manual" || attendanceMethod === "qr" || attendanceMethod === "code" || attendanceMethod === "face" || attendanceMethod === "camera") && Object.keys(attendance).length > 0) {
+    if (selectedClassId && (attendanceMethod === "manual" || attendanceMethod === "qr" || attendanceMethod === "code" || attendanceMethod === "face" || attendanceMethod === "camera" || attendanceMethod === "geo") && Object.keys(attendance).length > 0) {
       const cacheKey = `att_cache_${selectedClassId}_${attendanceMethod}`;
       localStorage.setItem(cacheKey, JSON.stringify({ 
         attendance, 
@@ -225,10 +231,12 @@ export default function AttendancePage() {
         subject,
         attendanceCode,
         codeQrUrl,
+        radius,
+        geoActive,
         lastUpdated: new Date().toISOString()
       }));
     }
-  }, [attendance, studentNotes, subject, selectedClassId, attendanceMethod, attendanceCode, codeQrUrl]);
+  }, [attendance, studentNotes, subject, selectedClassId, attendanceMethod, attendanceCode, codeQrUrl, radius, geoActive]);
 
   // QR Scanner Cleanup
   useEffect(() => {
@@ -314,9 +322,94 @@ export default function AttendancePage() {
     } else if (methodId === "camera") {
       setAttendanceMethod("camera");
       await fetchStudentsForClass(false);
+    } else if (methodId === "geo") {
+      setAttendanceMethod("geo");
+      await fetchStudentsForClass(false);
     } else {
       toast.success(`${methodName} শুরু হচ্ছে...`);
     }
+  };
+
+  const startGeoSession = async () => {
+    if (!navigator.geolocation) {
+      toast.error("আপনার ব্রাউজারে লোকেশন সাপোর্ট নেই!");
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setTeacherLocation({ lat: latitude, lng: longitude });
+        setIsLocating(false);
+        setGeoActive(true);
+
+        if (!tenantId || !selectedClassId || !user) return;
+
+        try {
+          const sessionPath = `tenants/${tenantId}/attendance_sessions`;
+          await addDoc(collection(db, sessionPath), {
+            classId: selectedClassId,
+            teacherId: user.user_id,
+            method: "geo",
+            location: { lat: latitude, lng: longitude },
+            radius: radius,
+            active: true,
+            subject: subject,
+            createdAt: serverTimestamp(),
+            expiresAt: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000) // 1 hour
+          });
+          
+          listenForGeoAttendance();
+          toast.success("জিও সেশন শুরু হয়েছে!");
+        } catch (error) {
+          console.error("Geo session error:", error);
+          toast.error("সেশন শুরু করতে সমস্যা হয়েছে");
+        }
+      },
+      (error) => {
+        setIsLocating(false);
+        console.error("Geolocation error:", error);
+        toast.error("লোকেশন পেতে সমস্যা হচ্ছে। অনুগ্রহ করে পারমিশন চেক করুন।");
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
+  const listenForGeoAttendance = () => {
+    if (!tenantId || !selectedClassId || sessionUnsubscribe.current) return;
+
+    const checkinPath = `tenants/${tenantId}/attendance_entries`;
+    const q = query(
+      collection(db, checkinPath),
+      where("classId", "==", selectedClassId),
+      where("method", "==", "geo"),
+      where("createdAt", ">=", Timestamp.fromMillis(Date.now() - 3600000))
+    );
+
+    sessionUnsubscribe.current = onSnapshot(q, (snapshot) => {
+      const newAttendance = { ...attendance };
+      let changed = false;
+
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.studentId && !newAttendance[data.studentId]) {
+          newAttendance[data.studentId] = true;
+          changed = true;
+          
+          const student = students.find(s => s.user_id === data.studentId);
+          if (student) {
+            toast.success(`${student.name} লোকেশন ভেরিফিকেশনের মাধ্যমে হাজিরা দিয়েছেন`, { 
+              icon: <MapPin className="w-5 h-5 text-indigo-500" /> 
+            });
+          }
+        }
+      });
+
+      if (changed) {
+        setAttendance(newAttendance);
+      }
+    });
   };
 
   const fetchStudentsForClass = async (defaultPresent: boolean = true) => {
@@ -724,6 +817,9 @@ export default function AttendancePage() {
       if (attendanceMethod === "camera") {
         stopCamera();
       }
+      if (attendanceMethod === "geo") {
+        setGeoActive(false);
+      }
       if (sessionUnsubscribe.current) {
         sessionUnsubscribe.current();
         sessionUnsubscribe.current = null;
@@ -735,6 +831,8 @@ export default function AttendancePage() {
         setSelectedClassId(null);
         setAttendance({});
         setStudentNotes({});
+        setGeoActive(false);
+        setTeacherLocation(null);
       }, 1000);
 
     } catch (error: any) {
@@ -1524,6 +1622,154 @@ export default function AttendancePage() {
                 </div>
               </div>
             </motion.div>
+          ) : attendanceMethod === "geo" ? (
+            <motion.div
+              key="geo-view"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="space-y-6 pb-40"
+            >
+              <div className="flex items-center justify-between">
+                <button 
+                  onClick={() => {
+                    if (sessionUnsubscribe.current) sessionUnsubscribe.current();
+                    sessionUnsubscribe.current = null;
+                    setGeoActive(false);
+                    setAttendanceMethod(null);
+                  }}
+                  className="flex items-center gap-2 text-gray-500 font-black text-xs uppercase tracking-widest hover:text-[#6f42c1] transition-colors font-bengali"
+                >
+                  <ArrowLeft className="w-4 h-4" /> ফিরে যান
+                </button>
+                <div className="flex items-center gap-2">
+                   <div className={cn("w-2 h-2 rounded-full", geoActive ? "bg-indigo-500 animate-pulse" : "bg-gray-300")} />
+                   <span className="text-[10px] font-black text-gray-400 tracking-[0.2em] uppercase font-bengali">Geo-Location Mode</span>
+                </div>
+              </div>
+
+              {!geoActive ? (
+                <Card className="p-10 border-none shadow-2xl rounded-[3rem] bg-white flex flex-col items-center justify-center text-center gap-6">
+                   <div className="w-24 h-24 bg-indigo-50 text-indigo-600 rounded-[2.5rem] flex items-center justify-center">
+                      <MapPin className="w-12 h-12" />
+                   </div>
+                   <div className="space-y-2">
+                      <h2 className="text-2xl font-black text-gray-900 font-bengali">জিও লোকেশন হাজিরা</h2>
+                      <p className="text-sm text-gray-400 font-medium font-bengali">আপনার বর্তমান অবস্থান থেকে একটি নির্দিষ্ট ডেরার মধ্যে শিক্ষার্থীরা হাজিরা দিতে পারবে।</p>
+                   </div>
+                   
+                   <div className="w-full space-y-4">
+                      <div className="flex items-center justify-between px-2">
+                         <span className="text-xs font-black text-gray-500 font-bengali">হাজিরার ব্যাসার্ধ (Radius)</span>
+                         <span className="text-xs font-black text-[#6f42c1] font-bengali">{radius} ফিট / {(radius * 0.3048).toFixed(1)} মিটার</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="10" 
+                        max="500" 
+                        step="10"
+                        value={radius}
+                        onChange={(e) => setRadius(parseInt(e.target.value))}
+                        className="w-full h-2 bg-indigo-100 rounded-lg appearance-none cursor-pointer accent-[#6f42c1]"
+                      />
+                   </div>
+
+                   <button 
+                    onClick={startGeoSession}
+                    disabled={isLocating}
+                    className="w-full py-5 bg-[#6f42c1] text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-xl shadow-purple-600/20 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50 font-bengali"
+                   >
+                     {isLocating ? <Loader2 className="w-5 h-5 animate-spin" /> : <MapPin className="w-5 h-5" />}
+                     হাজিরা শুরু করুন
+                   </button>
+                </Card>
+              ) : (
+                <div className="space-y-6">
+                  {/* Active Geo Status Card */}
+                  <Card className="bg-white border-0 shadow-2xl rounded-[3rem] overflow-hidden">
+                    <div className="p-8 pb-4 text-center border-b border-gray-50 bg-indigo-50/30">
+                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-2 font-bengali">হাজিরা সেশন সচল আছে</p>
+                       <div className="flex flex-col items-center justify-center gap-2">
+                          <CheckCircle2 className="w-12 h-12 text-emerald-500" />
+                          <p className="text-sm font-black text-gray-900 font-bengali">শিক্ষার্থীরা এখন হাজিরা দিতে পারবে</p>
+                       </div>
+                    </div>
+                    
+                    <div className="p-8 grid grid-cols-2 gap-4">
+                       <div className="p-4 bg-gray-50 rounded-2xl space-y-1">
+                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest font-bengali">নির্ধারিত ব্যাসার্ধ</p>
+                          <p className="text-sm font-black text-indigo-600">{radius} Feet</p>
+                       </div>
+                       <div className="p-4 bg-gray-50 rounded-2xl space-y-1">
+                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest font-bengali">বর্তমান অবস্থান</p>
+                          <p className="text-sm font-black text-emerald-600 truncate">Verified</p>
+                       </div>
+                    </div>
+
+                    <div className="px-8 pb-8">
+                       <button 
+                        onClick={() => {
+                          if (sessionUnsubscribe.current) sessionUnsubscribe.current();
+                          sessionUnsubscribe.current = null;
+                          setGeoActive(false);
+                          toast.info("জিও সেশন বন্ধ করা হয়েছে");
+                        }}
+                        className="w-full py-4 border-2 border-red-500 text-red-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-50 transition-all font-bengali"
+                       >
+                         সেশন বন্ধ করুন
+                       </button>
+                    </div>
+                  </Card>
+
+                  {/* Real-time Attendees List */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between px-2">
+                      <h3 className="text-sm font-black text-gray-900 font-bengali flex items-center gap-2">
+                        <Users className="w-4 h-4 text-indigo-500" /> জিও-লোকেশন হাজিরা ({presentCount})
+                      </h3>
+                      <div className="flex items-center gap-1">
+                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
+                         <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest font-bengali">Tracking Live</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3">
+                      {students.filter(s => attendance[s.user_id]).length > 0 ? (
+                        students.filter(s => attendance[s.user_id])
+                        .reverse()
+                        .map((student) => (
+                          <motion.div
+                            key={student.user_id}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-indigo-50 flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs">
+                                 {student.name.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="text-sm font-black text-gray-900 font-bengali leading-tight">{student.name}</p>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Marked via GPS</p>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end">
+                               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                               <span className="text-[8px] font-bold text-gray-300 uppercase mt-1">Verified Location</span>
+                            </div>
+                          </motion.div>
+                        ))
+                      ) : (
+                        <div className="p-12 text-center bg-white/50 border-2 border-dashed border-gray-100 rounded-[2.5rem] space-y-3">
+                           <MapPin className="w-8 h-8 text-indigo-200 mx-auto animate-bounce" />
+                           <p className="text-[11px] font-bold text-gray-400 font-bengali uppercase tracking-widest">শিক্ষার্থীদের অবস্থানে প্রবেশের জন্য অপেক্ষা করুন...</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </motion.div>
           ) : (
             <motion.div
               key="manual-view"
@@ -1688,7 +1934,7 @@ export default function AttendancePage() {
             exit={{ y: 100, opacity: 0 }}
             className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-md z-50 flex flex-col gap-4"
           >
-            {attendanceMethod === "manual" || attendanceMethod === "qr" || attendanceMethod === "code" || attendanceMethod === "face" || attendanceMethod === "camera" ? (
+            {attendanceMethod === "manual" || attendanceMethod === "qr" || attendanceMethod === "code" || attendanceMethod === "face" || attendanceMethod === "camera" || attendanceMethod === "geo" ? (
               <div className="bg-white/80 backdrop-blur-xl border border-white p-4 rounded-[2.5rem] shadow-2xl flex flex-col gap-4">
                  <div className="flex items-center justify-between px-2 pt-1">
                     <div className="flex items-center gap-3">
@@ -1704,7 +1950,7 @@ export default function AttendancePage() {
 
                  <button 
                   onClick={handleSubmitAttendance}
-                  disabled={submitting || (attendanceMethod === "manual" && fetchingStudents) || (attendanceMethod === "code" && !attendanceCode)}
+                  disabled={submitting || (attendanceMethod === "manual" && fetchingStudents) || (attendanceMethod === "code" && !attendanceCode) || (attendanceMethod === "geo" && !geoActive)}
                   className="w-full py-5 bg-[#6f42c1] text-white rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-purple-600/20 active:scale-95 hover:scale-[1.02] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:scale-100 font-bengali"
                  >
                     {submitting ? (
