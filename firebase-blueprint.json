@@ -46,6 +46,30 @@
         "type": { "type": "string", "enum": ["assigned", "self-created"] }
       },
       "required": ["teacher_id", "name"]
+    },
+    "AttendanceLog": {
+      "title": "AttendanceLog",
+      "description": "Historical attendance records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "classId": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "subject": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "method": { "type": "string" },
+        "stats": { 
+          "type": "object",
+          "properties": {
+            "present": { "type": "number" },
+            "absent": { "type": "number" },
+            "total": { "type": "number" }
+          }
+        },
+        "attendance": { "type": "object", "description": "studentId -> status mapping" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["classId", "teacherId", "date", "attendance"]
     }
   },
   "firestore": {
@@ -68,6 +92,10 @@
     "/tenants/{tenantId}/teacher_classes/{classId}": {
       "schema": "TeacherClass",
       "description": "Classes managed by teachers within a tenant"
+    },
+    "/tenants/{tenantId}/attendance_logs/{logId}": {
+      "schema": "AttendanceLog",
+      "description": "Historical attendance records"
     }
   }
 }

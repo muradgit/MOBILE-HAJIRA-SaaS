@@ -784,7 +784,8 @@ export default function AttendancePage() {
           id: s.user_id,
           name: s.name,
           roll: s.student_id
-        }))
+        })),
+        method: attendanceMethod
       };
 
       const res = await fetch("/api/attendance/submit", {
@@ -819,6 +820,7 @@ export default function AttendancePage() {
       }
       if (attendanceMethod === "geo") {
         setGeoActive(false);
+        setTeacherLocation(null);
       }
       if (sessionUnsubscribe.current) {
         sessionUnsubscribe.current();
