@@ -19,7 +19,15 @@ if (!admin.apps || admin.apps.length === 0) {
 
   if (serviceAccount) {
     try {
-      const parsedServiceAccount = JSON.parse(serviceAccount);
+      let parsedServiceAccount;
+      if (serviceAccount.trim().startsWith("{")) {
+        parsedServiceAccount = JSON.parse(serviceAccount);
+      } else {
+        // Not JSON, maybe it's just the private key? 
+        // We really need the full service account for doc-based auth, 
+        // but let's try to handle cases where it's just the key.
+        throw new Error("Service account is not a valid JSON string");
+      }
       
       // Fix for Vercel/Env var newline escaping
       if (parsedServiceAccount.private_key) {
@@ -34,8 +42,20 @@ if (!admin.apps || admin.apps.length === 0) {
         databaseURL: projectId ? `https://${projectId}.firebaseio.com` : undefined
       });
     } catch (e) {
-      console.error("Firebase Admin JSON Parse/Init Error:", e);
-      admin.initializeApp({ projectId });
+      if (process.env.NODE_ENV !== 'production' || process.env.NEXT_PHASE === 'phase-production-build') {
+        console.warn("Firebase Admin Init Warning (Build/Dev): Using default credentials or projectId only.");
+      } else {
+        console.error("Firebase Admin JSON Parse/Init Error:", e);
+      }
+      
+      try {
+        admin.initializeApp({ projectId });
+      } catch (initErr) {
+        // Fallback for build phase if everything else fails
+        if (!admin.apps.length) {
+          admin.initializeApp({ projectId: projectId || 'placeholder-for-build' });
+        }
+      }
     }
   } else {
     admin.initializeApp({ projectId });

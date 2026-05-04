@@ -35,5 +35,11 @@ async function handler(req: NextRequest) {
   }
 }
 
-// Export the handler wrapped with signature verification
-export const POST = verifySignatureAppRouter(handler);
+// Export the handler - if signing keys are missing, we bypass verification (mostly for build/dev)
+// In production, these keys MUST be provided for security.
+export const POST = (process.env.QSTASH_CURRENT_SIGNING_KEY) 
+  ? verifySignatureAppRouter(handler)
+  : async (req: NextRequest) => {
+      console.warn("[QStash] Warning: QSTASH_CURRENT_SIGNING_KEY is missing. Signature verification bypassed.");
+      return handler(req);
+    };

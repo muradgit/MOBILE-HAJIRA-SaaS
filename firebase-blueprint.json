@@ -70,6 +70,34 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["classId", "teacherId", "date", "attendance"]
+    },
+    "AttendanceSession": {
+      "title": "AttendanceSession",
+      "description": "Active session for students to check-in",
+      "type": "object",
+      "properties": {
+        "classId": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "method": { "type": "string" },
+        "code": { "type": "string" },
+        "active": { "type": "boolean" },
+        "subject": { "type": "string" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "AttendanceEntry": {
+      "title": "AttendanceEntry",
+      "description": "Individual student check-in record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "name": { "type": "string" },
+        "classId": { "type": "string" },
+        "method": { "type": "string" },
+        "code": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "firestore": {
@@ -96,6 +124,14 @@
     "/tenants/{tenantId}/attendance_logs/{logId}": {
       "schema": "AttendanceLog",
       "description": "Historical attendance records"
+    },
+    "/tenants/{tenantId}/attendance_sessions/{sessionId}": {
+      "schema": "AttendanceSession",
+      "description": "Active attendance sessions"
+    },
+    "/tenants/{tenantId}/attendance_entries/{entryId}": {
+      "schema": "AttendanceEntry",
+      "description": "Student check-in entries"
     }
   }
 }

@@ -41,15 +41,48 @@ export async function POST(req: NextRequest) {
       return errorResponse("আবেদন অপূর্ণাঙ্গ: Tenant ID এবং Class ID প্রয়োজন।");
     }
 
-    // Role check - only teachers or admins can submit
-    if (user.role !== 'teacher' && user.role !== 'institute_admin' && user.role !== 'super_admin') {
+    const isStudent = user.role === 'student';
+
+    // Role check - only teachers, admins, or students (for self check-in)
+    if (!isStudent && user.role !== 'teacher' && user.role !== 'institute_admin' && user.role !== 'super_admin') {
       return errorResponse("আপনার হাজিরা জমা দেওয়ার অনুমতি নেই।", 403);
     }
 
-    // Ensure teacher belongs to this tenant (unless super admin)
-    if (user.role === 'teacher' && user.tenant_id !== tenant_id) {
+    // Ensure user belongs to this tenant
+    if (user.tenant_id !== tenant_id && user.role !== 'super_admin') {
        return errorResponse("আপনি আপনার নির্ধারিত প্রতিষ্ঠানের বাইরে হাজিরা জমা দিতে পারবেন না।", 403);
     }
+
+    // If student is submitting, it's a "Check-in"
+    if (isStudent) {
+       // Validate that this student is only submitting for themselves
+       if (presentStudents && presentStudents.length > 0 && presentStudents[0].id !== user.uid) {
+         return errorResponse("আপনি অন্য কারো হাজিরা দিতে পারবেন না।", 403);
+       }
+
+       const checkinRef = adminDb.collection(`tenants/${tenant_id}/attendance_entries`).doc();
+       const checkinData = {
+         id: checkinRef.id,
+         tenantId: tenant_id,
+         classId,
+         studentId: user.uid,
+         name: user.name,
+         method: finalMethod,
+         code: body.code || "",
+         location: body.location || null,
+         createdAt: FieldValue.serverTimestamp(),
+       };
+
+       await checkinRef.set(checkinData);
+
+       return successResponse({ 
+         success: true, 
+         id: checkinRef.id,
+         message: "আপনার হাজিরা সফলভাবে গ্রহণ করা হয়েছে।" 
+       });
+    }
+
+    // --- FROM HERE: TEACHER SUBMISSION LOGIC ---
 
     // 2. Fetch tenant data and check credits
     const tenantDoc = await adminDb.collection("tenants").doc(tenant_id).get();
