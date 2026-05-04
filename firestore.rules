@@ -96,6 +96,12 @@ service cloud.firestore {
       
       // Attendance & Data
       match /attendance_logs/{id} { allow read, write: if isMemberOfTenant(tenantId); }
+      match /attendance_sessions/{id} { allow read, write: if isMemberOfTenant(tenantId); }
+      match /attendance_entries/{id} { 
+        allow read: if isMemberOfTenant(tenantId);
+        allow create: if isMemberOfTenant(tenantId);
+        allow update, delete: if isTeacher(tenantId) || isInstitutionAdmin(tenantId);
+      }
       match /settings/{id} { allow read, write: if isInstitutionAdmin(tenantId); }
     }
 

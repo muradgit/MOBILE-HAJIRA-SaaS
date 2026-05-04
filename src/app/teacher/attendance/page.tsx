@@ -121,7 +121,7 @@ const ATTENDANCE_METHODS = [
     hoverColor: "hover:bg-emerald-600",
   },
   {
-    id: "face",
+    id: "face_scan",
     title: "ফেস স্ক্যান",
     description: "ফেস রিকগনিশন ব্যবহার করে দ্রুত হাজিরা নিন",
     icon: ScanFace,
@@ -223,7 +223,7 @@ export default function AttendancePage() {
 
   // Persistence
   useEffect(() => {
-    if (selectedClassId && (attendanceMethod === "manual" || attendanceMethod === "qr" || attendanceMethod === "code" || attendanceMethod === "face" || attendanceMethod === "camera" || attendanceMethod === "geo") && Object.keys(attendance).length > 0) {
+    if (selectedClassId && (attendanceMethod === "manual" || attendanceMethod === "qr" || attendanceMethod === "code" || attendanceMethod === "face_scan" || attendanceMethod === "camera" || attendanceMethod === "geo") && Object.keys(attendance).length > 0) {
       const cacheKey = `att_cache_${selectedClassId}_${attendanceMethod}`;
       localStorage.setItem(cacheKey, JSON.stringify({ 
         attendance, 
@@ -316,9 +316,10 @@ export default function AttendancePage() {
     } else if (methodId === "code") {
       setAttendanceMethod("code");
       await fetchStudentsForClass(false);
-    } else if (methodId === "face") {
-      setAttendanceMethod("face");
+    } else if (methodId === "face_scan") {
+      setAttendanceMethod("face_scan");
       await fetchStudentsForClass(false);
+      setTimeout(() => startFaceScan(), 500);
     } else if (methodId === "camera") {
       setAttendanceMethod("camera");
       await fetchStudentsForClass(false);
@@ -769,11 +770,16 @@ export default function AttendancePage() {
         tenant_id: tenantId,
         classId: selectedClassId,
         className: selectedClass.nameBN || selectedClass.name,
+        academicLevel: selectedClass.name, // Usually the level
+        session: new Date().getFullYear().toString(), // Dynamic session
         section: selectedClass.section || "",
         subject: subject,
+        teacher_id: user.user_id,
         teacherName: user.name,
         totalPresent: presentCount,
         totalAbsent: students.length - presentCount,
+        timestamp: Date.now(),
+        attendance_method: attendanceMethod,
         presentStudents: students.filter(s => attendance[s.user_id]).map(s => ({
           id: s.user_id,
           name: s.name,
@@ -784,8 +790,7 @@ export default function AttendancePage() {
           id: s.user_id,
           name: s.name,
           roll: s.student_id
-        })),
-        method: attendanceMethod
+        }))
       };
 
       const res = await fetch("/api/attendance/submit", {
@@ -812,7 +817,7 @@ export default function AttendancePage() {
       if (attendanceMethod === "qr") {
         stopQRScanner();
       }
-      if (attendanceMethod === "face") {
+      if (attendanceMethod === "face_scan") {
         stopFaceScan();
       }
       if (attendanceMethod === "camera") {
@@ -1936,7 +1941,7 @@ export default function AttendancePage() {
             exit={{ y: 100, opacity: 0 }}
             className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-md z-50 flex flex-col gap-4"
           >
-            {attendanceMethod === "manual" || attendanceMethod === "qr" || attendanceMethod === "code" || attendanceMethod === "face" || attendanceMethod === "camera" || attendanceMethod === "geo" ? (
+            {attendanceMethod === "manual" || attendanceMethod === "qr" || attendanceMethod === "code" || attendanceMethod === "face_scan" || attendanceMethod === "camera" || attendanceMethod === "geo" ? (
               <div className="bg-white/80 backdrop-blur-xl border border-white p-4 rounded-[2.5rem] shadow-2xl flex flex-col gap-4">
                  <div className="flex items-center justify-between px-2 pt-1">
                     <div className="flex items-center gap-3">

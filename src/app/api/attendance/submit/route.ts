@@ -19,15 +19,22 @@ export async function POST(req: NextRequest) {
       tenant_id, 
       classId, 
       className,
+      academicLevel,
+      session,
       section, 
-      subject, 
+      subject,
+      teacher_id,
       teacherName, 
       totalPresent, 
       totalAbsent, 
       presentStudents, 
       absentStudents,
+      attendance_method,
       method = "manual"
     } = body;
+    
+    // Use attendance_method if provided, otherwise fallback to method
+    const finalMethod = attendance_method || method;
 
     // Validate required fields
     if (!tenant_id || !classId) {
@@ -90,12 +97,14 @@ export async function POST(req: NextRequest) {
       tenantId: tenant_id,
       classId,
       className: className || "Unknown Class",
+      academicLevel: academicLevel || "",
+      session: session || "",
       section: section || "",
-      teacherId: user.uid,
+      teacherId: teacher_id || user.uid,
       teacherName: teacherName || user.name || "Unknown Teacher",
       subject: subject || "No Subject",
       date: dateStr,
-      method,
+      method: finalMethod,
       stats: {
         present: totalPresent,
         absent: totalAbsent,
@@ -114,9 +123,9 @@ export async function POST(req: NextRequest) {
     // A. Log Entry
     batch.set(logRef, attendanceLog);
     
-    // B. Deduct Credit
+    // B. Deduct Credit (2 credits per submission as per requirements)
     batch.update(adminDb.collection("tenants").doc(tenant_id), {
-      credits_left: FieldValue.increment(-1)
+      credits_left: FieldValue.increment(-2)
     });
 
     await batch.commit();
@@ -134,7 +143,7 @@ export async function POST(req: NextRequest) {
         totalAbsent,
         presentStudents,
         absentStudents,
-        method
+        method: finalMethod
       };
 
       await queueGoogleSheetSync(tenant_id, syncData, "ATTENDANCE");
